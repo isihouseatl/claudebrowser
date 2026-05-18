@@ -108,3 +108,15 @@ export async function interceptRequest(
 export async function clearInterceptions(client: CdpClient): Promise<void> {
   await client.raw.Fetch.disable();
 }
+
+// Get the response body for a captured request by requestId.
+// requestId comes from waitForResponse() or browser_network_log_get entries.
+// Returns decoded string body (decodes base64 if needed).
+export async function getResponseBody(client: CdpClient, requestId: string): Promise<string> {
+  const result = await (client.raw.Network as any).getResponseBody({ requestId });
+  if (!result) throw new Error(`No response body for requestId: ${requestId}`);
+  if (result.base64Encoded) {
+    return Buffer.from(result.body as string, 'base64').toString('utf8');
+  }
+  return result.body as string;
+}

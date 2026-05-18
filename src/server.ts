@@ -5,7 +5,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
-import { navigate, reload, goBack, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics } from './cdp/page';
+import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
 import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog } from './cdp/evaluate';
@@ -14,11 +14,13 @@ import { getText, getAttribute, isVisible, findText } from './cdp/query';
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
 import { applyStealthPatches } from './cdp/stealth';
 import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage, getAllSessionStorage, clearSessionStorage } from './cdp/storage';
-import { waitForResponse, interceptRequest, clearInterceptions } from './cdp/network';
+import { waitForResponse, interceptRequest, clearInterceptions, getResponseBody } from './cdp/network';
 import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle as getElementComputedStyle, selectOption as elementSelectOption, getSelectOptions } from './cdp/element';
 import { startConsoleMonitor as startCdpConsole, getConsoleMessages as getCdpConsoleMessages, clearConsoleMessages as clearCdpConsoleMessages, getJsErrors, clearJsErrors, stopConsoleMonitor as stopCdpConsole } from './cdp/console';
 import { startNetworkLog, getNetworkLog, clearNetworkLog as clearNetLog, stopNetworkLog } from './cdp/netlog';
 import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions } from './cdp/emulation';
+import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
+import { queryShadow, getShadowHtml, evaluateInShadow } from './cdp/shadow';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -49,6 +51,11 @@ const TOOLS = [
   { name: 'browser_wait_for_url', description: 'Wait until page URL contains a substring (SPA route changes)', inputSchema: { type: 'object', properties: { pattern: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['pattern'] } },
   { name: 'browser_wait_for_response', description: 'Wait for a network response whose URL contains the given pattern', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['url_pattern'] } },
   { name: 'browser_wait_for_new_tab', description: 'Wait for a new browser tab to open (e.g. after clicking a link that opens in a new window)', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  { name: 'browser_get_url', description: 'Get the current page URL', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_title', description: 'Get the current page title', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_forward', description: 'Go forward in browser history', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_removed', description: 'Wait until an element is removed from the DOM (e.g. loading spinner disappears)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_for_text', description: 'Wait until an element exists and its text contains the given string', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'text'] } },
   // ── Tabs & sessions ─────────────────────────────────────────────────────────
   { name: 'browser_tabs', description: 'List tabs owned by this session. Pass all:true for all Chrome tabs.', inputSchema: { type: 'object', properties: { all: { type: 'boolean' } } } },
   { name: 'browser_sessions', description: 'List all active claudebrowser sessions', inputSchema: { type: 'object', properties: {} } },
@@ -96,6 +103,14 @@ const TOOLS = [
   { name: 'browser_get_attribute', description: 'Get an attribute value from an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' } }, required: ['selector', 'attribute'] } },
   { name: 'browser_is_visible', description: 'Check if an element is visible', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_find_text', description: 'Find elements containing text, returns positions (x,y)', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  // ── Extraction ────────────────────────────────────────────────────────────────
+  { name: 'browser_get_inner_html', description: 'Get the innerHTML of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_table', description: 'Extract a table as an array of row objects (headers as keys)', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the <table> element' } }, required: ['selector'] } },
+  { name: 'browser_screenshot_element', description: 'Take a screenshot clipped to a single element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Shadow DOM ────────────────────────────────────────────────────────────────
+  { name: 'browser_query_shadow', description: 'querySelector inside a shadow root. Returns outerHTML of the found element or null.', inputSchema: { type: 'object', properties: { host_selector: { type: 'string', description: 'CSS selector for the shadow host element' }, shadow_selector: { type: 'string', description: 'CSS selector to run inside the shadow root' } }, required: ['host_selector', 'shadow_selector'] } },
+  { name: 'browser_get_shadow_html', description: 'Get the innerHTML of a shadow root', inputSchema: { type: 'object', properties: { host_selector: { type: 'string' } }, required: ['host_selector'] } },
+  { name: 'browser_evaluate_in_shadow', description: 'Run a JS function inside a shadow root. Script receives (shadowRoot, host) as arguments.', inputSchema: { type: 'object', properties: { host_selector: { type: 'string' }, script: { type: 'string', description: 'JS function expression e.g. (shadowRoot) => shadowRoot.querySelector("input").value' } }, required: ['host_selector', 'script'] } },
   // ── Storage ───────────────────────────────────────────────────────────────────
   { name: 'browser_get_cookies', description: 'Get all cookies for the current page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_set_cookie', description: 'Set a cookie on the current page', inputSchema: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' }, domain: { type: 'string' }, path: { type: 'string' }, expires: { type: 'number' }, http_only: { type: 'boolean' }, secure: { type: 'boolean' } }, required: ['name', 'value'] } },
@@ -139,6 +154,7 @@ const TOOLS = [
   // ── Network interception ──────────────────────────────────────────────────────
   { name: 'browser_intercept_request', description: 'Mock a network request — matching URLs get the given response body instead of hitting the server', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' }, status: { type: 'number' }, body: { type: 'string' }, content_type: { type: 'string' } }, required: ['url_pattern'] } },
   { name: 'browser_clear_interceptions', description: 'Remove all active request interceptions', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_response_body', description: 'Get the decoded response body for a captured network request by requestId', inputSchema: { type: 'object', properties: { request_id: { type: 'string' } }, required: ['request_id'] } },
   // ── Frames (iframes) ──────────────────────────────────────────────────────────
   { name: 'browser_get_frames', description: 'List all frames (iframes) on the page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_evaluate_in_frame', description: 'Execute JavaScript inside a specific iframe', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the <iframe> element' }, script: { type: 'string' } }, required: ['selector', 'script'] } },
@@ -192,7 +208,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.7.0' },
+    { name: 'claudebrowser', version: '1.8.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -221,6 +237,11 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_wait_for_url':           return ok({ url: await waitForUrl(cdp, a.pattern as string, a.timeout_ms as number | undefined) });
         case 'browser_wait_for_response':      return ok(await waitForResponse(cdp, a.url_pattern as string, a.timeout_ms as number | undefined));
         case 'browser_wait_for_new_tab':       return ok({ targetId: await waitForNewTab(cdp, a.timeout_ms as number | undefined) });
+        case 'browser_get_url':                return ok({ url: await getUrl(cdp) });
+        case 'browser_get_title':              return ok({ title: await getTitle(cdp) });
+        case 'browser_forward':                return ok({ url: await goForward(cdp) });
+        case 'browser_wait_for_removed':       { await waitForElementRemoved(cdp, a.selector as string, a.timeout_ms as number | undefined); return ok('Element removed'); }
+        case 'browser_wait_for_text':          { await waitForText(cdp, a.selector as string, a.text as string, a.timeout_ms as number | undefined); return ok('Text found'); }
         // Tabs
         case 'browser_tabs':                   return ok(a.all ? await listTabs(cdp) : await listSessionTabs(cdp, sessionId));
         case 'browser_sessions':               return ok(getAllSessions());
@@ -268,6 +289,14 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_get_attribute':          return ok(await getAttribute(cdp, a.selector as string, a.attribute as string));
         case 'browser_is_visible':             return ok({ visible: await isVisible(cdp, a.selector as string) });
         case 'browser_find_text':              return ok(await findText(cdp, a.text as string));
+        // Extraction
+        case 'browser_get_inner_html':         return ok(await getInnerHtml(cdp, a.selector as string));
+        case 'browser_get_table':              return ok(await getTableData(cdp, a.selector as string));
+        case 'browser_screenshot_element':     return okImage(await screenshotElement(cdp, a.selector as string));
+        // Shadow DOM
+        case 'browser_query_shadow':           return ok(await queryShadow(cdp, a.host_selector as string, a.shadow_selector as string));
+        case 'browser_get_shadow_html':        return ok(await getShadowHtml(cdp, a.host_selector as string));
+        case 'browser_evaluate_in_shadow':     return ok(await evaluateInShadow(cdp, a.host_selector as string, a.script as string));
         // Storage
         case 'browser_get_cookies':            return ok(await getCookies(cdp));
         case 'browser_set_cookie':             { await setCookie(cdp, a.name as string, a.value as string, { domain: a.domain as string | undefined, path: a.path as string | undefined, expires: a.expires as number | undefined, httpOnly: a.http_only as boolean | undefined, secure: a.secure as boolean | undefined }); return ok('Cookie set'); }
@@ -315,6 +344,7 @@ export async function startServer(sessionName?: string): Promise<void> {
           _interceptCleanups.set(sessionId, [...(_interceptCleanups.get(sessionId) ?? []), cleanup]);
           return ok('Interception active');
         }
+        case 'browser_get_response_body':      return ok(await getResponseBody(cdp, a.request_id as string));
         case 'browser_clear_interceptions': {
           const cleanups = _interceptCleanups.get(sessionId) ?? [];
           for (const fn of cleanups) await fn().catch(() => {});

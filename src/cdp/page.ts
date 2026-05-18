@@ -268,3 +268,67 @@ export async function getPageMetrics(client: CdpClient): Promise<PageMetrics> {
     jsHeapSizeBytes,
   };
 }
+
+export async function getUrl(client: CdpClient): Promise<string> {
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  return result.value as string;
+}
+
+export async function getTitle(client: CdpClient): Promise<string> {
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: 'document.title',
+    returnByValue: true,
+  });
+  return result.value as string;
+}
+
+export async function goForward(client: CdpClient): Promise<string> {
+  await client.raw.Runtime.evaluate({ expression: 'history.go(1)' });
+  await new Promise(r => setTimeout(r, 300));
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  return result.value as string;
+}
+
+export async function waitForElementRemoved(
+  client: CdpClient,
+  selector: string,
+  timeoutMs = 10000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: `document.querySelector(${JSON.stringify(selector)}) === null`,
+      returnByValue: true,
+    });
+    if (result.value) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`Element "${selector}" still present after ${timeoutMs}ms`);
+}
+
+export async function waitForText(
+  client: CdpClient,
+  selector: string,
+  text: string,
+  timeoutMs = 10000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  return el !== null && el.textContent.includes(${JSON.stringify(text)});
+})()`,
+      returnByValue: true,
+    });
+    if (result.value) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`Text "${text}" not found in "${selector}" within ${timeoutMs}ms`);
+}
