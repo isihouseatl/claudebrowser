@@ -5,12 +5,12 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
-import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText } from './cdp/page';
+import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText, getScrollPosition, scrollToCoords, scrollToTop, scrollToBottom, waitForAttribute, waitForElementCount } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
 import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog } from './cdp/evaluate';
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
-import { getText, getAttribute, isVisible, findText } from './cdp/query';
+import { getText, getAttribute, isVisible, findText, getAllText, getAllAttributes } from './cdp/query';
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
 import { applyStealthPatches } from './cdp/stealth';
 import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage, getAllSessionStorage, clearSessionStorage } from './cdp/storage';
@@ -18,9 +18,14 @@ import { waitForResponse, interceptRequest, clearInterceptions, getResponseBody 
 import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle as getElementComputedStyle, selectOption as elementSelectOption, getSelectOptions } from './cdp/element';
 import { startConsoleMonitor as startCdpConsole, getConsoleMessages as getCdpConsoleMessages, clearConsoleMessages as clearCdpConsoleMessages, getJsErrors, clearJsErrors, stopConsoleMonitor as stopCdpConsole } from './cdp/console';
 import { startNetworkLog, getNetworkLog, clearNetworkLog as clearNetLog, stopNetworkLog } from './cdp/netlog';
-import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions } from './cdp/emulation';
+import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions, setMediaType, setColorScheme, setPrefersReducedMotion } from './cdp/emulation';
+import { setExtraHeaders, clearExtraHeaders } from './cdp/network';
 import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
 import { queryShadow, getShadowHtml, evaluateInShadow } from './cdp/shadow';
+import { setAttribute, removeAttribute, addClass, removeClass, injectCss, removeInjectedCss, submitForm, resetForm } from './cdp/dom';
+import { setClipboard, getClipboard } from './cdp/clipboard';
+import { listIndexedDatabases, getAllIndexedDb, getIndexedDb, clearIndexedDb } from './cdp/indexeddb';
+import { getPaintTiming, getNavigationTiming, getResourceTimings, clearPerformanceBuffer } from './cdp/performance';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -56,6 +61,8 @@ const TOOLS = [
   { name: 'browser_forward', description: 'Go forward in browser history', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_wait_for_removed', description: 'Wait until an element is removed from the DOM (e.g. loading spinner disappears)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
   { name: 'browser_wait_for_text', description: 'Wait until an element exists and its text contains the given string', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'text'] } },
+  { name: 'browser_wait_for_attribute', description: 'Wait until an element has a specific attribute value', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' }, value: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'attribute', 'value'] } },
+  { name: 'browser_wait_for_count', description: 'Wait until exactly N elements match a CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, count: { type: 'number' }, timeout_ms: { type: 'number' } }, required: ['selector', 'count'] } },
   // ── Tabs & sessions ─────────────────────────────────────────────────────────
   { name: 'browser_tabs', description: 'List tabs owned by this session. Pass all:true for all Chrome tabs.', inputSchema: { type: 'object', properties: { all: { type: 'boolean' } } } },
   { name: 'browser_sessions', description: 'List all active claudebrowser sessions', inputSchema: { type: 'object', properties: {} } },
@@ -85,6 +92,10 @@ const TOOLS = [
   { name: 'browser_hover_selector', description: 'Move mouse over element by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_scroll', description: 'Scroll the page by pixel amount', inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['up', 'down', 'left', 'right'] }, amount: { type: 'number' } }, required: ['direction', 'amount'] } },
   { name: 'browser_scroll_to', description: 'Scroll an element into view by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_scroll_to_top', description: 'Scroll to the top of the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_bottom', description: 'Scroll to the bottom of the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_coords', description: 'Scroll to absolute coordinates (x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_get_scroll_position', description: 'Get the current scroll position: {x, y}', inputSchema: { type: 'object', properties: {} } },
   // ── Keyboard & input ─────────────────────────────────────────────────────────
   { name: 'browser_type', description: 'Type text at current focus', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
   { name: 'browser_press_key', description: 'Press a key with optional modifiers (Enter, Tab, Escape, etc.)', inputSchema: { type: 'object', properties: { key: { type: 'string' }, modifiers: { type: 'array', items: { type: 'string' }, description: 'e.g. ["ctrl", "shift"]' } }, required: ['key'] } },
@@ -100,9 +111,40 @@ const TOOLS = [
   // ── Evaluate & query ──────────────────────────────────────────────────────────
   { name: 'browser_evaluate', description: 'Execute JavaScript and return result', inputSchema: { type: 'object', properties: { script: { type: 'string' } }, required: ['script'] } },
   { name: 'browser_get_text', description: 'Get innerText of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_all_text', description: 'Get innerText of ALL elements matching a selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_get_attribute', description: 'Get an attribute value from an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' } }, required: ['selector', 'attribute'] } },
+  { name: 'browser_get_all_attributes', description: 'Get an attribute value from ALL elements matching a selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' } }, required: ['selector', 'attribute'] } },
   { name: 'browser_is_visible', description: 'Check if an element is visible', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_find_text', description: 'Find elements containing text, returns positions (x,y)', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  // ── DOM manipulation ──────────────────────────────────────────────────────────
+  { name: 'browser_set_attribute', description: 'Set an attribute on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'attribute', 'value'] } },
+  { name: 'browser_remove_attribute', description: 'Remove an attribute from an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' } }, required: ['selector', 'attribute'] } },
+  { name: 'browser_add_class', description: 'Add a CSS class to an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, class_name: { type: 'string' } }, required: ['selector', 'class_name'] } },
+  { name: 'browser_remove_class', description: 'Remove a CSS class from an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, class_name: { type: 'string' } }, required: ['selector', 'class_name'] } },
+  { name: 'browser_inject_css', description: 'Inject a <style> tag into the page. Returns a styleId for removal.', inputSchema: { type: 'object', properties: { css: { type: 'string' } }, required: ['css'] } },
+  { name: 'browser_remove_css', description: 'Remove a previously injected style by its styleId', inputSchema: { type: 'object', properties: { style_id: { type: 'string' } }, required: ['style_id'] } },
+  { name: 'browser_submit_form', description: 'Submit a form element programmatically', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_reset_form', description: 'Reset a form to its default values', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Clipboard ─────────────────────────────────────────────────────────────────
+  { name: 'browser_set_clipboard', description: 'Write text to the clipboard', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_get_clipboard', description: 'Read text from the clipboard (requires clipboard-read permission — use browser_grant_permission first)', inputSchema: { type: 'object', properties: {} } },
+  // ── IndexedDB ─────────────────────────────────────────────────────────────────
+  { name: 'browser_list_indexed_databases', description: 'List all IndexedDB database names for the current page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_all_indexed_db', description: 'Get all records from an IndexedDB object store', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' } }, required: ['db_name', 'store_name'] } },
+  { name: 'browser_get_indexed_db', description: 'Get a single record from IndexedDB by key', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' }, key: {} }, required: ['db_name', 'store_name', 'key'] } },
+  { name: 'browser_clear_indexed_db', description: 'Clear all records from an IndexedDB object store', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' } }, required: ['db_name', 'store_name'] } },
+  // ── Performance ───────────────────────────────────────────────────────────────
+  { name: 'browser_get_paint_timing', description: 'Get First Paint and First Contentful Paint timings in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_navigation_timing', description: 'Get navigation timing breakdown: TTFB, DOMContentLoaded, load, DNS, TCP', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_resource_timings', description: 'Get all resource timings (scripts, images, XHR, etc.) with duration and size', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_performance_buffer', description: 'Clear the performance resource timing buffer', inputSchema: { type: 'object', properties: {} } },
+  // ── Media & CSS emulation ─────────────────────────────────────────────────────
+  { name: 'browser_set_media_type', description: "Emulate CSS media type ('print', 'screen', or '' to reset)", inputSchema: { type: 'object', properties: { media: { type: 'string' } }, required: ['media'] } },
+  { name: 'browser_set_color_scheme', description: "Emulate prefers-color-scheme ('light', 'dark', or '' to reset)", inputSchema: { type: 'object', properties: { scheme: { type: 'string' } }, required: ['scheme'] } },
+  { name: 'browser_set_prefers_reduced_motion', description: "Emulate prefers-reduced-motion ('reduce' or '' to reset)", inputSchema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] } },
+  // ── Extra HTTP headers ────────────────────────────────────────────────────────
+  { name: 'browser_set_extra_headers', description: 'Add extra HTTP headers to all subsequent requests (e.g. Authorization tokens)', inputSchema: { type: 'object', properties: { headers: { type: 'object', additionalProperties: { type: 'string' } } }, required: ['headers'] } },
+  { name: 'browser_clear_extra_headers', description: 'Remove all extra HTTP header overrides', inputSchema: { type: 'object', properties: {} } },
   // ── Extraction ────────────────────────────────────────────────────────────────
   { name: 'browser_get_inner_html', description: 'Get the innerHTML of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_get_table', description: 'Extract a table as an array of row objects (headers as keys)', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the <table> element' } }, required: ['selector'] } },
@@ -208,7 +250,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.8.0' },
+    { name: 'claudebrowser', version: '1.9.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -242,6 +284,8 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_forward':                return ok({ url: await goForward(cdp) });
         case 'browser_wait_for_removed':       { await waitForElementRemoved(cdp, a.selector as string, a.timeout_ms as number | undefined); return ok('Element removed'); }
         case 'browser_wait_for_text':          { await waitForText(cdp, a.selector as string, a.text as string, a.timeout_ms as number | undefined); return ok('Text found'); }
+        case 'browser_wait_for_attribute':     { await waitForAttribute(cdp, a.selector as string, a.attribute as string, a.value as string, a.timeout_ms as number | undefined); return ok('Attribute matched'); }
+        case 'browser_wait_for_count':         { await waitForElementCount(cdp, a.selector as string, a.count as number, a.timeout_ms as number | undefined); return ok('Count matched'); }
         // Tabs
         case 'browser_tabs':                   return ok(a.all ? await listTabs(cdp) : await listSessionTabs(cdp, sessionId));
         case 'browser_sessions':               return ok(getAllSessions());
@@ -271,6 +315,10 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_hover_selector':         { await hoverSelector(cdp, a.selector as string); return ok('Hovered'); }
         case 'browser_scroll':                 { await scroll(cdp, a.direction as any, a.amount as number); return ok('Scrolled'); }
         case 'browser_scroll_to':              return ok(await scrollToElement(cdp, a.selector as string));
+        case 'browser_scroll_to_top':          { await scrollToTop(cdp); return ok('Scrolled to top'); }
+        case 'browser_scroll_to_bottom':       { await scrollToBottom(cdp); return ok('Scrolled to bottom'); }
+        case 'browser_scroll_to_coords':       { await scrollToCoords(cdp, a.x as number, a.y as number); return ok('Scrolled'); }
+        case 'browser_get_scroll_position':    return ok(await getScrollPosition(cdp));
         // Keyboard & input
         case 'browser_type':                   { await typeText(cdp, a.text as string); return ok('Typed'); }
         case 'browser_press_key':              { await pressKey(cdp, a.key as string, a.modifiers as string[] | undefined); return ok('Key pressed'); }
@@ -286,9 +334,28 @@ export async function startServer(sessionName?: string): Promise<void> {
         // Evaluate & query
         case 'browser_evaluate':               return ok(await evaluate(cdp, a.script as string));
         case 'browser_get_text':               return ok(await getText(cdp, a.selector as string));
+        case 'browser_get_all_text':           return ok(await getAllText(cdp, a.selector as string));
         case 'browser_get_attribute':          return ok(await getAttribute(cdp, a.selector as string, a.attribute as string));
+        case 'browser_get_all_attributes':     return ok(await getAllAttributes(cdp, a.selector as string, a.attribute as string));
         case 'browser_is_visible':             return ok({ visible: await isVisible(cdp, a.selector as string) });
         case 'browser_find_text':              return ok(await findText(cdp, a.text as string));
+        // DOM manipulation
+        case 'browser_set_attribute':          { await setAttribute(cdp, a.selector as string, a.attribute as string, a.value as string); return ok('Attribute set'); }
+        case 'browser_remove_attribute':       { await removeAttribute(cdp, a.selector as string, a.attribute as string); return ok('Attribute removed'); }
+        case 'browser_add_class':              { await addClass(cdp, a.selector as string, a.class_name as string); return ok('Class added'); }
+        case 'browser_remove_class':           { await removeClass(cdp, a.selector as string, a.class_name as string); return ok('Class removed'); }
+        case 'browser_inject_css':             return ok({ styleId: await injectCss(cdp, a.css as string) });
+        case 'browser_remove_css':             { await removeInjectedCss(cdp, a.style_id as string); return ok('Style removed'); }
+        case 'browser_submit_form':            { await submitForm(cdp, a.selector as string); return ok('Form submitted'); }
+        case 'browser_reset_form':             { await resetForm(cdp, a.selector as string); return ok('Form reset'); }
+        // Clipboard
+        case 'browser_set_clipboard':          { await setClipboard(cdp, a.text as string); return ok('Clipboard set'); }
+        case 'browser_get_clipboard':          return ok({ text: await getClipboard(cdp) });
+        // IndexedDB
+        case 'browser_list_indexed_databases': return ok(await listIndexedDatabases(cdp));
+        case 'browser_get_all_indexed_db':     return ok(await getAllIndexedDb(cdp, a.db_name as string, a.store_name as string));
+        case 'browser_get_indexed_db':         return ok(await getIndexedDb(cdp, a.db_name as string, a.store_name as string, a.key as any));
+        case 'browser_clear_indexed_db':       { await clearIndexedDb(cdp, a.db_name as string, a.store_name as string); return ok('IndexedDB store cleared'); }
         // Extraction
         case 'browser_get_inner_html':         return ok(await getInnerHtml(cdp, a.selector as string));
         case 'browser_get_table':              return ok(await getTableData(cdp, a.selector as string));
@@ -337,6 +404,16 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_clear_geolocation':      { await clearGeolocation(cdp); return ok('Geolocation cleared'); }
         case 'browser_grant_permission':       { await grantPermission(cdp, a.permission as string, a.origin as string | undefined); return ok('Permission granted'); }
         case 'browser_reset_permissions':      { await resetPermissions(cdp); return ok('Permissions reset'); }
+        case 'browser_set_media_type':         { await setMediaType(cdp, a.media as string); return ok('Media type set'); }
+        case 'browser_set_color_scheme':       { await setColorScheme(cdp, a.scheme as string); return ok('Color scheme set'); }
+        case 'browser_set_prefers_reduced_motion': { await setPrefersReducedMotion(cdp, a.value as string); return ok('Reduced motion set'); }
+        case 'browser_set_extra_headers':      { await setExtraHeaders(cdp, a.headers as Record<string, string>); return ok('Extra headers set'); }
+        case 'browser_clear_extra_headers':    { await clearExtraHeaders(cdp); return ok('Extra headers cleared'); }
+        // Performance
+        case 'browser_get_paint_timing':       return ok(await getPaintTiming(cdp));
+        case 'browser_get_navigation_timing':  return ok(await getNavigationTiming(cdp));
+        case 'browser_get_resource_timings':   return ok(await getResourceTimings(cdp));
+        case 'browser_clear_performance_buffer': { await clearPerformanceBuffer(cdp); return ok('Performance buffer cleared'); }
         // Network interception
         case 'browser_intercept_request': {
           const cleanup = await interceptRequest(cdp, { urlPattern: a.url_pattern as string, status: a.status as number | undefined, body: a.body as string | undefined, contentType: a.content_type as string | undefined });

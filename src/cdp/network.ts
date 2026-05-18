@@ -120,3 +120,16 @@ export async function getResponseBody(client: CdpClient, requestId: string): Pro
   }
   return result.body as string;
 }
+
+// Set extra HTTP headers sent with every request (e.g. auth tokens, custom headers)
+export async function setExtraHeaders(
+  client: CdpClient,
+  headers: Record<string, string>,
+): Promise<void> {
+  await (client.raw.Network as any).setExtraHTTPHeaders({ headers });
+}
+
+// Clear extra HTTP headers (pass empty object)
+export async function clearExtraHeaders(client: CdpClient): Promise<void> {
+  await (client.raw.Network as any).setExtraHTTPHeaders({ headers: {} });
+}

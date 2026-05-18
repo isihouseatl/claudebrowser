@@ -100,3 +100,35 @@ export async function findText(client: CdpClient, text: string): Promise<TextMat
   }
   return result.value as TextMatch[];
 }
+
+export async function getAllText(client: CdpClient, selector: string): Promise<string[]> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el => el.innerText ?? '')`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (!Array.isArray(result.value)) {
+    return [];
+  }
+  return result.value as string[];
+}
+
+export async function getAllAttributes(
+  client: CdpClient,
+  selector: string,
+  attribute: string,
+): Promise<(string | null)[]> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `Array.from(document.querySelectorAll(${JSON.stringify(selector)})).map(el => el.getAttribute(${JSON.stringify(attribute)}))`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (!Array.isArray(result.value)) {
+    return [];
+  }
+  return result.value as (string | null)[];
+}

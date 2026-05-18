@@ -108,3 +108,22 @@ export async function grantPermission(
 export async function resetPermissions(client: CdpClient): Promise<void> {
   await (client.raw.Browser as any).resetPermissions({});
 }
+
+// Emulate CSS media type ('print', 'screen', or '' to reset)
+export async function setMediaType(client: CdpClient, media: string): Promise<void> {
+  await (client.raw.Emulation as any).setEmulatedMedia({ media });
+}
+
+// Emulate prefers-color-scheme ('light', 'dark', or '' to reset)
+export async function setColorScheme(client: CdpClient, scheme: string): Promise<void> {
+  await (client.raw.Emulation as any).setEmulatedMedia({
+    features: [{ name: 'prefers-color-scheme', value: scheme }],
+  });
+}
+
+// Emulate prefers-reduced-motion ('reduce' or '' to reset)
+export async function setPrefersReducedMotion(client: CdpClient, value: string): Promise<void> {
+  await (client.raw.Emulation as any).setEmulatedMedia({
+    features: [{ name: 'prefers-reduced-motion', value }],
+  });
+}

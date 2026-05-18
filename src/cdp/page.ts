@@ -332,3 +332,63 @@ export async function waitForText(
   }
   throw new Error(`Text "${text}" not found in "${selector}" within ${timeoutMs}ms`);
 }
+
+export async function getScrollPosition(client: CdpClient): Promise<{ x: number; y: number }> {
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: 'JSON.stringify({ x: window.scrollX, y: window.scrollY })',
+    returnByValue: true,
+  });
+  return JSON.parse(result.value as string);
+}
+
+export async function scrollToCoords(client: CdpClient, x: number, y: number): Promise<void> {
+  await client.raw.Runtime.evaluate({ expression: `window.scrollTo(${x}, ${y})` });
+}
+
+export async function scrollToTop(client: CdpClient): Promise<void> {
+  await client.raw.Runtime.evaluate({ expression: 'window.scrollTo(0, 0)' });
+}
+
+export async function scrollToBottom(client: CdpClient): Promise<void> {
+  await client.raw.Runtime.evaluate({ expression: 'window.scrollTo(0, document.body.scrollHeight)' });
+}
+
+export async function waitForAttribute(
+  client: CdpClient,
+  selector: string,
+  attribute: string,
+  value: string,
+  timeoutMs = 10000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  return el !== null && el.getAttribute(${JSON.stringify(attribute)}) === ${JSON.stringify(value)};
+})()`,
+      returnByValue: true,
+    });
+    if (result.value) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`Attribute "${attribute}" on "${selector}" did not equal "${value}" within ${timeoutMs}ms`);
+}
+
+export async function waitForElementCount(
+  client: CdpClient,
+  selector: string,
+  count: number,
+  timeoutMs = 10000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: `document.querySelectorAll(${JSON.stringify(selector)}).length === ${count}`,
+      returnByValue: true,
+    });
+    if (result.value) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`Expected ${count} elements matching "${selector}" but count did not match within ${timeoutMs}ms`);
+}
