@@ -31,25 +31,31 @@ const requestLog: Map<string, Partial<NetworkRequest>> = new Map();
 const MAX_LOG_SIZE = 500;
 const EVICT_COUNT = 100;
 let monitorStarted = false;
+let networkUnsub1: (() => void) | null = null;
+let networkUnsub2: (() => void) | null = null;
 
 export function startNetworkMonitor(client: CdpClient): void {
   if (monitorStarted) return;
   monitorStarted = true;
 
-  client.raw.Network.requestWillBeSent(({ requestId, request, type, timestamp }) => {
+  networkUnsub1 = client.raw.Network.requestWillBeSent(({ requestId, request, type, timestamp }) => {
     if (requestLog.size >= MAX_LOG_SIZE) {
       const keys = requestLog.keys();
       for (let i = 0; i < EVICT_COUNT; i++) requestLog.delete(keys.next().value!);
     }
     requestLog.set(requestId, { url: request.url, method: request.method, resourceType: type ?? 'Other', timestamp, status: null });
-  });
-  client.raw.Network.responseReceived(({ requestId, response }) => {
+  }) as unknown as () => void;
+  networkUnsub2 = client.raw.Network.responseReceived(({ requestId, response }) => {
     const existing = requestLog.get(requestId);
     if (existing) requestLog.set(requestId, { ...existing, status: response.status });
-  });
+  }) as unknown as () => void;
 }
 
 export function resetNetworkMonitor(): void {
+  networkUnsub1?.();
+  networkUnsub2?.();
+  networkUnsub1 = null;
+  networkUnsub2 = null;
   monitorStarted = false;
   requestLog.clear();
 }
@@ -74,21 +80,24 @@ const consoleLog: ConsoleMessage[] = [];
 const MAX_CONSOLE_SIZE = 500;
 const CONSOLE_EVICT_COUNT = 100;
 let consoleMonitorStarted = false;
+let consoleUnsub: (() => void) | null = null;
 
 export function startConsoleMonitor(client: CdpClient): void {
   if (consoleMonitorStarted) return;
   consoleMonitorStarted = true;
 
-  client.raw.Runtime.consoleAPICalled(({ type, args, timestamp }) => {
+  consoleUnsub = client.raw.Runtime.consoleAPICalled(({ type, args, timestamp }) => {
     if (consoleLog.length >= MAX_CONSOLE_SIZE) {
       consoleLog.splice(0, CONSOLE_EVICT_COUNT);
     }
     const text = args.map(a => a.value ?? a.description ?? String(a.type)).join(' ');
     consoleLog.push({ type, text, timestamp });
-  });
+  }) as unknown as () => void;
 }
 
 export function resetConsoleMonitor(): void {
+  consoleUnsub?.();
+  consoleUnsub = null;
   consoleMonitorStarted = false;
   consoleLog.length = 0;
 }

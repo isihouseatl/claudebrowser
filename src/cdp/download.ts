@@ -1,4 +1,5 @@
 // src/cdp/download.ts
+import * as os from 'os';
 import { CdpClient } from './client';
 
 export interface DownloadEvent {
@@ -21,7 +22,7 @@ const cleanupFns = new WeakMap<CdpClient, () => void>();
 // Calling again on the same client is a no-op (already monitoring).
 export async function startDownloadMonitor(
   client: CdpClient,
-  downloadPath = '/tmp',
+  downloadPath = os.tmpdir(),
 ): Promise<void> {
   if (cleanupFns.has(client)) return;
 

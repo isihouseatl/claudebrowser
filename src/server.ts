@@ -74,6 +74,10 @@ import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, c
 import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays } from './cdp/highlight2';
 import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input2';
 import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
+import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests } from './cdp/network2';
+import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAllStorage, getCookieCount, getCookieDomains, getStorageEstimate, clearOriginStorage } from './cdp/storage2';
+import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
+import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay } from './cdp/modal';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -668,6 +672,42 @@ const TOOLS = [
   { name: 'browser_structured_data', description: 'Parse and return all JSON-LD structured data blocks on the page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_word_count', description: 'Count words in document.body.innerText', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_external_links', description: 'Return all external anchor links as array of {href, text}', inputSchema: { type: 'object', properties: {} } },
+  // ── Network analysis ─────────────────────────────────────────────────────────
+  { name: 'browser_network_timings', description: 'Get DNS/connect/TTFB/total timing breakdown for all page resources', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_largest_requests', description: 'Return top N requests by transfer size', inputSchema: { type: 'object', properties: { limit: { type: 'number' } } } },
+  { name: 'browser_failed_requests', description: 'Return requests that transferred 0 bytes (blocked or failed)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_request_count', description: 'Count total requests and breakdown by type (script, img, fetch, etc.)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_info', description: 'Get in-page service worker status: controlled, scriptURL, state', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_protocol', description: 'Get window.location.protocol (e.g. https:)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dns_lookup_time', description: 'Get DNS lookup time in ms for a hostname from resource timings', inputSchema: { type: 'object', properties: { hostname: { type: 'string' } }, required: ['hostname'] } },
+  { name: 'browser_cached_requests', description: 'Return resources served from browser cache (transferSize=0, decodedBodySize>0)', inputSchema: { type: 'object', properties: {} } },
+  // ── Storage inspection ─────────────────────────────────────────────────────────
+  { name: 'browser_localstorage_size', description: 'Get localStorage key count and total byte size', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_localstorage', description: 'Search localStorage by key or value substring', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'browser_sessionstorage_size', description: 'Get sessionStorage key count and total byte size', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dump_storage', description: 'Dump all localStorage and sessionStorage as plain objects', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count', description: 'Count cookies visible to the page via document.cookie', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_domains', description: 'List unique cookie domains for the current browser session', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_estimate', description: 'Get storage quota/usage/percent via navigator.storage.estimate()', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_origin_storage', description: 'Clear all storage types for the current origin via CDP', inputSchema: { type: 'object', properties: {} } },
+  // ── DOM manipulation ───────────────────────────────────────────────────────────
+  { name: 'browser_create_element', description: 'Create and append a new element to a parent selector', inputSchema: { type: 'object', properties: { parent_selector: { type: 'string' }, tag: { type: 'string' }, attrs: { type: 'object' }, text: { type: 'string' } }, required: ['parent_selector', 'tag'] } },
+  { name: 'browser_remove_element', description: 'Remove first element matching selector from DOM, returns true if found', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_wrap_element', description: 'Wrap element in a new parent element with optional class', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, wrapper_tag: { type: 'string' }, wrapper_class: { type: 'string' } }, required: ['selector', 'wrapper_tag'] } },
+  { name: 'browser_unwrap_element', description: 'Unwrap element — replace parent with its own children', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_clone_element', description: 'Deep-clone element and append to a target parent', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, target_parent: { type: 'string' } }, required: ['selector', 'target_parent'] } },
+  { name: 'browser_move_element', description: 'Move (not clone) element to a target parent', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, target_parent: { type: 'string' } }, required: ['selector', 'target_parent'] } },
+  { name: 'browser_set_element_text', description: 'Set textContent of matching element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
+  { name: 'browser_get_element_count', description: 'Count elements matching a CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Modal / overlay ───────────────────────────────────────────────────────────
+  { name: 'browser_is_modal_open', description: 'Detect if any in-page modal or overlay is currently visible', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_modal_content', description: 'Return text content of the first visible modal dialog', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_close_modal', description: 'Close modal by clicking close button or pressing Escape, returns true if button was found', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_modal', description: 'Wait up to timeoutMs for a modal to appear, returns true if found', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  { name: 'browser_get_modal_buttons', description: 'List all buttons inside visible modals as {text, selector}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click_modal_button', description: 'Click a button inside a modal by its text (case-insensitive)', inputSchema: { type: 'object', properties: { button_text: { type: 'string' } }, required: ['button_text'] } },
+  { name: 'browser_is_overlay_blocking', description: 'Check if a higher z-index overlay is blocking the given selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_dismiss_overlay', description: 'Press Escape then click body (1,1) to dismiss any visible overlay', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -724,7 +764,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.22.0' },
+    { name: 'claudebrowser', version: '1.23.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -735,7 +775,12 @@ export async function startServer(sessionName?: string): Promise<void> {
     const a = args as Record<string, unknown>;
 
     if (!cdp.isConnected() && name !== 'browser_status') {
-      try { resetNetworkMonitor(); resetConsoleMonitor(); await cdp.connect(); startNetworkMonitor(cdp); startConsoleMonitor(cdp); startFrameMonitor(cdp); } catch {
+      try {
+        resetNetworkMonitor(); resetConsoleMonitor();
+        await cdp.connect();
+        await applyStealthPatches(cdp);
+        startNetworkMonitor(cdp); startConsoleMonitor(cdp); startFrameMonitor(cdp);
+      } catch {
         return fail('Chrome not connected. Is it running? Run: claudebrowser init', 'CDP_DISCONNECTED', 'claudebrowser status');
       }
     }
