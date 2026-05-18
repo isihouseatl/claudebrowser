@@ -4,8 +4,9 @@ import { CdpClient } from '../cdp/client';
 export interface AuthCheck {
   name: string;
   url: string;
-  loggedInSelector: string;
-  loggedOutSelector: string;
+  loginUrlPattern: string;   // substring in URL when redirected to login — more reliable than DOM selectors
+  loggedInSelector?: string; // optional fallback DOM check
+  loggedOutSelector?: string;
 }
 
 export interface AuthResult {
@@ -19,20 +20,17 @@ export const AUTH_PRESETS: AuthCheck[] = [
   {
     name: 'Instagram',
     url: 'https://www.instagram.com/',
-    loggedInSelector: 'a[href="/direct/inbox/"]',
-    loggedOutSelector: 'input[name="username"]',
+    loginUrlPattern: 'accounts/login',
   },
   {
     name: 'Meta Ads',
     url: 'https://adsmanager.facebook.com/',
-    loggedInSelector: '[data-testid="ads_manager_left_nav"]',
-    loggedOutSelector: 'input[name="email"]',
+    loginUrlPattern: 'loginpage',
   },
   {
     name: 'TikTok Ads',
     url: 'https://ads.tiktok.com/i18n/dashboard',
-    loggedInSelector: '[class*="SideNavMenu"]',
-    loggedOutSelector: 'input[name="email"]',
+    loginUrlPattern: '/login',
   },
 ];
 
@@ -59,15 +57,10 @@ export async function checkAuth(
     });
   });
 
-  const querySelector = async (selector: string): Promise<boolean> => {
-    const result = await raw.Runtime.evaluate({
-      expression: `!!document.querySelector(${JSON.stringify(selector)})`,
-      returnByValue: true,
-    });
-    return result.result.value === true;
-  };
-
-  const loggedIn = await querySelector(check.loggedInSelector);
+  // Primary check: URL-based — reliable across DOM changes and React re-renders
+  const { result: urlResult } = await raw.Runtime.evaluate({ expression: 'window.location.href', returnByValue: true });
+  const finalUrl: string = urlResult.value ?? '';
+  const loggedIn = !finalUrl.includes(check.loginUrlPattern);
 
   return {
     name: check.name,
@@ -99,12 +92,9 @@ export async function waitForAuth(
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const result = await raw.Runtime.evaluate({
-      expression: `!!document.querySelector(${JSON.stringify(check.loggedInSelector)})`,
-      returnByValue: true,
-    });
-
-    if (result.result.value === true) {
+    const { result } = await raw.Runtime.evaluate({ expression: 'window.location.href', returnByValue: true });
+    const currentUrl: string = result.value ?? '';
+    if (!currentUrl.includes(check.loginUrlPattern)) {
       return true;
     }
 

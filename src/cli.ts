@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('claudebrowser')
   .description('Claude Code browser automation via Chrome CDP')
-  .version('1.2.1');
+  .version('1.2.2');
 
 program
   .command('init')
