@@ -82,6 +82,10 @@ import { getUrlParts, getQueryParams, setQueryParam, removeQueryParam, getHashFr
 import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow } from './cdp/table3';
 import { setGeolocationAccuracy, simulateMovement, setHighAccuracyMode, setLowAccuracyMode, setBatteryLevel, clearBatteryOverride, setScreenOrientation, clearScreenOrientation } from './cdp/geolocation3';
 import { takeFullPageScreenshot, takeViewportScreenshot, takeRegionScreenshot, takeJpegScreenshot, compareScreenshots, getFullPageDimensions2, takeScreenshotAfterDelay, screenshotSelector } from './cdp/capture2';
+import { getScrollDepth, isScrolledToBottom, isScrolledToTop, getScrollableParent, scrollByAmount, scrollElementBy, getScrollbarWidth, scrollToPercent } from './cdp/scroll3';
+import { getFocusedSelector, tabToNext, tabToPrev, getFocusableElements, trapFocusInElement, isFocusTrapped, releaseFocusTrap, focusNthElement } from './cdp/focus';
+import { findElementsByText, getPageTextBlocks, findByRegex, getHeadings, getParagraphs, getListItems, countWords, extractEmails } from './cdp/search2';
+import { getBrowserInfo, getScreenInfo, isMobileDevice, isTouchDevice, getMediaCapabilities, getFeatureSupport, getNetworkType, getTimeInfo } from './cdp/device';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -748,6 +752,42 @@ const TOOLS = [
   { name: 'browser_full_page_dimensions2', description: 'Get full page scrollWidth/scrollHeight/devicePixelRatio', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_screenshot_after_delay', description: 'Wait delayMs then take a viewport screenshot', inputSchema: { type: 'object', properties: { delay_ms: { type: 'number' } }, required: ['delay_ms'] } },
   { name: 'browser_screenshot_selector', description: 'Screenshot a specific element by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Scroll state ──────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_depth', description: 'Get scroll position as {pixels, percent} (0-100)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_at_bottom', description: 'Return true if page is scrolled to bottom (2px tolerance)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_at_top', description: 'Return true if page is scrolled to top (2px tolerance)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_scrollable_parent', description: 'Find nearest scrollable ancestor of element, return CSS selector or null', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_scroll_by', description: 'Call window.scrollBy(x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_scroll_element_by', description: 'Call element.scrollBy(x, y) on matched element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
+  { name: 'browser_scrollbar_width', description: 'Measure browser scrollbar width in pixels', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_percent', description: 'Scroll to a percentage (0-100) of total page height', inputSchema: { type: 'object', properties: { percent: { type: 'number' } }, required: ['percent'] } },
+  // ── Focus management ───────────────────────────────────────────────────────────
+  { name: 'browser_get_focused_selector', description: 'Return CSS selector of currently focused element, or null', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_next', description: 'Press Tab to move focus to next focusable element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_prev', description: 'Press Shift+Tab to move focus to previous focusable element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_focusable', description: 'List all focusable elements as {selector, tag, type}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_trap_focus', description: 'Inject focus trap (Tab cycling) inside a container element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_focus_trapped', description: 'Check if a focus trap is currently active on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_release_focus_trap', description: 'Remove all focus trap listeners from the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_nth', description: 'Focus the nth (0-based) element matching a selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, n: { type: 'number' } }, required: ['selector', 'n'] } },
+  // ── Text search ────────────────────────────────────────────────────────────────
+  { name: 'browser_find_elements_by_text', description: 'Find elements whose text matches a string (case-insensitive partial)', inputSchema: { type: 'object', properties: { text: { type: 'string' }, tag: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_get_text_blocks', description: 'Extract all visible text blocks (h1-h6, p, li, td, th, direct-text divs)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_find_by_regex', description: 'Find elements whose text matches a regex pattern', inputSchema: { type: 'object', properties: { pattern: { type: 'string' }, flags: { type: 'string' } }, required: ['pattern'] } },
+  { name: 'browser_get_headings', description: 'Return all h1-h6 elements as {level, text, id}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_paragraphs', description: 'Return all non-empty paragraph texts as string array', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_list_items', description: 'Return all ul/ol lists with their items grouped', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_count_words', description: 'Count words in element text or full body', inputSchema: { type: 'object', properties: { selector: { type: 'string' } } } },
+  { name: 'browser_extract_emails', description: 'Extract unique email addresses from page text', inputSchema: { type: 'object', properties: {} } },
+  // ── Device info ────────────────────────────────────────────────────────────────
+  { name: 'browser_get_browser_info', description: 'Get userAgent, vendor, platform, language, cookieEnabled', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_screen_info', description: 'Get screen width/height/colorDepth/devicePixelRatio', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_mobile', description: 'Return true if screen.width < 768 or userAgent is mobile', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_touch', description: 'Return true if device supports touch events', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_capabilities', description: 'Detect WebGL, WebGL2, canvas, and supported video/audio formats', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_feature_support', description: 'Test browser feature availability: serviceWorker, indexedDB, geolocation, etc.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_type', description: 'Get connection type/effectiveType/downlink/rtt, null if not available', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_time_info', description: 'Get timezone, UTC offset, and locale', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -804,7 +844,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.24.0' },
+    { name: 'claudebrowser', version: '1.25.0' },
     { capabilities: { tools: {} } }
   );
 
