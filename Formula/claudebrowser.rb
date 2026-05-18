@@ -7,12 +7,12 @@ class Claudebrowser < Formula
 
   on_arm do
     url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.2.0/claudebrowser-macos-arm64"
-    sha256 "236b7810a0eff85083fe77d328a11b2f3827f89979f2ce379987bce03f9e28d4"
+    sha256 "42bf54eebd28798a3cc4f28b1d27fb26ef6452dfff96bfd22d05a35e5b61722c"
   end
 
   on_intel do
     url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.2.0/claudebrowser-macos-x64"
-    sha256 "da200d678251f0161e9bcb0ff88b0b3c65800d336dfbed04a6570cc2ff71c5a6"
+    sha256 "8f6abe0739c0dad65004065e2a7d0e2bb11dfe6ac5c34609806c800cbe36f65c"
   end
 
   def install
