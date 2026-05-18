@@ -10,6 +10,7 @@ export interface Config {
   navigationTimeoutMs: number;
   reconnectAttempts: number;
   reconnectIntervalMs: number;
+  authChecks?: Array<{ name: string; url: string; loggedInSelector: string; loggedOutSelector: string }>;
 }
 
 export const DEFAULT_CONFIG: Config = {

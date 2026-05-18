@@ -9,6 +9,7 @@ import { navigate, reload, goBack, scroll, waitForSelector } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, selectOption, setValue } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
 import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor } from './cdp/evaluate';
+import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
 import { readConfig } from './config';
 
 function ok(content: unknown) {
@@ -49,6 +50,8 @@ const TOOLS = [
   { name: 'browser_evaluate', description: 'Execute JavaScript and return result', inputSchema: { type: 'object', properties: { script: { type: 'string' } }, required: ['script'] } },
   { name: 'browser_set_value', description: 'Set input value (React/Vue safe via native setter)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'value'] } },
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads (or configured platforms). Run this before starting any automation.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_auth', description: 'Wait up to 2 minutes for the user to log in on the current page. Use after telling the user a session has expired.', inputSchema: { type: 'object', properties: { platform: { type: 'string', description: 'Platform name matching an auth check preset (e.g. "Instagram")' }, timeout_ms: { type: 'number' } } } },
 ];
 
 export async function startServer(): Promise<void> {
@@ -115,6 +118,21 @@ export async function startServer(): Promise<void> {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
           const target = await cdp.getActiveTarget();
           return ok({ connected: true, port: config.debugPort, activeTab: target ? { url: target.url, title: target.title } : null });
+        }
+        case 'browser_auth_check': {
+          const checks = config.authChecks ?? AUTH_PRESETS;
+          const results = await checkAllAuth(cdp, checks);
+          return ok(results);
+        }
+        case 'browser_wait_for_auth': {
+          const platformName = a.platform as string | undefined;
+          const checks = config.authChecks ?? AUTH_PRESETS;
+          const check = platformName
+            ? checks.find(c => c.name.toLowerCase() === platformName.toLowerCase())
+            : checks[0];
+          if (!check) return fail(`Unknown platform: ${platformName}`, 'AUTH_PLATFORM_NOT_FOUND', `Known platforms: ${checks.map(c => c.name).join(', ')}`);
+          const loggedIn = await waitForAuth(cdp, check, (a.timeout_ms as number) ?? 120000);
+          return ok({ loggedIn, platform: check.name });
         }
         default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }

@@ -41,4 +41,44 @@ program
     process.exit(open ? 0 : 1);
   });
 
+program
+  .command('auth-check')
+  .description('Check login status for configured platforms')
+  .action(async () => {
+    const { readConfig } = await import('./config');
+    const { CdpClient } = await import('./cdp/client');
+    const { checkAllAuth, AUTH_PRESETS } = await import('./cdp/auth');
+
+    const config = readConfig();
+    const client = new CdpClient(config.debugPort);
+
+    try {
+      await client.connect();
+    } catch {
+      console.log('Chrome not running. Start Chrome first (claudebrowser serve will launch it).');
+      process.exit(1);
+    }
+
+    const checks = config.authChecks ?? AUTH_PRESETS;
+    const results = await checkAllAuth(client, checks);
+    await client.disconnect();
+
+    const DIVIDER = '─'.repeat(34);
+    console.log('\nAuth Status');
+    console.log(DIVIDER);
+
+    let allLoggedIn = true;
+    for (const result of results) {
+      const icon = result.loggedIn ? '✓' : '✗';
+      const label = result.name.padEnd(18);
+      const status = result.loggedIn ? 'logged in' : 'logged out';
+      const hint = result.loggedIn ? '' : `  ← go to ${result.url} to re-login`;
+      console.log(`${icon} ${label} ${status}${hint}`);
+      if (!result.loggedIn) allLoggedIn = false;
+    }
+
+    console.log('');
+    process.exit(allLoggedIn ? 0 : 1);
+  });
+
 program.parse();
