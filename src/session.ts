@@ -208,3 +208,38 @@ export function isTabOwnedByOther(
   }
   return { owned: false };
 }
+
+// Atomically verify a tab is not owned by another session and pre-emptively
+// remove it from the caller's session registry — all inside one lock acquisition.
+// This eliminates the TOCTOU window between the ownership check and the actual
+// CDP.Close call in closeTab().
+export function atomicClaimForClose(
+  sessionId: string,
+  tabId: string,
+): { canClose: boolean; ownerSessionId?: string; ownerName?: string } {
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    // Check whether another session owns this tab.
+    for (const [sid, entry] of Object.entries(registry.sessions)) {
+      if (sid === sessionId) continue;
+      if (entry.tabs.includes(tabId)) {
+        return {
+          canClose: false,
+          ownerSessionId: sid,
+          ...(entry.name ? { ownerName: entry.name } : {}),
+        };
+      }
+    }
+    // Safe to close — pre-emptively release from our own session so no
+    // second caller can race past the ownership check before Chrome closes.
+    const session = registry.sessions[sessionId];
+    if (session) {
+      session.tabs = session.tabs.filter((t) => t !== tabId);
+      writeSessionsRaw(registry);
+    }
+    return { canClose: true };
+  } finally {
+    releaseLock();
+  }
+}

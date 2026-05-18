@@ -1,7 +1,7 @@
 // src/cdp/tabs.ts
 import CDP from 'chrome-remote-interface';
 import { CdpClient } from './client';
-import { claimTab, releaseTab, getSessionTabs, isTabOwnedByOther } from '../session';
+import { claimTab, releaseTab, getSessionTabs, isTabOwnedByOther, atomicClaimForClose } from '../session';
 
 export interface TabInfo {
   id: string;
@@ -26,14 +26,16 @@ export async function newTab(port: number, url = 'about:blank', sessionId?: stri
 
 export async function closeTab(port: number, id: string, sessionId?: string): Promise<void> {
   if (sessionId) {
-    const { owned, ownerSessionId } = isTabOwnedByOther(sessionId, id);
-    if (owned) {
+    // Atomically check ownership and pre-release the tab so no other session
+    // can race between the check and the actual CDP.Close call.
+    const { canClose, ownerSessionId } = atomicClaimForClose(sessionId, id);
+    if (!canClose) {
       throw new Error(`Tab ${id} is owned by session ${ownerSessionId}. Use browser_tabs to see your tabs.`);
     }
-  }
-  await CDP.Close({ port, id });
-  if (sessionId) {
-    releaseTab(sessionId, id);
+    // Tab is pre-released from registry; just close it in Chrome.
+    await CDP.Close({ port, id });
+  } else {
+    await CDP.Close({ port, id });
   }
 }
 

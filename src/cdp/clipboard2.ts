@@ -1,44 +1,26 @@
 // src/cdp/clipboard2.ts
+// Clipboard API-based clipboard utilities. These use navigator.clipboard directly
+// (the async Clipboard API) and are distinct from the Input.dispatchKeyEvent-based
+// helpers in clipboard.ts.
 import { CdpClient } from './client';
 
-// Read text from clipboard. Tries navigator.clipboard.readText() first (async Clipboard API),
-// falls back to document.execCommand('paste') via a temporary textarea when the API is
-// unavailable or the clipboard-read permission has not been granted.
-export async function readClipboard(client: CdpClient): Promise<string> {
+// Read plain text from the clipboard via navigator.clipboard.readText().
+export async function getClipboardText(client: CdpClient): Promise<string> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
-    expression: `(async () => {
-      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        try {
-          return await navigator.clipboard.readText();
-        } catch (_e) {
-          // fall through to execCommand fallback
-        }
-      }
-      const ta = document.createElement('textarea');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      ta.style.top = '0';
-      ta.style.left = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      const ok = document.execCommand('paste');
-      const value = ok ? ta.value : '';
-      document.body.removeChild(ta);
-      return value;
-    })()`,
+    expression: `navigator.clipboard.readText()`,
     returnByValue: true,
     awaitPromise: true,
   });
   if (exceptionDetails) {
     throw new Error(
-      `readClipboard failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `getClipboardText failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
   return (result.value as string) ?? '';
 }
 
-// Write text to clipboard using navigator.clipboard.writeText().
-export async function writeClipboard(client: CdpClient, text: string): Promise<void> {
+// Write text to the clipboard via navigator.clipboard.writeText().
+export async function setClipboardText(client: CdpClient, text: string): Promise<void> {
   const { exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `navigator.clipboard.writeText(${JSON.stringify(text)})`,
     returnByValue: true,
@@ -46,19 +28,15 @@ export async function writeClipboard(client: CdpClient, text: string): Promise<v
   });
   if (exceptionDetails) {
     throw new Error(
-      `writeClipboard failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `setClipboardText failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
 }
 
-// Clear the clipboard by writing an empty string.
-export async function clearClipboard(client: CdpClient): Promise<void> {
-  await writeClipboard(client, '');
-}
-
-// Read the clipboard as HTML using the async Clipboard API (navigator.clipboard.read()).
-// Returns an empty string if the text/html type is not present or the API is unavailable.
-export async function readClipboardHtml(client: CdpClient): Promise<string> {
+// Read the HTML clipboard item via navigator.clipboard.read().
+// Returns the text/html content as a string, or an empty string if the type is
+// not present or the API is unavailable.
+export async function getClipboardHtml(client: CdpClient): Promise<string> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(async () => {
       if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') return '';
@@ -80,125 +58,108 @@ export async function readClipboardHtml(client: CdpClient): Promise<string> {
   });
   if (exceptionDetails) {
     throw new Error(
-      `readClipboardHtml failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `getClipboardHtml failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
   return (result.value as string) ?? '';
 }
 
-// Write HTML to the clipboard using navigator.clipboard.write() with a ClipboardItem.
-// Also writes a plain-text version derived from the HTML (via DOMParser) so paste targets
-// that only accept text/plain still receive something sensible.
-export async function writeClipboardHtml(client: CdpClient, html: string): Promise<void> {
+// Clear the clipboard by writing an empty string.
+export async function clearClipboard(client: CdpClient): Promise<void> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `navigator.clipboard.writeText('')`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(
+      `clearClipboard failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+    );
+  }
+}
+
+// Select the element matching selector and copy its textContent to the clipboard
+// via navigator.clipboard.writeText().
+export async function copyTextToClipboard(client: CdpClient, selector: string): Promise<void> {
   const { exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(async () => {
-      const html = ${JSON.stringify(html)};
-      const htmlBlob = new Blob([html], { type: 'text/html' });
-      const parsed = new DOMParser().parseFromString(html, 'text/html');
-      const plain = parsed.body.textContent ?? '';
-      const textBlob = new Blob([plain], { type: 'text/plain' });
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob }),
-      ]);
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) throw new Error('Element not found: ' + ${JSON.stringify(selector)});
+      await navigator.clipboard.writeText(el.textContent ?? '');
     })()`,
     returnByValue: true,
     awaitPromise: true,
   });
   if (exceptionDetails) {
     throw new Error(
-      `writeClipboardHtml failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `copyTextToClipboard failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
 }
 
-// Focus the element matching selector, select all its text content, execute
-// document.execCommand('copy') to push it to the clipboard, then read the
-// clipboard and return the copied string.
-export async function copyFromElement(client: CdpClient, selector: string): Promise<string> {
-  const { result: focusResult, exceptionDetails: focusEx } = await client.raw.Runtime.evaluate({
-    expression: `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) throw new Error('Element not found: ' + ${JSON.stringify(selector)});
-      el.focus();
-      if (typeof el.select === 'function') {
-        el.select();
-      } else {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        const sel = window.getSelection();
-        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
-      }
-      return document.execCommand('copy');
-    })()`,
-    returnByValue: true,
-  });
-  if (focusEx) {
-    throw new Error(
-      `copyFromElement (select+copy) failed: ${focusEx.exception?.description ?? focusEx.text}`,
-    );
-  }
-  if (!focusResult.value) {
-    throw new Error(`copyFromElement: execCommand('copy') returned false for selector ${selector}`);
-  }
-  return readClipboard(client);
-}
-
-// Focus the element matching selector, write text to the clipboard, then dispatch
-// a synthetic paste event so the element receives the pasted content.
-export async function pasteIntoElement(
-  client: CdpClient,
-  selector: string,
-  text: string,
-): Promise<void> {
-  await writeClipboard(client, text);
-
+// Paste text at the cursor position in the currently active element using
+// document.execCommand('insertText', false, text).
+export async function pasteTextAtCursor(client: CdpClient, text: string): Promise<void> {
   const { exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) throw new Error('Element not found: ' + ${JSON.stringify(selector)});
-      el.focus();
-      const dt = new DataTransfer();
-      dt.setData('text/plain', ${JSON.stringify(text)});
-      const pasteEvent = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dt,
-      });
-      el.dispatchEvent(pasteEvent);
-      if (!pasteEvent.defaultPrevented) {
-        if (typeof el.setRangeText === 'function') {
-          el.setRangeText(${JSON.stringify(text)}, el.selectionStart ?? 0, el.selectionEnd ?? 0, 'end');
-        } else if ('value' in el) {
-          const start = el.selectionStart ?? el.value.length;
-          const end = el.selectionEnd ?? el.value.length;
-          el.value = el.value.slice(0, start) + ${JSON.stringify(text)} + el.value.slice(end);
-        } else {
-          document.execCommand('insertText', false, ${JSON.stringify(text)});
-        }
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      document.execCommand('insertText', false, ${JSON.stringify(text)});
     })()`,
     returnByValue: true,
+    awaitPromise: true,
   });
   if (exceptionDetails) {
     throw new Error(
-      `pasteIntoElement failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `pasteTextAtCursor failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
 }
 
-// Return the number of entries in window.__cbClipHistory if that array exists,
-// or 0 if it is absent.
-export async function getClipboardHistoryLength(client: CdpClient): Promise<number> {
+// Return an array of MIME type strings available in the current clipboard contents
+// via navigator.clipboard.read(). Returns an empty array if the API is unavailable
+// or no items are present.
+export async function getClipboardItemTypes(client: CdpClient): Promise<string[]> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
-    expression: `(window.__cbClipHistory?.length ?? 0)`,
+    expression: `(async () => {
+      if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') return [];
+      try {
+        const items = await navigator.clipboard.read();
+        const types = [];
+        for (const item of items) {
+          for (const t of item.types) {
+            if (!types.includes(t)) types.push(t);
+          }
+        }
+        return types;
+      } catch (_e) {
+        return [];
+      }
+    })()`,
     returnByValue: true,
+    awaitPromise: true,
   });
   if (exceptionDetails) {
     throw new Error(
-      `getClipboardHistoryLength failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+      `getClipboardItemTypes failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
     );
   }
-  return (result.value as number) ?? 0;
+  return (result.value as string[]) ?? [];
+}
+
+// Copy the outerHTML of the element matching selector to the clipboard via
+// navigator.clipboard.writeText().
+export async function copyElementHtml(client: CdpClient, selector: string): Promise<void> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(async () => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) throw new Error('Element not found: ' + ${JSON.stringify(selector)});
+      await navigator.clipboard.writeText(el.outerHTML);
+    })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(
+      `copyElementHtml failed: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+    );
+  }
 }

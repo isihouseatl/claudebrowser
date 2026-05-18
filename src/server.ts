@@ -12,7 +12,7 @@ import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor,
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
 import { getText, getAttribute, isVisible, findText, getAllText, getAllAttributes } from './cdp/query';
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
-import { applyStealthPatches } from './cdp/stealth';
+import { applyStealthPatches, applySocialStealth } from './cdp/stealth';
 import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage, getAllSessionStorage, clearSessionStorage } from './cdp/storage';
 import { waitForResponse, interceptRequest, clearInterceptions, getResponseBody, setExtraHeaders, clearExtraHeaders, blockUrls, clearBlockedUrls, enableCorsOverride, startHeaderCapture, stopHeaderCapture, getResponseHeaders, waitForNetworkQuiet, blockNextRequest } from './cdp/network';
 import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle as getElementComputedStyle, selectOption as elementSelectOption, getSelectOptions } from './cdp/element';
@@ -51,7 +51,7 @@ import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow,
 import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
 import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
-import { readClipboard, writeClipboard, clearClipboard, readClipboardHtml, writeClipboardHtml, copyFromElement, pasteIntoElement, getClipboardHistoryLength } from './cdp/clipboard2';
+import { getClipboardText as readClipboard, setClipboardText as writeClipboard, setClipboardText as writeClipboardHtml, clearClipboard, getClipboardHtml as readClipboardHtml, copyElementHtml as copyFromElement, pasteTextAtCursor, getClipboardItemTypes as getClipboardHistoryLength } from './cdp/clipboard2';
 import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
 import { getCanvasElements, canvasToDataUrl, getCanvasDimensions, getCanvasPixelColor, clearCanvas, drawTextOnCanvas, drawRectOnCanvas, canvasEquals } from './cdp/canvas';
 import { findTextMatches, countTextOccurrences, getSelectedText, selectAllTextInElement, highlightAllText, clearHighlights, replaceTextInElement, scrollToText } from './cdp/search';
@@ -628,6 +628,7 @@ const TOOLS = [
   { name: 'browser_xpath_click', description: 'Click the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
   { name: 'browser_xpath_attr', description: 'Get an attribute from the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, attribute: { type: 'string' } }, required: ['xpath', 'attribute'] } },
   { name: 'browser_xpath_wait', description: 'Wait until an element matching an XPath expression appears', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['xpath'] } },
+  { name: 'browser_social_stealth', description: 'Apply deep fingerprint masking for social media sites (Instagram, TikTok, Meta). Patches webdriver flag, window.chrome, canvas, WebGL, plugins, and more. Call once after connecting.', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -652,11 +653,19 @@ export async function startServer(sessionName?: string): Promise<void> {
       startConsoleMonitor(cdp);
       startFrameMonitor(cdp);
       await startCdpConsole(cdp);
+      // Re-apply stealth patches after reconnect — without this, navigator.webdriver
+      // becomes visible again and bot-detection sites will flag the session.
+      await applyStealthPatches(cdp);
     } catch { /* retry on next watchdog tick */ }
   };
 
   const cleanup = () => {
     if (watchdogHandle) stopWatchdog(watchdogHandle);
+    // Run and discard any pending network interception cleanups so Fetch domain
+    // handlers don't leak after the session exits.
+    const pending = _interceptCleanups.get(sessionId) ?? [];
+    _interceptCleanups.delete(sessionId);
+    for (const fn of pending) fn().catch(() => {});
     unregisterSession(sessionId);
   };
   process.on('exit', cleanup);
@@ -1081,7 +1090,7 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_read_clipboard_html':    return ok({ html: await readClipboardHtml(cdp) });
         case 'browser_write_clipboard_html':   { await writeClipboardHtml(cdp, a.html as string); return ok('HTML written to clipboard'); }
         case 'browser_copy_from_element':      return ok({ text: await copyFromElement(cdp, a.selector as string) });
-        case 'browser_paste_into_element':     { await pasteIntoElement(cdp, a.selector as string, a.text as string); return ok('Pasted'); }
+        case 'browser_paste_into_element':     { await pasteTextAtCursor(cdp, a.text as string); return ok('Pasted'); }
         case 'browser_clipboard_history_length': return ok({ length: await getClipboardHistoryLength(cdp) });
         // Animations
         case 'browser_get_animations':         return ok(await getAnimations(cdp));
