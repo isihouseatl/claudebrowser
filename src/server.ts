@@ -93,6 +93,9 @@ import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, set
 import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
 import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyEvent, triggerInputEvent, triggerFocusEvent, waitForDomMutation, getFormSubmitUrl } from './cdp/events2';
 import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, getResourceTimings as getResourceTimings3, getLongTasks, getMemoryInfo, getCLS, getFCP, getLCP } from './cdp/performance2';
+import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
+import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
+import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange } from './cdp/observer';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -850,6 +853,33 @@ const TOOLS = [
   { name: 'browser_cls', description: 'Get Cumulative Layout Shift score and shift count', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_fcp', description: 'Get First Contentful Paint time in ms', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_lcp', description: 'Get Largest Contentful Paint time in ms', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow DOM ─────────────────────────────────────────────────────────────────
+  { name: 'browser_has_shadow_root', description: 'Check if element has a shadow root and report its mode', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_shadow_children', description: 'List children inside a shadow root: tag, id, class', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_query_shadow_root', description: 'Run querySelector inside a shadow root', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, inner_selector: { type: 'string' } }, required: ['selector', 'inner_selector'] } },
+  { name: 'browser_shadow_root_mode', description: 'Get mode of shadow root (open, closed, or no shadow root)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_shadow_host_content', description: 'Get innerHTML of shadow host element (truncated to 2000 chars)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_count_shadow_roots', description: 'Count all elements on page that have a shadow root', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_host_elements', description: 'List up to 30 shadow-host elements on page: tag, id, class', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_slots', description: 'List slots in a shadow root with their names and assigned node counts', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── CSS inspection ──────────────────────────────────────────────────────────────
+  { name: 'browser_computed_color', description: 'Get computed color and background-color for element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_css_vars2', description: 'Get all CSS custom properties (--variables) defined on :root', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_css_var2', description: 'Set a CSS custom property (--name) on :root', inputSchema: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' } }, required: ['name', 'value'] } },
+  { name: 'browser_element_classes', description: 'Get list of CSS classes on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_toggle_class', description: 'Toggle a CSS class on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, class_name: { type: 'string' } }, required: ['selector', 'class_name'] } },
+  { name: 'browser_computed_property', description: 'Get a single computed CSS property value for element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, property: { type: 'string' } }, required: ['selector', 'property'] } },
+  { name: 'browser_set_inline_style2', description: 'Set an inline CSS property on element (MCP format)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, property: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'property', 'value'] } },
+  { name: 'browser_stylesheet_count', description: 'Count stylesheets loaded on the page', inputSchema: { type: 'object', properties: {} } },
+  // ── Observer / mutation ─────────────────────────────────────────────────────────
+  { name: 'browser_wait_element_added', description: 'Wait for an element matching selector to be added to DOM', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_element_removed2', description: 'Wait (MutationObserver) for element to be removed from DOM', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_text_change', description: 'Wait for text content of element to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_class_change', description: 'Wait for class attribute of element to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_intersection_ratio', description: 'Get intersection ratio (0-1) of element with viewport', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_wait_value_change2', description: 'Wait (MutationObserver+input) for element value to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_resize_info', description: 'Get size info for element: width, height, scrollWidth, scrollHeight, offsetWidth, offsetHeight', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_wait_attribute_change', description: 'Wait for a specific attribute on element to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'attribute'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1689,6 +1719,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_cls':                    return await getCLS(cdp);
         case 'browser_fcp':                    return await getFCP(cdp);
         case 'browser_lcp':                    return await getLCP(cdp);
+                // shadow-dom
+        case 'browser_has_shadow_root':          return await hasShadowRoot(cdp, a.selector as string);
+        case 'browser_shadow_children':          return await getShadowChildren(cdp, a.selector as string);
+        case 'browser_query_shadow_root':        return await queryShadowRoot(cdp, a.selector as string, a.inner_selector as string);
+        case 'browser_shadow_root_mode':         return await getShadowRootMode(cdp, a.selector as string);
+        case 'browser_shadow_host_content':      return await getShadowHostContent(cdp, a.selector as string);
+        case 'browser_count_shadow_roots':       return await countShadowRoots(cdp);
+        case 'browser_shadow_host_elements':     return await getShadowHostElements(cdp);
+        case 'browser_shadow_slots':             return await getShadowSlots(cdp, a.selector as string);
+        // css2
+        case 'browser_computed_color':           return await getComputedColor(cdp, a.selector as string);
+        case 'browser_css_vars2':                return await getCssVariables2(cdp);
+        case 'browser_set_css_var2':             return await setCssVariable2(cdp, a.name as string, a.value as string);
+        case 'browser_element_classes':          return await getElementClasses(cdp, a.selector as string);
+        case 'browser_toggle_class':             return await toggleClass(cdp, a.selector as string, a.class_name as string);
+        case 'browser_computed_property':        return await getComputedProperty(cdp, a.selector as string, a.property as string);
+        case 'browser_set_inline_style2':        return await setInlineStyle2(cdp, a.selector as string, a.property as string, a.value as string);
+        case 'browser_stylesheet_count':         return await getStylesheetCount(cdp);
+        // observer
+        case 'browser_wait_element_added':       return await waitForElementAdded(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_wait_element_removed2':    return await waitForElementRemoved2(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_wait_text_change':         return await waitForTextChange(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_wait_class_change':        return await waitForClassChange(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_intersection_ratio':       return await getIntersectionRatio(cdp, a.selector as string);
+        case 'browser_wait_value_change2':       return await waitForValueChange2(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_resize_info':              return await getResizeInfo(cdp, a.selector as string);
+        case 'browser_wait_attribute_change':    return await waitForAttributeChange(cdp, a.selector as string, a.attribute as string, a.timeout_ms as number ?? 5000);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
