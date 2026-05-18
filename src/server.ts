@@ -6,9 +6,9 @@ import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
 import { navigate, reload, goBack, scroll, waitForSelector } from './cdp/page';
-import { clickAt, clickSelector, typeText, pressKey, selectOption, setValue } from './cdp/input';
+import { clickAt, clickSelector, typeText, pressKey, selectOption, setValue, hoverAt, hoverSelector, handleDialog, uploadFile } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
-import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor } from './cdp/evaluate';
+import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages } from './cdp/evaluate';
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
 import { readConfig } from './config';
 
@@ -50,6 +50,11 @@ const TOOLS = [
   { name: 'browser_evaluate', description: 'Execute JavaScript and return result', inputSchema: { type: 'object', properties: { script: { type: 'string' } }, required: ['script'] } },
   { name: 'browser_set_value', description: 'Set input value (React/Vue safe via native setter)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'value'] } },
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover', description: 'Move mouse over x,y coordinates (reveals tooltips and dropdown menus)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_hover_selector', description: 'Move mouse over element by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_handle_dialog', description: 'Accept or dismiss an alert/confirm/prompt dialog', inputSchema: { type: 'object', properties: { accept: { type: 'boolean', description: 'true to click OK/Accept, false to click Cancel/Dismiss' }, prompt_text: { type: 'string', description: 'Text to enter into prompt dialogs' } }, required: ['accept'] } },
+  { name: 'browser_file_upload', description: 'Set files on an <input type="file"> element', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the file input' }, file_paths: { type: 'array', items: { type: 'string' }, description: 'Absolute paths to files' } }, required: ['selector', 'file_paths'] } },
+  { name: 'browser_console_messages', description: 'Get browser console output (log, warn, error). Useful for diagnosing JS errors.', inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'Filter by type: log, warn, error, info' } } } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads (or configured platforms). Run this before starting any automation.', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_wait_for_auth', description: 'Wait up to 2 minutes for the user to log in on the current page. Use after telling the user a session has expired.', inputSchema: { type: 'object', properties: { platform: { type: 'string', description: 'Platform name matching an auth check preset (e.g. "Instagram")' }, timeout_ms: { type: 'number' } } } },
 ];
@@ -70,6 +75,7 @@ export async function startServer(): Promise<void> {
   try {
     await cdp.connect();
     startNetworkMonitor(cdp);
+    startConsoleMonitor(cdp);
   } catch {
     process.stderr.write(`Warning: Chrome not reachable on port ${config.debugPort}. Run claudebrowser init first.\n`);
   }
@@ -86,7 +92,7 @@ export async function startServer(): Promise<void> {
     const a = args as Record<string, unknown>;
 
     if (!cdp.isConnected() && name !== 'browser_status') {
-      try { resetNetworkMonitor(); await cdp.connect(); startNetworkMonitor(cdp); } catch {
+      try { resetNetworkMonitor(); resetConsoleMonitor(); await cdp.connect(); startNetworkMonitor(cdp); startConsoleMonitor(cdp); } catch {
         return fail('Chrome not connected. Is it running? Run: claudebrowser init', 'CDP_DISCONNECTED', 'claudebrowser status');
       }
     }
@@ -119,6 +125,11 @@ export async function startServer(): Promise<void> {
           const target = await cdp.getActiveTarget();
           return ok({ connected: true, port: config.debugPort, activeTab: target ? { url: target.url, title: target.title } : null });
         }
+        case 'browser_hover':         { await hoverAt(cdp, a.x as number, a.y as number); return ok('Hovered'); }
+        case 'browser_hover_selector':{ await hoverSelector(cdp, a.selector as string); return ok('Hovered'); }
+        case 'browser_handle_dialog': { await handleDialog(cdp, a.accept as boolean, a.prompt_text as string | undefined); return ok('Dialog handled'); }
+        case 'browser_file_upload':   { await uploadFile(cdp, a.selector as string, a.file_paths as string[]); return ok('Files set'); }
+        case 'browser_console_messages': return ok(getConsoleMessages(a.type as string | undefined));
         case 'browser_auth_check': {
           const checks = config.authChecks ?? AUTH_PRESETS;
           const results = await checkAllAuth(cdp, checks);

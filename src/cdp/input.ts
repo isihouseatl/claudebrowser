@@ -59,3 +59,33 @@ export async function setValue(client: CdpClient, selector: string, value: strin
     })()`,
   });
 }
+
+export async function hoverAt(client: CdpClient, x: number, y: number): Promise<void> {
+  await client.raw.Input.dispatchMouseEvent({ type: 'mouseMoved', x, y });
+}
+
+export async function hoverSelector(client: CdpClient, selector: string): Promise<void> {
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`,
+    returnByValue: true,
+  });
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+  const { x, y } = result.value as { x: number; y: number };
+  await hoverAt(client, x, y);
+}
+
+export async function handleDialog(client: CdpClient, accept: boolean, promptText?: string): Promise<void> {
+  await client.raw.Page.handleJavaScriptDialog({ accept, promptText });
+}
+
+export async function uploadFile(client: CdpClient, selector: string, filePaths: string[]): Promise<void> {
+  const { root } = await client.raw.DOM.getDocument({ depth: 0 });
+  const { nodeId } = await client.raw.DOM.querySelector({ nodeId: root.nodeId, selector });
+  if (!nodeId) throw new Error(`File input not found: ${selector}`);
+  await client.raw.DOM.setFileInputFiles({ nodeId, files: filePaths });
+}

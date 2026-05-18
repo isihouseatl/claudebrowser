@@ -57,3 +57,41 @@ export function getNetworkRequests(filter?: string): NetworkRequest[] {
 export function clearNetworkLog(): void {
   requestLog.clear();
 }
+
+interface ConsoleMessage {
+  type: string;
+  text: string;
+  timestamp: number;
+}
+
+const consoleLog: ConsoleMessage[] = [];
+const MAX_CONSOLE_SIZE = 500;
+const CONSOLE_EVICT_COUNT = 100;
+let consoleMonitorStarted = false;
+
+export function startConsoleMonitor(client: CdpClient): void {
+  if (consoleMonitorStarted) return;
+  consoleMonitorStarted = true;
+
+  client.raw.Runtime.consoleAPICalled(({ type, args, timestamp }) => {
+    if (consoleLog.length >= MAX_CONSOLE_SIZE) {
+      consoleLog.splice(0, CONSOLE_EVICT_COUNT);
+    }
+    const text = args.map(a => a.value ?? a.description ?? String(a.type)).join(' ');
+    consoleLog.push({ type, text, timestamp });
+  });
+}
+
+export function resetConsoleMonitor(): void {
+  consoleMonitorStarted = false;
+  consoleLog.length = 0;
+}
+
+export function getConsoleMessages(type?: string): ConsoleMessage[] {
+  const filtered = type ? consoleLog.filter(m => m.type === type) : consoleLog;
+  return filtered.slice(-100);
+}
+
+export function clearConsoleLog(): void {
+  consoleLog.length = 0;
+}

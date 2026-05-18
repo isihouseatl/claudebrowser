@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('claudebrowser')
   .description('Claude Code browser automation via Chrome CDP')
-  .version('1.0.0');
+  .version('1.1.0');
 
 program
   .command('init')
@@ -79,6 +79,14 @@ program
 
     console.log('');
     process.exit(allLoggedIn ? 0 : 1);
+  });
+
+program
+  .command('doctor')
+  .description('Diagnose common setup issues')
+  .action(async () => {
+    const { runDoctor } = await import('./doctor');
+    await runDoctor();
   });
 
 program.parse();
