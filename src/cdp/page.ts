@@ -392,3 +392,54 @@ export async function waitForElementCount(
   }
   throw new Error(`Expected ${count} elements matching "${selector}" but count did not match within ${timeoutMs}ms`);
 }
+
+export async function getPageSource(client: CdpClient): Promise<string> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: 'document.documentElement.outerHTML',
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return result.value as string;
+}
+
+export async function getHistoryLength(client: CdpClient): Promise<number> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: 'history.length',
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return result.value as number;
+}
+
+export async function goToHistoryIndex(client: CdpClient, n: number): Promise<string> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `history.go(${n})`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  await new Promise(r => setTimeout(r, 300));
+  const { result, exceptionDetails: hrefEx } = await client.raw.Runtime.evaluate({
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  if (hrefEx) {
+    throw new Error(`JS error: ${hrefEx.exception?.description ?? hrefEx.text}`);
+  }
+  return result.value as string;
+}
+
+export async function scrollIntoView(client: CdpClient, x: number, y: number): Promise<void> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `window.scrollTo({ left: ${x} - window.innerWidth / 2, top: ${y} - window.innerHeight / 2, behavior: 'instant' })`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+}

@@ -5,8 +5,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
-import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText, getScrollPosition, scrollToCoords, scrollToTop, scrollToBottom, waitForAttribute, waitForElementCount } from './cdp/page';
-import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues } from './cdp/input';
+import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText, getScrollPosition, scrollToCoords, scrollToTop, scrollToBottom, waitForAttribute, waitForElementCount, getPageSource, getHistoryLength, goToHistoryIndex, scrollIntoView } from './cdp/page';
+import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues, setRangeValue, setDateValue, setColorValue, setSelectionRange, tapAt, swipeAt, pinchZoom } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
 import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog } from './cdp/evaluate';
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
@@ -26,6 +26,9 @@ import { setAttribute, removeAttribute, addClass, removeClass, injectCss, remove
 import { setClipboard, getClipboard } from './cdp/clipboard';
 import { listIndexedDatabases, getAllIndexedDb, getIndexedDb, clearIndexedDb } from './cdp/indexeddb';
 import { getPaintTiming, getNavigationTiming, getResourceTimings, clearPerformanceBuffer } from './cdp/performance';
+import { startWebSocketLog, getWebSocketMessages, getWebSocketConnections, clearWebSocketLog, stopWebSocketLog } from './cdp/websocket';
+import { startCssCoverage, stopCssCoverage, startJsCoverage, takeJsCoverage, stopJsCoverage } from './cdp/coverage';
+import { listServiceWorkers, unregisterServiceWorker, updateServiceWorker, isControlledByServiceWorker } from './cdp/serviceworker';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -92,6 +95,10 @@ const TOOLS = [
   { name: 'browser_hover_selector', description: 'Move mouse over element by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_scroll', description: 'Scroll the page by pixel amount', inputSchema: { type: 'object', properties: { direction: { type: 'string', enum: ['up', 'down', 'left', 'right'] }, amount: { type: 'number' } }, required: ['direction', 'amount'] } },
   { name: 'browser_scroll_to', description: 'Scroll an element into view by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_page_source', description: 'Get the full HTML source of the page (document.documentElement.outerHTML)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_history_length', description: 'Get the number of entries in the browser history for this tab', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_go_to_history_index', description: 'Navigate to a history entry by offset (e.g. -2 = two pages back, 1 = one page forward)', inputSchema: { type: 'object', properties: { n: { type: 'number' } }, required: ['n'] } },
+  { name: 'browser_scroll_into_view', description: 'Scroll so that coordinates (x,y) are centered in the viewport', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
   { name: 'browser_scroll_to_top', description: 'Scroll to the top of the page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_scroll_to_bottom', description: 'Scroll to the bottom of the page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_scroll_to_coords', description: 'Scroll to absolute coordinates (x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
@@ -202,6 +209,32 @@ const TOOLS = [
   { name: 'browser_evaluate_in_frame', description: 'Execute JavaScript inside a specific iframe', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the <iframe> element' }, script: { type: 'string' } }, required: ['selector', 'script'] } },
   { name: 'browser_switch_frame', description: 'Switch all subsequent operations to run inside a specific iframe', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_switch_main_frame', description: 'Switch back to the main page frame', inputSchema: { type: 'object', properties: {} } },
+  // ── Input type helpers ────────────────────────────────────────────────────────
+  { name: 'browser_set_range', description: 'Set the value of an <input type="range"> slider', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'number' } }, required: ['selector', 'value'] } },
+  { name: 'browser_set_date', description: 'Set the value of an <input type="date"> field (YYYY-MM-DD)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string', description: 'Date string in YYYY-MM-DD format' } }, required: ['selector', 'value'] } },
+  { name: 'browser_set_color', description: 'Set the value of an <input type="color"> field (#rrggbb hex)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string', description: 'Hex color e.g. #ff0000' } }, required: ['selector', 'value'] } },
+  { name: 'browser_set_selection_range', description: 'Set the text selection range inside an input or textarea', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, start: { type: 'number' }, end: { type: 'number' } }, required: ['selector', 'start', 'end'] } },
+  // ── Touch ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_tap', description: 'Simulate a touch tap at (x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_swipe', description: 'Simulate a touch swipe from (startX, startY) to (endX, endY)', inputSchema: { type: 'object', properties: { start_x: { type: 'number' }, start_y: { type: 'number' }, end_x: { type: 'number' }, end_y: { type: 'number' }, steps: { type: 'number', description: 'Number of intermediate touch points (default 10)' } }, required: ['start_x', 'start_y', 'end_x', 'end_y'] } },
+  { name: 'browser_pinch_zoom', description: 'Simulate a two-finger pinch or zoom gesture at center (x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, from_distance: { type: 'number', description: 'Initial finger spread in pixels' }, to_distance: { type: 'number', description: 'Final finger spread in pixels (larger = zoom in, smaller = zoom out)' }, steps: { type: 'number' } }, required: ['x', 'y', 'from_distance', 'to_distance'] } },
+  // ── WebSocket monitor ─────────────────────────────────────────────────────────
+  { name: 'browser_websocket_start', description: 'Start capturing WebSocket messages and connections', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_messages', description: 'Get all captured WebSocket messages (sent + received) since log started', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_connections', description: 'Get all WebSocket connections (open and closed) since log started', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_clear', description: 'Clear the WebSocket message/connection buffer without stopping capture', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_stop', description: 'Stop WebSocket capture and return the final message log', inputSchema: { type: 'object', properties: {} } },
+  // ── CSS & JS Coverage ─────────────────────────────────────────────────────────
+  { name: 'browser_start_css_coverage', description: 'Start CSS rule usage tracking (to find unused CSS)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stop_css_coverage', description: 'Stop CSS coverage and return used/unused rules with offsets', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_start_js_coverage', description: 'Start JavaScript precise coverage tracking', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_take_js_coverage', description: 'Take a JS coverage snapshot without stopping (shows which code ranges ran)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stop_js_coverage', description: 'Stop JS coverage and return the final coverage report', inputSchema: { type: 'object', properties: {} } },
+  // ── Service Workers ───────────────────────────────────────────────────────────
+  { name: 'browser_list_service_workers', description: 'List all registered service workers for the current page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_unregister_service_worker', description: 'Unregister a service worker by scope URL', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
+  { name: 'browser_update_service_worker', description: 'Force a service worker registration to update (re-fetch)', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
+  { name: 'browser_is_controlled_by_sw', description: 'Check whether the current page is controlled by a service worker', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -250,7 +283,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.9.0' },
+    { name: 'claudebrowser', version: '1.10.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -434,6 +467,32 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_evaluate_in_frame':      return ok(await evaluateInFrame(cdp, a.selector as string, a.script as string));
         case 'browser_switch_frame':           return ok({ frameId: await switchToFrame(cdp, a.selector as string) });
         case 'browser_switch_main_frame':      { switchToMainFrame(cdp); return ok('Switched to main frame'); }
+        // Input type helpers
+        case 'browser_set_range':              { await setRangeValue(cdp, a.selector as string, a.value as number); return ok('Range value set'); }
+        case 'browser_set_date':               { await setDateValue(cdp, a.selector as string, a.value as string); return ok('Date value set'); }
+        case 'browser_set_color':              { await setColorValue(cdp, a.selector as string, a.value as string); return ok('Color value set'); }
+        case 'browser_set_selection_range':    { await setSelectionRange(cdp, a.selector as string, a.start as number, a.end as number); return ok('Selection range set'); }
+        // Touch
+        case 'browser_tap':                    { await tapAt(cdp, a.x as number, a.y as number); return ok('Tapped'); }
+        case 'browser_swipe':                  { await swipeAt(cdp, a.start_x as number, a.start_y as number, a.end_x as number, a.end_y as number, a.steps as number | undefined); return ok('Swiped'); }
+        case 'browser_pinch_zoom':             { await pinchZoom(cdp, a.x as number, a.y as number, a.from_distance as number, a.to_distance as number, a.steps as number | undefined); return ok('Pinch zoom applied'); }
+        // WebSocket monitor
+        case 'browser_websocket_start':        { await startWebSocketLog(cdp); return ok('WebSocket capture started'); }
+        case 'browser_websocket_messages':     return ok(getWebSocketMessages(cdp));
+        case 'browser_websocket_connections':  return ok(getWebSocketConnections(cdp));
+        case 'browser_websocket_clear':        { clearWebSocketLog(cdp); return ok('WebSocket buffer cleared'); }
+        case 'browser_websocket_stop':         return ok(await stopWebSocketLog(cdp));
+        // CSS & JS coverage
+        case 'browser_start_css_coverage':     { await startCssCoverage(cdp); return ok('CSS coverage started'); }
+        case 'browser_stop_css_coverage':      return ok(await stopCssCoverage(cdp));
+        case 'browser_start_js_coverage':      { await startJsCoverage(cdp); return ok('JS coverage started'); }
+        case 'browser_take_js_coverage':       return ok(await takeJsCoverage(cdp));
+        case 'browser_stop_js_coverage':       return ok(await stopJsCoverage(cdp));
+        // Service workers
+        case 'browser_list_service_workers':   return ok(await listServiceWorkers(cdp));
+        case 'browser_unregister_service_worker': return ok({ unregistered: await unregisterServiceWorker(cdp, a.scope_url as string) });
+        case 'browser_update_service_worker':  { await updateServiceWorker(cdp, a.scope_url as string); return ok('Service worker updated'); }
+        case 'browser_is_controlled_by_sw':    return ok({ controlled: await isControlledByServiceWorker(cdp) });
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });

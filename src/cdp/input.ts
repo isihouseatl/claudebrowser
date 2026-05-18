@@ -218,3 +218,162 @@ export async function getFormValues(
   }
   return result.value as FormValues;
 }
+
+export async function setRangeValue(
+  client: CdpClient,
+  selector: string,
+  value: number,
+): Promise<void> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.value = String(${value});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) throw new Error(exceptionDetails.text ?? 'Runtime exception in setRangeValue');
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+}
+
+export async function setDateValue(
+  client: CdpClient,
+  selector: string,
+  value: string,
+): Promise<void> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.value = ${JSON.stringify(value)};
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) throw new Error(exceptionDetails.text ?? 'Runtime exception in setDateValue');
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+}
+
+export async function setColorValue(
+  client: CdpClient,
+  selector: string,
+  value: string,
+): Promise<void> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.value = ${JSON.stringify(value)};
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) throw new Error(exceptionDetails.text ?? 'Runtime exception in setColorValue');
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+}
+
+export async function setSelectionRange(
+  client: CdpClient,
+  selector: string,
+  start: number,
+  end: number,
+): Promise<void> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      el.setSelectionRange(${start}, ${end});
+      el.focus();
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) throw new Error(exceptionDetails.text ?? 'Runtime exception in setSelectionRange');
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+}
+
+// Simulate a touch tap at coordinates (for mobile testing — use after browser_set_device_metrics with mobile:true)
+export async function tapAt(
+  client: CdpClient,
+  x: number,
+  y: number,
+): Promise<void> {
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchStart',
+    touchPoints: [{ x, y, id: 0, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 }],
+  });
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+}
+
+// Simulate a touch swipe from (startX,startY) to (endX,endY) with steps
+export async function swipeAt(
+  client: CdpClient,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  steps: number = 10,
+): Promise<void> {
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchStart',
+    touchPoints: [{ x: startX, y: startY, id: 0, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 }],
+  });
+  for (let i = 0; i < steps; i++) {
+    const x = startX + (endX - startX) * i / (steps - 1);
+    const y = startY + (endY - startY) * i / (steps - 1);
+    await (client.raw.Input.dispatchTouchEvent as any)({
+      type: 'touchMove',
+      touchPoints: [{ x, y, id: 0, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 }],
+    });
+    await new Promise(r => setTimeout(r, 16));
+  }
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+}
+
+// Simulate pinch zoom gesture (two-finger pinch or spread)
+// centerX/Y: center of the gesture
+// fromDistance/toDistance: finger spread in pixels
+export async function pinchZoom(
+  client: CdpClient,
+  centerX: number,
+  centerY: number,
+  fromDistance: number,
+  toDistance: number,
+  steps: number = 10,
+): Promise<void> {
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchStart',
+    touchPoints: [
+      { x: centerX - fromDistance / 2, y: centerY, id: 0, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 },
+      { x: centerX + fromDistance / 2, y: centerY, id: 1, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 },
+    ],
+  });
+  for (let i = 0; i < steps; i++) {
+    const spread = fromDistance + (toDistance - fromDistance) * i / (steps - 1);
+    await (client.raw.Input.dispatchTouchEvent as any)({
+      type: 'touchMove',
+      touchPoints: [
+        { x: centerX - spread / 2, y: centerY, id: 0, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 },
+        { x: centerX + spread / 2, y: centerY, id: 1, radiusX: 1, radiusY: 1, rotationAngle: 0, force: 1 },
+      ],
+    });
+    await new Promise(r => setTimeout(r, 16));
+  }
+  await (client.raw.Input.dispatchTouchEvent as any)({
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+}

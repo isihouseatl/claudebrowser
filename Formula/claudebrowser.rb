@@ -2,7 +2,7 @@
 class Claudebrowser < Formula
   desc "Claude Code browser automation via Chrome CDP"
   homepage "https://github.com/isihouseatl/claudebrowser"
-  version "1.9.0"
+  version "1.10.0"
   license "MIT"
 
   on_arm do
