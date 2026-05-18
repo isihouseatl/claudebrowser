@@ -14,12 +14,14 @@ import { getText, getAttribute, isVisible, findText, getAllText, getAllAttribute
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
 import { applyStealthPatches } from './cdp/stealth';
 import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage, getAllSessionStorage, clearSessionStorage } from './cdp/storage';
-import { waitForResponse, interceptRequest, clearInterceptions, getResponseBody } from './cdp/network';
+import { waitForResponse, interceptRequest, clearInterceptions, getResponseBody, setExtraHeaders, clearExtraHeaders, blockUrls, clearBlockedUrls, enableCorsOverride, startHeaderCapture, stopHeaderCapture, getResponseHeaders, waitForNetworkQuiet, blockNextRequest } from './cdp/network';
 import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle as getElementComputedStyle, selectOption as elementSelectOption, getSelectOptions } from './cdp/element';
 import { startConsoleMonitor as startCdpConsole, getConsoleMessages as getCdpConsoleMessages, clearConsoleMessages as clearCdpConsoleMessages, getJsErrors, clearJsErrors, stopConsoleMonitor as stopCdpConsole } from './cdp/console';
 import { startNetworkLog, getNetworkLog, clearNetworkLog as clearNetLog, stopNetworkLog } from './cdp/netlog';
 import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions, setMediaType, setColorScheme, setPrefersReducedMotion } from './cdp/emulation';
-import { setExtraHeaders, clearExtraHeaders } from './cdp/network';
+import { getSecurityInfo, hasMixedContent, getCSPInfo, getThirdPartyDomains, isSecureContext } from './cdp/security';
+import { listCacheNames, getCacheEntries, deleteCache, deleteCacheEntry, clearAllCaches, getStorageQuota, getStorageBreakdown } from './cdp/cache';
+import { getZIndex, getElementsAtPoint, getPixelColor, getColors, highlightElement, removeHighlight, doElementsOverlap, getFontInfo } from './cdp/visual';
 import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
 import { queryShadow, getShadowHtml, evaluateInShadow } from './cdp/shadow';
 import { setAttribute, removeAttribute, addClass, removeClass, injectCss, removeInjectedCss, submitForm, resetForm } from './cdp/dom';
@@ -243,6 +245,38 @@ const TOOLS = [
   { name: 'browser_unregister_service_worker', description: 'Unregister a service worker by scope URL', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_update_service_worker', description: 'Force a service worker registration to update (re-fetch)', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_is_controlled_by_sw', description: 'Check whether the current page is controlled by a service worker', inputSchema: { type: 'object', properties: {} } },
+  // ── Security inspection ───────────────────────────────────────────────────────
+  { name: 'browser_get_security_info', description: 'Get TLS/security state for the current page (secure, insecure, mixed content, certificate info)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_has_mixed_content', description: 'Check if the page has any mixed content (HTTP resources on an HTTPS page)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_csp', description: 'Get Content Security Policy meta tags on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_third_party_domains', description: 'List all third-party domains the page has loaded resources from', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_secure_context', description: 'Check if the current page is in a secure context (HTTPS, localhost, etc.)', inputSchema: { type: 'object', properties: {} } },
+  // ── Network utilities ─────────────────────────────────────────────────────────
+  { name: 'browser_block_urls', description: 'Block requests to URLs matching glob patterns', inputSchema: { type: 'object', properties: { patterns: { type: 'array', items: { type: 'string' }, description: 'URL glob patterns to block (e.g. ["*google-analytics*", "*ads*"])' } }, required: ['patterns'] } },
+  { name: 'browser_clear_blocked_urls', description: 'Remove all blocked URL patterns', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_enable_cors_override', description: 'Inject Access-Control-Allow-Origin: * into all responses (bypasses CORS for testing)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_start_header_capture', description: 'Start capturing response headers per requestId (required before browser_get_response_headers)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stop_header_capture', description: 'Stop capturing response headers', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_response_headers', description: 'Get response headers for a captured request by requestId', inputSchema: { type: 'object', properties: { request_id: { type: 'string' } }, required: ['request_id'] } },
+  { name: 'browser_wait_for_network_quiet', description: 'Wait until there are no in-flight network requests for a sustained period (stricter than wait_for_network_idle)', inputSchema: { type: 'object', properties: { idle_ms: { type: 'number', description: 'How long request count must stay at 0 (default 500ms)' }, timeout_ms: { type: 'number' } } } },
+  { name: 'browser_block_next_request', description: 'Block the next network request whose URL contains a pattern, once', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' } }, required: ['url_pattern'] } },
+  // ── Cache API ─────────────────────────────────────────────────────────────────
+  { name: 'browser_list_caches', description: 'List all Cache API cache names for the current origin', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_cache_entries', description: 'Get all entries in a named Cache API cache', inputSchema: { type: 'object', properties: { cache_name: { type: 'string' } }, required: ['cache_name'] } },
+  { name: 'browser_delete_cache', description: 'Delete a named Cache API cache entirely', inputSchema: { type: 'object', properties: { cache_name: { type: 'string' } }, required: ['cache_name'] } },
+  { name: 'browser_delete_cache_entry', description: 'Delete a specific URL from a named cache', inputSchema: { type: 'object', properties: { cache_name: { type: 'string' }, url: { type: 'string' } }, required: ['cache_name', 'url'] } },
+  { name: 'browser_clear_all_caches', description: 'Clear all Cache API caches for the current origin', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_storage_quota', description: 'Get storage quota: how much storage this origin is using and how much is available', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_storage_breakdown', description: 'Get storage usage breakdown by type: localStorage, sessionStorage, caches, indexedDB, serviceWorker', inputSchema: { type: 'object', properties: {} } },
+  // ── Visual inspection ─────────────────────────────────────────────────────────
+  { name: 'browser_get_z_index', description: 'Get the computed z-index of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_elements_at_point', description: 'Find all elements stacked at a given (x, y) coordinate, back to front', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_get_pixel_color', description: 'Get the background color at a point (x, y) by reading the element at that position', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_get_colors', description: 'Get computed color, background-color, and border-color for all elements matching a selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_highlight_element', description: 'Visually highlight an element with a colored outline. Returns styleId for removal.', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, color: { type: 'string', description: 'CSS color (default #ff3b30)' } }, required: ['selector'] } },
+  { name: 'browser_remove_highlight', description: 'Remove a highlight previously added by browser_highlight_element', inputSchema: { type: 'object', properties: { style_id: { type: 'string' } }, required: ['style_id'] } },
+  { name: 'browser_do_elements_overlap', description: 'Check if two elements overlap visually (bounding boxes intersect)', inputSchema: { type: 'object', properties: { selector1: { type: 'string' }, selector2: { type: 'string' } }, required: ['selector1', 'selector2'] } },
+  { name: 'browser_get_font_info', description: 'Get font information for an element: family, size, weight, line-height, letter-spacing', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── DOM mutation observer ─────────────────────────────────────────────────────
   { name: 'browser_mutation_start', description: 'Start observing DOM mutations on elements matching a selector. Use a unique observerId to manage multiple observers.', inputSchema: { type: 'object', properties: { observer_id: { type: 'string', description: 'Unique name for this observer (e.g. "nav-changes")' }, selector: { type: 'string', description: 'CSS selector to observe, or "document" for page-level' }, child_list: { type: 'boolean' }, attributes: { type: 'boolean' }, character_data: { type: 'boolean' }, subtree: { type: 'boolean', description: 'Observe descendants too (default true)' } }, required: ['observer_id', 'selector'] } },
   { name: 'browser_mutation_get', description: 'Get all captured DOM mutations for a given observerId', inputSchema: { type: 'object', properties: { observer_id: { type: 'string' } }, required: ['observer_id'] } },
@@ -345,7 +379,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.12.0' },
+    { name: 'claudebrowser', version: '1.13.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -555,6 +589,46 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_unregister_service_worker': return ok({ unregistered: await unregisterServiceWorker(cdp, a.scope_url as string) });
         case 'browser_update_service_worker':  { await updateServiceWorker(cdp, a.scope_url as string); return ok('Service worker updated'); }
         case 'browser_is_controlled_by_sw':    return ok({ controlled: await isControlledByServiceWorker(cdp) });
+        // Security inspection
+        case 'browser_get_security_info':      return ok(await getSecurityInfo(cdp));
+        case 'browser_has_mixed_content':      return ok({ mixed: await hasMixedContent(cdp) });
+        case 'browser_get_csp':                return ok(await getCSPInfo(cdp));
+        case 'browser_get_third_party_domains':return ok(await getThirdPartyDomains(cdp));
+        case 'browser_is_secure_context':      return ok({ secure: await isSecureContext(cdp) });
+        // Network utilities
+        case 'browser_block_urls':             { await blockUrls(cdp, a.patterns as string[]); return ok('URLs blocked'); }
+        case 'browser_clear_blocked_urls':     { await clearBlockedUrls(cdp); return ok('Blocked URLs cleared'); }
+        case 'browser_enable_cors_override': {
+          const cleanupCors = await enableCorsOverride(cdp);
+          _interceptCleanups.set(sessionId, [...(_interceptCleanups.get(sessionId) ?? []), cleanupCors]);
+          return ok('CORS override active');
+        }
+        case 'browser_start_header_capture':   { startHeaderCapture(cdp); return ok('Header capture started'); }
+        case 'browser_stop_header_capture':    { stopHeaderCapture(cdp); return ok('Header capture stopped'); }
+        case 'browser_get_response_headers':   return ok(await getResponseHeaders(cdp, a.request_id as string));
+        case 'browser_wait_for_network_quiet': { await waitForNetworkQuiet(cdp, a.idle_ms as number | undefined, a.timeout_ms as number | undefined); return ok('Network quiet'); }
+        case 'browser_block_next_request': {
+          const cleanupBlock = await blockNextRequest(cdp, a.url_pattern as string);
+          _interceptCleanups.set(sessionId, [...(_interceptCleanups.get(sessionId) ?? []), cleanupBlock]);
+          return ok('Next matching request will be blocked');
+        }
+        // Cache API
+        case 'browser_list_caches':            return ok(await listCacheNames(cdp));
+        case 'browser_get_cache_entries':      return ok(await getCacheEntries(cdp, a.cache_name as string));
+        case 'browser_delete_cache':           return ok({ deleted: await deleteCache(cdp, a.cache_name as string) });
+        case 'browser_delete_cache_entry':     return ok({ deleted: await deleteCacheEntry(cdp, a.cache_name as string, a.url as string) });
+        case 'browser_clear_all_caches':       { await clearAllCaches(cdp); return ok('All caches cleared'); }
+        case 'browser_get_storage_quota':      return ok(await getStorageQuota(cdp));
+        case 'browser_get_storage_breakdown':  return ok(await getStorageBreakdown(cdp));
+        // Visual inspection
+        case 'browser_get_z_index':            return ok({ zIndex: await getZIndex(cdp, a.selector as string) });
+        case 'browser_get_elements_at_point':  return ok(await getElementsAtPoint(cdp, a.x as number, a.y as number));
+        case 'browser_get_pixel_color':        return ok(await getPixelColor(cdp, a.x as number, a.y as number));
+        case 'browser_get_colors':             return ok(await getColors(cdp, a.selector as string));
+        case 'browser_highlight_element':      return ok({ styleId: await highlightElement(cdp, a.selector as string, a.color as string | undefined) });
+        case 'browser_remove_highlight':       { await removeHighlight(cdp, a.style_id as string); return ok('Highlight removed'); }
+        case 'browser_do_elements_overlap':    return ok({ overlap: await doElementsOverlap(cdp, a.selector1 as string, a.selector2 as string) });
+        case 'browser_get_font_info':          return ok(await getFontInfo(cdp, a.selector as string));
         // DOM mutation observer
         case 'browser_mutation_start':         { await startMutationObserver(cdp, a.observer_id as string, a.selector as string, { childList: a.child_list as boolean | undefined, attributes: a.attributes as boolean | undefined, characterData: a.character_data as boolean | undefined, subtree: a.subtree as boolean | undefined }); return ok('Mutation observer started'); }
         case 'browser_mutation_get':           return ok(await getMutations(cdp, a.observer_id as string));

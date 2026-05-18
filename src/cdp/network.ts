@@ -133,3 +133,215 @@ export async function setExtraHeaders(
 export async function clearExtraHeaders(client: CdpClient): Promise<void> {
   await (client.raw.Network as any).setExtraHTTPHeaders({ headers: {} });
 }
+
+// ---------------------------------------------------------------------------
+// URL blocking
+// ---------------------------------------------------------------------------
+
+// Block requests to URLs matching the given patterns (glob-style, CDP semantics).
+export async function blockUrls(client: CdpClient, patterns: string[]): Promise<void> {
+  await (client.raw.Network as any).setBlockedURLs({ urls: patterns });
+}
+
+// Clear all blocked URL patterns.
+export async function clearBlockedUrls(client: CdpClient): Promise<void> {
+  await (client.raw.Network as any).setBlockedURLs({ urls: [] });
+}
+
+// ---------------------------------------------------------------------------
+// CORS override
+// ---------------------------------------------------------------------------
+
+// Enable CORS bypass: intercepts every response via CDP Fetch and injects
+// Access-Control-Allow-Origin: * (plus ACAO credentials / methods headers).
+// Returns a cleanup function that disables the override.
+export async function enableCorsOverride(client: CdpClient): Promise<() => Promise<void>> {
+  await client.raw.Fetch.enable({
+    patterns: [{ urlPattern: '*', requestStage: 'Response' }],
+  });
+
+  const handler = ({ requestId, responseHeaders }: {
+    requestId: string;
+    responseHeaders?: Array<{ name: string; value: string }>;
+  }) => {
+    const headers = (responseHeaders ?? []).filter(
+      (h) =>
+        !h.name.toLowerCase().startsWith('access-control-'),
+    );
+    headers.push(
+      { name: 'Access-Control-Allow-Origin', value: '*' },
+      { name: 'Access-Control-Allow-Methods', value: '*' },
+      { name: 'Access-Control-Allow-Headers', value: '*' },
+    );
+    client.raw.Fetch.continueRequest({
+      requestId,
+      headers,
+    } as any).catch(() => {});
+  };
+
+  const removeHandler = client.raw.Fetch.requestPaused(handler) as unknown as () => void;
+
+  return async (): Promise<void> => {
+    removeHandler?.();
+    await client.raw.Fetch.disable();
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Response header capture
+// ---------------------------------------------------------------------------
+
+// Per-client map: requestId -> response headers (populated by startHeaderCapture).
+const headerStore = new WeakMap<object, Map<string, Record<string, string>>>();
+
+// Begin capturing response headers for this client. Idempotent — safe to call
+// multiple times. Should be called once after Network.enable().
+export function startHeaderCapture(client: CdpClient): void {
+  if (headerStore.has(client.raw)) return;
+
+  const map = new Map<string, Record<string, string>>();
+  headerStore.set(client.raw, map);
+
+  client.raw.Network.responseReceived(({
+    requestId,
+    response,
+  }: {
+    requestId: string;
+    response: { headers?: Record<string, string> };
+  }) => {
+    if (response.headers) {
+      map.set(requestId, response.headers);
+    }
+  });
+}
+
+// Stop capturing and clear stored headers for this client.
+export function stopHeaderCapture(client: CdpClient): void {
+  headerStore.delete(client.raw);
+}
+
+// Return the captured response headers for a requestId.
+// Throws if startHeaderCapture was never called or the requestId is unknown.
+export async function getResponseHeaders(
+  client: CdpClient,
+  requestId: string,
+): Promise<Record<string, string>> {
+  const map = headerStore.get(client.raw);
+  if (!map) {
+    throw new Error('getResponseHeaders: call startHeaderCapture(client) first');
+  }
+  const headers = map.get(requestId);
+  if (!headers) {
+    throw new Error(`getResponseHeaders: no captured headers for requestId "${requestId}"`);
+  }
+  return headers;
+}
+
+// ---------------------------------------------------------------------------
+// Network quiet detection
+// ---------------------------------------------------------------------------
+
+// Resolves when the in-flight request count has been 0 for idleMs continuously.
+// Rejects after timeoutMs if network never quiets.
+export async function waitForNetworkQuiet(
+  client: CdpClient,
+  idleMs = 500,
+  timeoutMs = 30000,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let inFlight = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    let globalTimer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
+
+    const cleanup = () => {
+      clearTimeout(idleTimer);
+      clearTimeout(globalTimer);
+      removeRequest?.();
+      removeFinished?.();
+      removeFailed?.();
+    };
+
+    const settle = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      err ? reject(err) : resolve();
+    };
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      if (inFlight === 0) {
+        idleTimer = setTimeout(() => settle(), idleMs);
+      }
+    };
+
+    globalTimer = setTimeout(
+      () => settle(new Error(`waitForNetworkQuiet: network did not quiet within ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+
+    const removeRequest = client.raw.Network.requestWillBeSent(() => {
+      inFlight++;
+      clearTimeout(idleTimer);
+    }) as unknown as () => void;
+
+    const removeFinished = client.raw.Network.loadingFinished(() => {
+      inFlight = Math.max(0, inFlight - 1);
+      resetIdleTimer();
+    }) as unknown as () => void;
+
+    const removeFailed = client.raw.Network.loadingFailed(() => {
+      inFlight = Math.max(0, inFlight - 1);
+      resetIdleTimer();
+    }) as unknown as () => void;
+
+    // Start the idle timer immediately in case nothing is in-flight yet.
+    resetIdleTimer();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// One-shot request blocking
+// ---------------------------------------------------------------------------
+
+// Abort the next request whose URL contains urlPattern, then remove the
+// interception. Returns a cleanup function to cancel early if needed.
+export async function blockNextRequest(
+  client: CdpClient,
+  urlPattern: string,
+): Promise<() => Promise<void>> {
+  await client.raw.Fetch.enable({
+    patterns: [{ urlPattern: '*', requestStage: 'Request' }],
+  });
+
+  let triggered = false;
+
+  const handler = ({ requestId, request }: {
+    requestId: string;
+    request: { url: string };
+  }) => {
+    if (!triggered && request.url.includes(urlPattern)) {
+      triggered = true;
+      client.raw.Fetch.failRequest({
+        requestId,
+        errorReason: 'BlockedByClient',
+      } as any).catch(() => {});
+      removeHandler?.();
+      client.raw.Fetch.disable().catch(() => {});
+    } else {
+      client.raw.Fetch.continueRequest({ requestId }).catch(() => {});
+    }
+  };
+
+  let removeHandler: (() => void) | undefined =
+    client.raw.Fetch.requestPaused(handler) as unknown as () => void;
+
+  return async (): Promise<void> => {
+    if (!triggered) {
+      removeHandler?.();
+      removeHandler = undefined;
+      await client.raw.Fetch.disable();
+    }
+  };
+}
