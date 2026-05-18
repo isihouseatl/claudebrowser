@@ -78,6 +78,10 @@ import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCou
 import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAllStorage, getCookieCount, getCookieDomains, getStorageEstimate, clearOriginStorage } from './cdp/storage2';
 import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
 import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay } from './cdp/modal';
+import { getUrlParts, getQueryParams, setQueryParam, removeQueryParam, getHashFragment, setHashFragment, navigateToHash, getNavigationHistory } from './cdp/url2';
+import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow } from './cdp/table3';
+import { setGeolocationAccuracy, simulateMovement, setHighAccuracyMode, setLowAccuracyMode, setBatteryLevel, clearBatteryOverride, setScreenOrientation, clearScreenOrientation } from './cdp/geolocation3';
+import { takeFullPageScreenshot, takeViewportScreenshot, takeRegionScreenshot, takeJpegScreenshot, compareScreenshots, getFullPageDimensions2, takeScreenshotAfterDelay, screenshotSelector } from './cdp/capture2';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -708,6 +712,42 @@ const TOOLS = [
   { name: 'browser_click_modal_button', description: 'Click a button inside a modal by its text (case-insensitive)', inputSchema: { type: 'object', properties: { button_text: { type: 'string' } }, required: ['button_text'] } },
   { name: 'browser_is_overlay_blocking', description: 'Check if a higher z-index overlay is blocking the given selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_dismiss_overlay', description: 'Press Escape then click body (1,1) to dismiss any visible overlay', inputSchema: { type: 'object', properties: {} } },
+  // ── URL / navigation ──────────────────────────────────────────────────────────
+  { name: 'browser_get_url_parts', description: 'Get href/protocol/host/pathname/search/hash/origin of current URL', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_query_params', description: 'Get all query parameters as key-value object', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_query_param', description: 'Set a query parameter without navigating (history.replaceState)', inputSchema: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] } },
+  { name: 'browser_remove_query_param', description: 'Remove a query parameter without navigating', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_get_hash', description: 'Get window.location.hash fragment', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_hash', description: 'Set window.location.hash', inputSchema: { type: 'object', properties: { hash: { type: 'string' } }, required: ['hash'] } },
+  { name: 'browser_navigate_to_hash', description: 'Scroll to element by id and set location hash', inputSchema: { type: 'object', properties: { element_id: { type: 'string' } }, required: ['element_id'] } },
+  { name: 'browser_navigation_history', description: 'Get CDP navigation history with currentIndex and entries', inputSchema: { type: 'object', properties: {} } },
+  // ── Advanced table ─────────────────────────────────────────────────────────────
+  { name: 'browser_get_full_table_data', description: 'Extract full table as array of header-keyed row objects', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_table_row_data', description: 'Get a single table row by 0-based index as header→cell object', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' } }, required: ['selector', 'row_index'] } },
+  { name: 'browser_get_table_cell_text', description: 'Get text of a specific cell by row and column index (0-based)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' }, col_index: { type: 'number' } }, required: ['selector', 'row_index', 'col_index'] } },
+  { name: 'browser_sort_table_column', description: 'Click table header at colIndex to trigger sort', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, col_index: { type: 'number' } }, required: ['selector', 'col_index'] } },
+  { name: 'browser_table_page_info', description: 'Get table metadata: rows, cols, hasHeader, hasFoot', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_export_table_csv', description: 'Export table to CSV string', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_selected_rows', description: 'Return indices of selected/checked rows in a table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_highlight_table_row', description: 'Set background color of a table row by index', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' }, color: { type: 'string' } }, required: ['selector', 'row_index'] } },
+  // ── Device emulation ───────────────────────────────────────────────────────────
+  { name: 'browser_set_geolocation_accuracy', description: 'Update geolocation accuracy without changing lat/lng', inputSchema: { type: 'object', properties: { accuracy: { type: 'number' } }, required: ['accuracy'] } },
+  { name: 'browser_simulate_movement', description: 'Walk through array of {lat,lng} coordinates with delay between steps', inputSchema: { type: 'object', properties: { steps: { type: 'array', items: { type: 'object' } }, interval_ms: { type: 'number' } }, required: ['steps'] } },
+  { name: 'browser_high_accuracy_mode', description: 'Set geolocation with accuracy: 1 (GPS-level)', inputSchema: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' } }, required: ['lat', 'lng'] } },
+  { name: 'browser_low_accuracy_mode', description: 'Set geolocation with accuracy: 150 (network-level)', inputSchema: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' } }, required: ['lat', 'lng'] } },
+  { name: 'browser_set_battery_level', description: 'Spoof battery level (0.0-1.0) and charging state', inputSchema: { type: 'object', properties: { level: { type: 'number' }, charging: { type: 'boolean' } }, required: ['level'] } },
+  { name: 'browser_clear_battery_override', description: 'Restore real battery data by clearing battery override', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_screen_orientation', description: 'Set screen orientation override (portraitPrimary, landscapePrimary, etc.)', inputSchema: { type: 'object', properties: { type: { type: 'string' }, angle: { type: 'number' } }, required: ['type', 'angle'] } },
+  { name: 'browser_clear_screen_orientation', description: 'Clear screen orientation override', inputSchema: { type: 'object', properties: {} } },
+  // ── Advanced screenshots ───────────────────────────────────────────────────────
+  { name: 'browser_screenshot_full_page', description: 'Screenshot full page including below the fold (captureBeyondViewport)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_screenshot_viewport', description: 'Screenshot current viewport only', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_screenshot_region', description: 'Screenshot a specific x,y,width,height region', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' } }, required: ['x', 'y', 'width', 'height'] } },
+  { name: 'browser_screenshot_jpeg', description: 'Screenshot in JPEG format with quality setting (default 85)', inputSchema: { type: 'object', properties: { quality: { type: 'number' } } } },
+  { name: 'browser_compare_screenshots', description: 'Compare two base64 screenshot strings for pixel-perfect equality', inputSchema: { type: 'object', properties: { base64a: { type: 'string' }, base64b: { type: 'string' } }, required: ['base64a', 'base64b'] } },
+  { name: 'browser_full_page_dimensions2', description: 'Get full page scrollWidth/scrollHeight/devicePixelRatio', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_screenshot_after_delay', description: 'Wait delayMs then take a viewport screenshot', inputSchema: { type: 'object', properties: { delay_ms: { type: 'number' } }, required: ['delay_ms'] } },
+  { name: 'browser_screenshot_selector', description: 'Screenshot a specific element by CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -764,7 +804,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.23.0' },
+    { name: 'claudebrowser', version: '1.24.0' },
     { capabilities: { tools: {} } }
   );
 
