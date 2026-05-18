@@ -57,11 +57,13 @@ export function startWatchdog(
   return setInterval(async () => {
     const alive = await isDebugPortOpen(port);
     if (!alive) {
+      process.stderr.write(`[claudebrowser] Chrome not responding on port ${port} — restarting...\n`);
       launchChrome();
       try {
         await waitForDebugPort(port, 5000);
+        process.stderr.write(`[claudebrowser] Chrome restarted successfully.\n`);
       } catch {
-        // ignore — Chrome may still be starting
+        process.stderr.write(`[claudebrowser] Chrome restart timed out — will retry on next watchdog tick.\n`);
       }
       onRestart();
     }

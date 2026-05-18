@@ -13,8 +13,26 @@ export interface Config {
   authChecks?: Array<{ name: string; url: string; loginUrlPattern: string; loggedInSelector?: string; loggedOutSelector?: string }>;
 }
 
+function defaultChromePath(): string {
+  if (process.platform === 'win32') {
+    return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+  }
+  if (process.platform === 'darwin') {
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
+  // Linux — check common locations
+  const linuxPaths = [
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ];
+  const { existsSync } = require('fs') as typeof import('fs');
+  return linuxPaths.find(p => existsSync(p)) ?? '/usr/bin/google-chrome';
+}
+
 export const DEFAULT_CONFIG: Config = {
-  chromePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  chromePath: defaultChromePath(),
   debugPort: 9222,
   profilePath: join(homedir(), '.claudebrowser', 'chrome-profile'),
   navigationTimeoutMs: 10000,

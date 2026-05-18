@@ -23,9 +23,22 @@ export class CdpClient {
     const { webSocketDebuggerUrl } = await fetch(`http://localhost:${this.port}/json/version`).then(r => r.json()) as { webSocketDebuggerUrl: string };
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(webSocketDebuggerUrl);
+      let settled = false;
+
+      const finish = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        // Always close the socket — prevents orphaned WebSocket connections.
+        try { ws.close(); } catch { /* ignore */ }
+        err ? reject(err) : resolve();
+      };
+
+      const timer = setTimeout(() => finish(new Error('ensurePageTarget: timed out waiting for Target.createTarget response')), 5000);
+
       ws.on('open', () => ws.send(JSON.stringify({ id: 1, method: 'Target.createTarget', params: { url: 'about:blank' } })));
-      ws.on('message', () => { ws.close(); resolve(); });
-      ws.on('error', reject);
+      ws.on('message', () => finish());
+      ws.on('error', (err) => finish(err));
     });
     // Give Chrome a moment to register the new target
     await new Promise(r => setTimeout(r, 300));

@@ -67,6 +67,10 @@ import { getCssVariables, setCssVariable, getStylesheets, getMatchingRules, getI
 import { getSelectionRange, selectText, clearSelection, getCaretPosition, setCaretInElement, copySelectionToClipboard } from './cdp/selection';
 import { touchTap, touchDoubleTap, touchLongPress, touchSwipe, touchPinch, touchScroll, touchDrag, getTouchSupport } from './cdp/touch';
 import { setDarkMode, setLightMode, clearColorScheme, getColorScheme, setContrastPreference, getThemeColors, takeThemeScreenshots } from './cdp/darkmode';
+import { printToPdfBuffer, getPageCount, getPrintableArea, setPageTitle, injectPrintStyle, removePrintStyles, getPrintCssRules, printPageToHtml } from './cdp/printing';
+import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElementVisibilityRatio, getOffScreenElements, getScrollableElements, getElementScrollPosition } from './cdp/viewport2';
+import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceEvaluate, retryEvaluate, getHighResolutionTime, measureExpressionTime } from './cdp/timing';
+import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -589,6 +593,41 @@ const TOOLS = [
   { name: 'browser_set_contrast', description: 'Emulate prefers-contrast (more/less/no-preference)', inputSchema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] } },
   { name: 'browser_get_theme_colors', description: 'Get background, foreground, and accent colors from the page', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_theme_screenshots', description: 'Capture screenshots in both light and dark mode, returns {light, dark} base64 PNGs', inputSchema: { type: 'object', properties: {} } },
+  // ── Printing / PDF ────────────────────────────────────────────────────────────
+  { name: 'browser_print_pdf_full', description: 'Export page as base64 PDF with full layout options (margins, paper size, landscape)', inputSchema: { type: 'object', properties: { landscape: { type: 'boolean' }, paper_width: { type: 'number' }, paper_height: { type: 'number' }, margin_top: { type: 'number' }, margin_bottom: { type: 'number' }, margin_left: { type: 'number' }, margin_right: { type: 'number' }, print_background: { type: 'boolean' } } } },
+  { name: 'browser_get_page_count', description: 'Estimate the number of print pages for the current content', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_printable_area', description: 'Get the full scrollable content dimensions (useful for PDF sizing)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_page_title', description: 'Set the document title (affects PDF filename and print header)', inputSchema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
+  { name: 'browser_inject_print_style', description: 'Inject a <style media="print"> block for custom print CSS', inputSchema: { type: 'object', properties: { css: { type: 'string' } }, required: ['css'] } },
+  { name: 'browser_remove_print_styles', description: 'Remove all injected print style blocks', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_print_rules', description: 'Get all CSS rules inside @media print blocks', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_to_html', description: 'Get the full page outer HTML (for offline rendering)', inputSchema: { type: 'object', properties: {} } },
+  // ── Viewport / scroll state ───────────────────────────────────────────────────
+  { name: 'browser_full_page_size', description: 'Get full page scroll dimensions (scrollWidth, scrollHeight, clientWidth, clientHeight, innerWidth, innerHeight)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_visible_rect', description: 'Get the visible rectangle of the page (scrollX/Y + viewport size)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_fully_visible', description: 'Check if all 4 corners of an element are within the viewport', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_visibility_ratio', description: 'Get the fraction (0-1) of an element visible in the viewport', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_offscreen_elements', description: 'Find elements fully outside the viewport and their direction (above/below/left/right)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_scrollable', description: 'Find scrollable elements (excluding html/body)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_element_scroll_pos', description: 'Get scrollLeft, scrollTop, scrollWidth, scrollHeight for an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Timing / polling ──────────────────────────────────────────────────────────
+  { name: 'browser_sleep', description: 'Wait N milliseconds (server-side)', inputSchema: { type: 'object', properties: { ms: { type: 'number' } }, required: ['ms'] } },
+  { name: 'browser_measure_duration', description: 'Evaluate a JS expression and return the result + elapsed ms', inputSchema: { type: 'object', properties: { expression: { type: 'string' } }, required: ['expression'] } },
+  { name: 'browser_wait_idle', description: 'Wait until document.readyState is complete', inputSchema: { type: 'object', properties: { idle_ms: { type: 'number' }, timeout_ms: { type: 'number' } } } },
+  { name: 'browser_wait_expression', description: 'Poll until a JS expression returns truthy', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, polling_ms: { type: 'number' }, timeout_ms: { type: 'number' } }, required: ['expression'] } },
+  { name: 'browser_debounce_evaluate', description: 'Wait N ms then evaluate a JS expression (let the page settle first)', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, wait_ms: { type: 'number' } }, required: ['expression', 'wait_ms'] } },
+  { name: 'browser_retry_evaluate', description: 'Evaluate a JS expression with retries on failure', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, max_retries: { type: 'number' }, retry_delay_ms: { type: 'number' } }, required: ['expression', 'max_retries'] } },
+  { name: 'browser_high_res_time', description: 'Get performance.now() from the browser (high-resolution timestamp in ms)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_measure_expression', description: 'Run a JS expression N times and return avg/min/max execution time in ms', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, runs: { type: 'number' } }, required: ['expression'] } },
+  // ── XPath queries ─────────────────────────────────────────────────────────────
+  { name: 'browser_xpath_first', description: 'Find the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_all', description: 'Find all elements matching an XPath expression (up to 50)', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_count', description: 'Count elements matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_text', description: 'Get text value of an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_exists', description: 'Check if any element matches an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_click', description: 'Click the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' } }, required: ['xpath'] } },
+  { name: 'browser_xpath_attr', description: 'Get an attribute from the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, attribute: { type: 'string' } }, required: ['xpath', 'attribute'] } },
+  { name: 'browser_xpath_wait', description: 'Wait until an element matching an XPath expression appears', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['xpath'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -637,7 +676,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.20.0' },
+    { name: 'claudebrowser', version: '1.21.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -1171,6 +1210,41 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_set_contrast':           { await setContrastPreference(cdp, a.value as 'more' | 'less' | 'no-preference'); return ok('Contrast set'); }
         case 'browser_get_theme_colors':       return ok(await getThemeColors(cdp));
         case 'browser_theme_screenshots':      return ok(await takeThemeScreenshots(cdp));
+        // Printing / PDF
+        case 'browser_print_pdf_full':      return ok({ pdf: await printToPdfBuffer(cdp, { landscape: a.landscape as boolean | undefined, paperWidth: a.paper_width as number | undefined, paperHeight: a.paper_height as number | undefined, marginTop: a.margin_top as number | undefined, marginBottom: a.margin_bottom as number | undefined, marginLeft: a.margin_left as number | undefined, marginRight: a.margin_right as number | undefined, printBackground: a.print_background as boolean | undefined }) });
+        case 'browser_get_page_count':      return ok({ count: await getPageCount(cdp) });
+        case 'browser_get_printable_area':  return ok(await getPrintableArea(cdp));
+        case 'browser_set_page_title':      { await setPageTitle(cdp, a.title as string); return ok('Title set'); }
+        case 'browser_inject_print_style':  { await injectPrintStyle(cdp, a.css as string); return ok('Print style injected'); }
+        case 'browser_remove_print_styles': { await removePrintStyles(cdp); return ok('Print styles removed'); }
+        case 'browser_get_print_rules':     return ok(await getPrintCssRules(cdp));
+        case 'browser_page_to_html':        return ok({ html: await printPageToHtml(cdp) });
+        // Viewport / scroll state
+        case 'browser_full_page_size':      return ok(await getFullPageDimensions(cdp));
+        case 'browser_get_visible_rect':    return ok(await getVisibleRect(cdp));
+        case 'browser_is_fully_visible':    return ok({ visible: await isElementFullyVisible(cdp, a.selector as string) });
+        case 'browser_visibility_ratio':    return ok({ ratio: await getElementVisibilityRatio(cdp, a.selector as string) });
+        case 'browser_offscreen_elements':  return ok(await getOffScreenElements(cdp));
+        case 'browser_get_scrollable':      return ok(await getScrollableElements(cdp));
+        case 'browser_element_scroll_pos':  return ok(await getElementScrollPosition(cdp, a.selector as string));
+        // Timing / polling
+        case 'browser_sleep':               { await sleep(cdp, a.ms as number); return ok('Done'); }
+        case 'browser_measure_duration':    return ok(await measureDuration(cdp, a.expression as string));
+        case 'browser_wait_idle':           { await waitUntilIdle(cdp, a.idle_ms as number | undefined, a.timeout_ms as number | undefined); return ok('Idle'); }
+        case 'browser_wait_expression':     { await waitForExpressionTrue(cdp, a.expression as string, a.polling_ms as number | undefined, a.timeout_ms as number | undefined); return ok('Expression true'); }
+        case 'browser_debounce_evaluate':   return ok({ result: await debounceEvaluate(cdp, a.expression as string, a.wait_ms as number) });
+        case 'browser_retry_evaluate':      return ok({ result: await retryEvaluate(cdp, a.expression as string, a.max_retries as number, a.retry_delay_ms as number | undefined) });
+        case 'browser_high_res_time':       return ok({ time: await getHighResolutionTime(cdp) });
+        case 'browser_measure_expression':  return ok(await measureExpressionTime(cdp, a.expression as string, a.runs as number | undefined));
+        // XPath queries
+        case 'browser_xpath_first':         return ok(await xpathFirst(cdp, a.xpath as string));
+        case 'browser_xpath_all':           return ok(await xpathAll(cdp, a.xpath as string));
+        case 'browser_xpath_count':         return ok({ count: await xpathCount(cdp, a.xpath as string) });
+        case 'browser_xpath_text':          return ok({ text: await xpathText(cdp, a.xpath as string) });
+        case 'browser_xpath_exists':        return ok({ exists: await xpathExists(cdp, a.xpath as string) });
+        case 'browser_xpath_click':         { await xpathClick(cdp, a.xpath as string); return ok('Clicked'); }
+        case 'browser_xpath_attr':          return ok({ value: await xpathGetAttribute(cdp, a.xpath as string, a.attribute as string) });
+        case 'browser_xpath_wait':          return ok(await xpathWaitFor(cdp, a.xpath as string, a.timeout_ms as number | undefined));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });

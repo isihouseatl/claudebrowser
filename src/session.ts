@@ -21,6 +21,10 @@ const SESSIONS_LOCK = path.join(SESSIONS_DIR, "sessions.lock");
 const LOCK_TIMEOUT_MS = 5000;
 const LOCK_RETRY_MS = 20;
 
+// Shared buffer for Atomics.wait — lets us sleep synchronously without
+// burning CPU in a busy-wait loop. One 4-byte cell is sufficient.
+const _lockSleepBuf = new Int32Array(new SharedArrayBuffer(4));
+
 function acquireLock(): void {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -29,12 +33,10 @@ function acquireLock(): void {
       fs.writeFileSync(SESSIONS_LOCK, String(process.pid), { flag: "wx" });
       return; // acquired
     } catch {
-      // lock held by another process — spin
+      // Lock held by another process — sleep without burning CPU.
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;
-      // synchronous sleep via busy-wait (sessions.json ops are fast, <5ms)
-      const end = Date.now() + Math.min(LOCK_RETRY_MS, remaining);
-      while (Date.now() < end) { /* spin */ }
+      Atomics.wait(_lockSleepBuf, 0, 0, Math.min(LOCK_RETRY_MS, remaining));
     }
   }
   // Timed out — stale lock. Remove and take it.
@@ -71,15 +73,16 @@ function writeSessionsRaw(registry: SessionRegistry): void {
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
     fs.writeFileSync(SESSIONS_TMP, JSON.stringify(registry, null, 2), "utf8");
     fs.renameSync(SESSIONS_TMP, SESSIONS_FILE);
-  } catch {
-    // If write fails, leave sessions.json as-is
+  } catch (err) {
+    process.stderr.write(`[claudebrowser] Warning: failed to write sessions.json: ${err}\n`);
   }
 }
 
 export function generateSessionId(): string {
   const pid = process.pid;
   const ts = Date.now().toString(16);
-  return `${pid}-${ts}`;
+  const rand = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0');
+  return `${pid}-${ts}-${rand}`;
 }
 
 export function readSessions(): SessionRegistry {
@@ -89,11 +92,7 @@ export function readSessions(): SessionRegistry {
 export function writeSessions(registry: SessionRegistry): void {
   acquireLock();
   try {
-    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-    fs.writeFileSync(SESSIONS_TMP, JSON.stringify(registry, null, 2), "utf8");
-    fs.renameSync(SESSIONS_TMP, SESSIONS_FILE);
-  } catch {
-    // leave sessions.json as-is
+    writeSessionsRaw(registry);
   } finally {
     releaseLock();
   }

@@ -1,6 +1,6 @@
 # claudebrowser
 
-A CLI tool and MCP server that connects Claude Code to Chrome via the Chrome DevTools Protocol (CDP). Gives Claude Code full browser control as 21 native MCP tools — no Playwright, no bundled browser, no hacks.
+A CLI tool and MCP server that connects Claude Code to Chrome via the Chrome DevTools Protocol (CDP). Gives Claude Code full browser control as 467 native MCP tools — no Playwright, no bundled browser, no hacks.
 
 ```
 Claude Code  →  MCP (stdio)  →  claudebrowser serve  →  CDP WebSocket  →  Your Chrome
