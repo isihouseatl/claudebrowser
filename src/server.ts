@@ -51,7 +51,6 @@ import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow,
 import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
 import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
-import { getClipboardText as readClipboard, setClipboardText as writeClipboard, setClipboardText as writeClipboardHtml, clearClipboard, getClipboardHtml as readClipboardHtml, copyElementHtml as copyFromElement, pasteTextAtCursor, getClipboardItemTypes as getClipboardHistoryLength } from './cdp/clipboard2';
 import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
 import { getCanvasElements, canvasToDataUrl, getCanvasDimensions, getCanvasPixelColor, clearCanvas, drawTextOnCanvas, drawRectOnCanvas, canvasEquals } from './cdp/canvas';
 import { findTextMatches, countTextOccurrences, getSelectedText, selectAllTextInElement, highlightAllText, clearHighlights, replaceTextInElement, scrollToText } from './cdp/search';
@@ -71,6 +70,10 @@ import { printToPdfBuffer, getPageCount, getPrintableArea, setPageTitle, injectP
 import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElementVisibilityRatio, getOffScreenElements, getScrollableElements, getElementScrollPosition } from './cdp/viewport2';
 import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceEvaluate, retryEvaluate, getHighResolutionTime, measureExpressionTime } from './cdp/timing';
 import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
+import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml } from './cdp/clipboard2';
+import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays } from './cdp/highlight2';
+import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input2';
+import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -629,6 +632,42 @@ const TOOLS = [
   { name: 'browser_xpath_attr', description: 'Get an attribute from the first element matching an XPath expression', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, attribute: { type: 'string' } }, required: ['xpath', 'attribute'] } },
   { name: 'browser_xpath_wait', description: 'Wait until an element matching an XPath expression appears', inputSchema: { type: 'object', properties: { xpath: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['xpath'] } },
   { name: 'browser_social_stealth', description: 'Apply deep fingerprint masking for social media sites (Instagram, TikTok, Meta). Patches webdriver flag, window.chrome, canvas, WebGL, plugins, and more. Call once after connecting.', inputSchema: { type: 'object', properties: {} } },
+  // ── Clipboard API ─────────────────────────────────────────────────────────────
+  { name: 'browser_clipboard_read_text', description: 'Read plain text from clipboard via Clipboard API', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_write_text', description: 'Write text to clipboard', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_clipboard_read_html', description: 'Read HTML from clipboard (text/html type), returns empty string if not available', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_clear', description: 'Clear clipboard by writing empty string', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_copy_element_text', description: 'Copy textContent of matching element to clipboard', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_clipboard_paste_at_cursor', description: 'Paste text at the current cursor position using execCommand insertText', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_clipboard_item_types', description: 'List MIME types available in clipboard (e.g. text/plain, text/html)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_copy_element_html', description: 'Copy outerHTML of matching element to clipboard', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Highlight / overlay ────────────────────────────────────────────────────────
+  { name: 'browser_highlight_elements', description: 'Add colored outline to all elements matching selector, returns count', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, color: { type: 'string', description: 'CSS color e.g. rgba(255,0,0,0.5)' } }, required: ['selector'] } },
+  { name: 'browser_remove_highlights', description: 'Remove all highlights added by browser_highlight_elements', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_highlight_with_label', description: 'Highlight element and show floating text label badge near it', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, label: { type: 'string' } }, required: ['selector', 'label'] } },
+  { name: 'browser_flash_element', description: 'Flash element border on/off N times to draw attention', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, times: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_get_bounding_boxes', description: 'Return bounding boxes {x,y,width,height} for all matching elements', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_draw_overlay', description: 'Draw a colored overlay div at page coordinates, returns overlayId', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, color: { type: 'string' } }, required: ['x', 'y', 'width', 'height'] } },
+  { name: 'browser_remove_overlay', description: 'Remove overlay div by its ID', inputSchema: { type: 'object', properties: { overlay_id: { type: 'string' } }, required: ['overlay_id'] } },
+  { name: 'browser_clear_overlays', description: 'Remove all overlay divs injected by browser_draw_overlay', inputSchema: { type: 'object', properties: {} } },
+  // ── Advanced input ─────────────────────────────────────────────────────────────
+  { name: 'browser_type_with_delay', description: 'Type text character by character with a delay between keystrokes (human-like)', inputSchema: { type: 'object', properties: { text: { type: 'string' }, delay_ms: { type: 'number', description: 'Delay between characters in ms' } }, required: ['text', 'delay_ms'] } },
+  { name: 'browser_clear_and_type', description: 'Select all text in element then type replacement text', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
+  { name: 'browser_press_key_combo', description: 'Press multiple keys simultaneously (e.g. [Control,a] or [Control,Shift,z])', inputSchema: { type: 'object', properties: { keys: { type: 'array', items: { type: 'string' } } }, required: ['keys'] } },
+  { name: 'browser_fill_by_label', description: 'Find input associated with a label by text and set its value', inputSchema: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'string' } }, required: ['label', 'value'] } },
+  { name: 'browser_check_checkbox', description: 'Check a checkbox if unchecked', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_uncheck_checkbox', description: 'Uncheck a checkbox if checked', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_select_radio', description: 'Click a radio button to select it', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_type_contenteditable', description: 'Focus a contenteditable element and insert text at cursor position', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
+  // ── Page info / SEO ────────────────────────────────────────────────────────────
+  { name: 'browser_page_language', description: 'Get the lang attribute of the document root element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_charset', description: 'Get the document character set', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canonical_url', description: 'Get the canonical URL from link[rel=canonical], or null if not set', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_og_tags', description: 'Get all Open Graph meta tags as a key-value object', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_twitter_tags', description: 'Get all Twitter Card meta tags as a key-value object', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_structured_data', description: 'Parse and return all JSON-LD structured data blocks on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_word_count', description: 'Count words in document.body.innerText', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_external_links', description: 'Return all external anchor links as array of {href, text}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -685,7 +724,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.21.0' },
+    { name: 'claudebrowser', version: '1.22.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -1084,14 +1123,14 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_get_computed_properties':return ok(await getComputedProperties(cdp, a.selector as string, a.properties as string[]));
         case 'browser_check_visibility':       return ok(await checkVisibility(cdp, a.selector as string));
         // Clipboard (advanced)
-        case 'browser_read_clipboard':         return ok({ text: await readClipboard(cdp) });
-        case 'browser_write_clipboard':        { await writeClipboard(cdp, a.text as string); return ok('Clipboard written'); }
+        case 'browser_read_clipboard':         return ok({ text: await getClipboardText(cdp) });
+        case 'browser_write_clipboard':        { await setClipboardText(cdp, a.text as string); return ok('Clipboard written'); }
         case 'browser_clear_clipboard':        { await clearClipboard(cdp); return ok('Clipboard cleared'); }
-        case 'browser_read_clipboard_html':    return ok({ html: await readClipboardHtml(cdp) });
-        case 'browser_write_clipboard_html':   { await writeClipboardHtml(cdp, a.html as string); return ok('HTML written to clipboard'); }
-        case 'browser_copy_from_element':      return ok({ text: await copyFromElement(cdp, a.selector as string) });
+        case 'browser_read_clipboard_html':    return ok({ html: await getClipboardHtml(cdp) });
+        case 'browser_write_clipboard_html':   { await setClipboardText(cdp, a.html as string); return ok('HTML written to clipboard'); }
+        case 'browser_copy_from_element':      return ok({ text: await copyElementHtml(cdp, a.selector as string) });
         case 'browser_paste_into_element':     { await pasteTextAtCursor(cdp, a.text as string); return ok('Pasted'); }
-        case 'browser_clipboard_history_length': return ok({ length: await getClipboardHistoryLength(cdp) });
+        case 'browser_clipboard_history_length': return ok({ length: await getClipboardItemTypes(cdp) });
         // Animations
         case 'browser_get_animations':         return ok(await getAnimations(cdp));
         case 'browser_get_element_animations': return ok(await getElementAnimations(cdp, a.selector as string));
