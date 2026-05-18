@@ -51,6 +51,10 @@ import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow,
 import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
 import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
+import { readClipboard, writeClipboard, clearClipboard, readClipboardHtml, writeClipboardHtml, copyFromElement, pasteIntoElement, getClipboardHistoryLength } from './cdp/clipboard2';
+import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
+import { getCanvasElements, canvasToDataUrl, getCanvasDimensions, getCanvasPixelColor, clearCanvas, drawTextOnCanvas, drawRectOnCanvas, canvasEquals } from './cdp/canvas';
+import { findTextMatches, countTextOccurrences, getSelectedText, selectAllTextInElement, highlightAllText, clearHighlights, replaceTextInElement, scrollToText } from './cdp/search';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -437,6 +441,42 @@ const TOOLS = [
   { name: 'browser_find_stale_elements', description: 'Check which selectors in a list no longer match any element in the DOM', inputSchema: { type: 'object', properties: { selectors: { type: 'array', items: { type: 'string' } } }, required: ['selectors'] } },
   { name: 'browser_get_computed_properties', description: 'Get multiple computed CSS properties for an element in a single round-trip', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, properties: { type: 'array', items: { type: 'string' }, description: 'CSS property names e.g. ["color", "display", "opacity"]' } }, required: ['selector', 'properties'] } },
   { name: 'browser_check_visibility', description: 'Detailed visibility breakdown: exists, hasSize, cssVisible, display, opacity, overflowHidden, parentHidden', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Clipboard (advanced) ──────────────────────────────────────────────────────
+  { name: 'browser_read_clipboard', description: 'Read current clipboard text (tries Clipboard API, falls back to execCommand)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_write_clipboard', description: 'Write text to the clipboard', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_clear_clipboard', description: 'Clear the clipboard', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_read_clipboard_html', description: 'Read clipboard as HTML (returns empty string if not available)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_write_clipboard_html', description: 'Write HTML to clipboard (also writes plain-text fallback)', inputSchema: { type: 'object', properties: { html: { type: 'string' } }, required: ['html'] } },
+  { name: 'browser_copy_from_element', description: 'Focus and select all text in element, copy to clipboard, return copied text', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_paste_into_element', description: 'Write text to clipboard and paste into focused element via synthetic paste event', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
+  { name: 'browser_clipboard_history_length', description: 'Get length of window.__cbClipHistory if present', inputSchema: { type: 'object', properties: {} } },
+  // ── Animations ────────────────────────────────────────────────────────────────
+  { name: 'browser_get_animations', description: 'Get all active animations on the page (id, name, type, duration, delay, playState, currentTime)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_element_animations', description: 'Get all animations on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pause_animations', description: 'Pause all animations on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resume_animations', description: 'Resume all animations', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_animation_speed', description: 'Set global animation playback rate (0=paused, 1=normal, 2=2x)', inputSchema: { type: 'object', properties: { rate: { type: 'number' } }, required: ['rate'] } },
+  { name: 'browser_finish_animations', description: 'Jump all animations to their finished state', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cancel_element_animations', description: 'Cancel all animations on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_wait_animations_finished', description: 'Wait until all animations (or element animations) have finished', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } } } },
+  // ── Canvas ────────────────────────────────────────────────────────────────────
+  { name: 'browser_get_canvas_elements', description: 'Get all canvas elements with their dimensions and context type', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_to_data_url', description: 'Export a canvas as a base64 PNG data URL', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_canvas_dimensions', description: 'Get width and height of a canvas element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_canvas_pixel', description: 'Get RGBA color of a specific pixel on a canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
+  { name: 'browser_clear_canvas', description: 'Clear a canvas (fill with transparent)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_draw_text_on_canvas', description: 'Draw text on a 2D canvas context', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, font: { type: 'string' }, color: { type: 'string' } }, required: ['selector', 'text', 'x', 'y'] } },
+  { name: 'browser_draw_rect_on_canvas', description: 'Draw a rectangle on a 2D canvas context', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, color: { type: 'string' }, fill: { type: 'boolean' } }, required: ['selector', 'x', 'y', 'width', 'height'] } },
+  { name: 'browser_canvas_equals', description: 'Check if two canvas elements have identical pixel content', inputSchema: { type: 'object', properties: { selector1: { type: 'string' }, selector2: { type: 'string' } }, required: ['selector1', 'selector2'] } },
+  // ── Text search ───────────────────────────────────────────────────────────────
+  { name: 'browser_find_text_matches', description: 'Find all occurrences of text on page with xpath and pixel rect', inputSchema: { type: 'object', properties: { search_text: { type: 'string' }, case_sensitive: { type: 'boolean' } }, required: ['search_text'] } },
+  { name: 'browser_count_text', description: 'Count how many times text appears on the page', inputSchema: { type: 'object', properties: { search_text: { type: 'string' }, case_sensitive: { type: 'boolean' } }, required: ['search_text'] } },
+  { name: 'browser_get_selected_text', description: 'Get the text currently selected/highlighted on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_all_text_in', description: 'Select all text content within an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_highlight_all_text', description: 'Highlight all occurrences of text on page with CSS <mark> (returns count)', inputSchema: { type: 'object', properties: { search_text: { type: 'string' }, color: { type: 'string' } }, required: ['search_text'] } },
+  { name: 'browser_clear_highlights', description: 'Remove all highlights added by browser_highlight_all_text', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_replace_text_in', description: 'Replace first occurrence of text in an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, search_text: { type: 'string' }, replacement: { type: 'string' } }, required: ['selector', 'search_text', 'replacement'] } },
+  { name: 'browser_scroll_to_text', description: 'Scroll to the first occurrence of text on the page', inputSchema: { type: 'object', properties: { search_text: { type: 'string' }, case_sensitive: { type: 'boolean' } }, required: ['search_text'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -485,7 +525,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.16.0' },
+    { name: 'claudebrowser', version: '1.17.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -883,6 +923,42 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_find_stale_elements':    return ok(await findStaleElements(cdp, (a.selectors as string[] | undefined) ?? []));
         case 'browser_get_computed_properties':return ok(await getComputedProperties(cdp, a.selector as string, a.properties as string[]));
         case 'browser_check_visibility':       return ok(await checkVisibility(cdp, a.selector as string));
+        // Clipboard (advanced)
+        case 'browser_read_clipboard':         return ok({ text: await readClipboard(cdp) });
+        case 'browser_write_clipboard':        { await writeClipboard(cdp, a.text as string); return ok('Clipboard written'); }
+        case 'browser_clear_clipboard':        { await clearClipboard(cdp); return ok('Clipboard cleared'); }
+        case 'browser_read_clipboard_html':    return ok({ html: await readClipboardHtml(cdp) });
+        case 'browser_write_clipboard_html':   { await writeClipboardHtml(cdp, a.html as string); return ok('HTML written to clipboard'); }
+        case 'browser_copy_from_element':      return ok({ text: await copyFromElement(cdp, a.selector as string) });
+        case 'browser_paste_into_element':     { await pasteIntoElement(cdp, a.selector as string, a.text as string); return ok('Pasted'); }
+        case 'browser_clipboard_history_length': return ok({ length: await getClipboardHistoryLength(cdp) });
+        // Animations
+        case 'browser_get_animations':         return ok(await getAnimations(cdp));
+        case 'browser_get_element_animations': return ok(await getElementAnimations(cdp, a.selector as string));
+        case 'browser_pause_animations':       { await pauseAllAnimations(cdp); return ok('Animations paused'); }
+        case 'browser_resume_animations':      { await resumeAllAnimations(cdp); return ok('Animations resumed'); }
+        case 'browser_set_animation_speed':    { await setAnimationSpeed(cdp, a.rate as number); return ok(`Playback rate set to ${a.rate}`); }
+        case 'browser_finish_animations':      { await finishAllAnimations(cdp); return ok('Animations finished'); }
+        case 'browser_cancel_element_animations': { await cancelElementAnimations(cdp, a.selector as string); return ok('Animations cancelled'); }
+        case 'browser_wait_animations_finished': { await waitForAnimationsFinished(cdp, a.selector as string | undefined, a.timeout_ms as number | undefined); return ok('Animations finished'); }
+        // Canvas
+        case 'browser_get_canvas_elements':    return ok(await getCanvasElements(cdp));
+        case 'browser_canvas_to_data_url':     return ok({ dataUrl: await canvasToDataUrl(cdp, a.selector as string) });
+        case 'browser_get_canvas_dimensions':  return ok(await getCanvasDimensions(cdp, a.selector as string));
+        case 'browser_get_canvas_pixel':       return ok(await getCanvasPixelColor(cdp, a.selector as string, a.x as number, a.y as number));
+        case 'browser_clear_canvas':           { await clearCanvas(cdp, a.selector as string); return ok('Canvas cleared'); }
+        case 'browser_draw_text_on_canvas':    { await drawTextOnCanvas(cdp, a.selector as string, a.text as string, a.x as number, a.y as number, a.font as string | undefined, a.color as string | undefined); return ok('Text drawn'); }
+        case 'browser_draw_rect_on_canvas':    { await drawRectOnCanvas(cdp, a.selector as string, a.x as number, a.y as number, a.width as number, a.height as number, a.color as string | undefined, a.fill as boolean | undefined); return ok('Rect drawn'); }
+        case 'browser_canvas_equals':          return ok({ equal: await canvasEquals(cdp, a.selector1 as string, a.selector2 as string) });
+        // Text search
+        case 'browser_find_text_matches':      return ok(await findTextMatches(cdp, a.search_text as string, a.case_sensitive as boolean | undefined));
+        case 'browser_count_text':             return ok({ count: await countTextOccurrences(cdp, a.search_text as string, a.case_sensitive as boolean | undefined) });
+        case 'browser_get_selected_text':      return ok({ text: await getSelectedText(cdp) });
+        case 'browser_select_all_text_in':     { await selectAllTextInElement(cdp, a.selector as string); return ok('Text selected'); }
+        case 'browser_highlight_all_text':     return ok({ count: await highlightAllText(cdp, a.search_text as string, a.color as string | undefined) });
+        case 'browser_clear_highlights':       { await clearHighlights(cdp); return ok('Highlights cleared'); }
+        case 'browser_replace_text_in':        return ok({ replaced: await replaceTextInElement(cdp, a.selector as string, a.search_text as string, a.replacement as string) });
+        case 'browser_scroll_to_text':         return ok({ found: await scrollToText(cdp, a.search_text as string, a.case_sensitive as boolean | undefined) });
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
