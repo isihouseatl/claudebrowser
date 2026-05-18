@@ -30,6 +30,10 @@ import { startWebSocketLog, getWebSocketMessages, getWebSocketConnections, clear
 import { startCssCoverage, stopCssCoverage, startJsCoverage, takeJsCoverage, stopJsCoverage } from './cdp/coverage';
 import { listServiceWorkers, unregisterServiceWorker, updateServiceWorker, isControlledByServiceWorker } from './cdp/serviceworker';
 import { getPageSnapshot } from './cdp/snapshot';
+import { startMutationObserver, getMutations, clearMutations, stopMutationObserver, stopAllMutationObservers, waitForMutation } from './cdp/mutation';
+import { getMediaElements, playMedia, pauseMedia, seekMedia, setMediaVolume, setMediaMuted, setPlaybackRate, waitForMediaReady } from './cdp/media';
+import { dispatchEvent as dispatchDomEvent, triggerReactChange, waitForEvent, getPerformanceMarks, setPerformanceMark, measurePerformance } from './cdp/events';
+import { getAllTabSnapshots, findTabsByUrl, duplicateTab, getTabInfo, waitForTabLoad } from './cdp/tabstate';
 import { startDownloadMonitor, getDownloads, clearDownloads, stopDownloadMonitor, waitForDownload } from './cdp/download';
 import { getAxSubtree, getFocusedElement, getInteractiveAxNodes, getLiveRegions } from './cdp/accessibility';
 import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
@@ -239,6 +243,35 @@ const TOOLS = [
   { name: 'browser_unregister_service_worker', description: 'Unregister a service worker by scope URL', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_update_service_worker', description: 'Force a service worker registration to update (re-fetch)', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_is_controlled_by_sw', description: 'Check whether the current page is controlled by a service worker', inputSchema: { type: 'object', properties: {} } },
+  // ── DOM mutation observer ─────────────────────────────────────────────────────
+  { name: 'browser_mutation_start', description: 'Start observing DOM mutations on elements matching a selector. Use a unique observerId to manage multiple observers.', inputSchema: { type: 'object', properties: { observer_id: { type: 'string', description: 'Unique name for this observer (e.g. "nav-changes")' }, selector: { type: 'string', description: 'CSS selector to observe, or "document" for page-level' }, child_list: { type: 'boolean' }, attributes: { type: 'boolean' }, character_data: { type: 'boolean' }, subtree: { type: 'boolean', description: 'Observe descendants too (default true)' } }, required: ['observer_id', 'selector'] } },
+  { name: 'browser_mutation_get', description: 'Get all captured DOM mutations for a given observerId', inputSchema: { type: 'object', properties: { observer_id: { type: 'string' } }, required: ['observer_id'] } },
+  { name: 'browser_mutation_clear', description: 'Clear the mutation buffer for an observer', inputSchema: { type: 'object', properties: { observer_id: { type: 'string' } }, required: ['observer_id'] } },
+  { name: 'browser_mutation_stop', description: 'Stop a DOM mutation observer and return final mutations', inputSchema: { type: 'object', properties: { observer_id: { type: 'string' } }, required: ['observer_id'] } },
+  { name: 'browser_mutation_stop_all', description: 'Stop all active DOM mutation observers for this session', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_mutation', description: 'Wait for at least one DOM mutation to be captured by an observer', inputSchema: { type: 'object', properties: { observer_id: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['observer_id'] } },
+  // ── Media ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_get_media', description: 'Get info for all <video> and <audio> elements: src, time, duration, paused, volume, etc.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_play_media', description: 'Play a media element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pause_media', description: 'Pause a media element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_seek_media', description: 'Seek a media element to a time in seconds', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, time: { type: 'number', description: 'Time in seconds' } }, required: ['selector', 'time'] } },
+  { name: 'browser_set_media_volume', description: 'Set volume on a media element (0.0 to 1.0)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, volume: { type: 'number', description: '0.0 (silent) to 1.0 (full)' } }, required: ['selector', 'volume'] } },
+  { name: 'browser_set_media_muted', description: 'Mute or unmute a media element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, muted: { type: 'boolean' } }, required: ['selector', 'muted'] } },
+  { name: 'browser_set_playback_rate', description: 'Set playback rate on a media element (e.g. 0.5 = half speed, 2 = double speed)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, rate: { type: 'number' } }, required: ['selector', 'rate'] } },
+  { name: 'browser_wait_for_media_ready', description: 'Wait for a media element to reach a readyState (default 4 = HAVE_ENOUGH_DATA)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, ready_state: { type: 'number', description: '1-4 (default 4)' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  // ── DOM events & performance marks ────────────────────────────────────────────
+  { name: 'browser_dispatch_event', description: 'Dispatch a DOM event on an element (click, change, input, focus, blur, keydown, custom, etc.)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, event_type: { type: 'string' }, bubbles: { type: 'boolean' }, cancelable: { type: 'boolean' }, detail: { description: 'Custom event detail (any JSON value)' }, key: { type: 'string' }, ctrl_key: { type: 'boolean' }, shift_key: { type: 'boolean' }, alt_key: { type: 'boolean' }, meta_key: { type: 'boolean' }, button: { type: 'number' }, client_x: { type: 'number' }, client_y: { type: 'number' } }, required: ['selector', 'event_type'] } },
+  { name: 'browser_trigger_react_change', description: 'Trigger a React synthetic change event on a controlled input (bypasses React synthetic event system)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'value'] } },
+  { name: 'browser_wait_for_event', description: 'Wait for a custom DOM event to fire on document, window, or an element', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector, "document", or "window"' }, event_type: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'event_type'] } },
+  { name: 'browser_get_performance_marks', description: 'Get all performance.mark() entries set by the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_performance_mark', description: 'Set a performance mark in the page (performance.mark)', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'browser_measure_performance', description: 'Measure elapsed time between two performance marks', inputSchema: { type: 'object', properties: { name: { type: 'string' }, start_mark: { type: 'string' }, end_mark: { type: 'string' } }, required: ['name', 'start_mark', 'end_mark'] } },
+  // ── Tab state ─────────────────────────────────────────────────────────────────
+  { name: 'browser_get_all_tabs', description: 'Get a snapshot of all open Chrome tabs: id, url, title, loading state', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_find_tabs_by_url', description: 'Find tabs whose URL contains a given pattern', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' } }, required: ['url_pattern'] } },
+  { name: 'browser_duplicate_tab', description: 'Open a duplicate of a tab by its id', inputSchema: { type: 'object', properties: { tab_id: { type: 'string' } }, required: ['tab_id'] } },
+  { name: 'browser_get_tab_info', description: 'Get details for a specific tab by id', inputSchema: { type: 'object', properties: { tab_id: { type: 'string' } }, required: ['tab_id'] } },
+  { name: 'browser_wait_for_tab_load', description: 'Wait for a tab to finish loading', inputSchema: { type: 'object', properties: { tab_id: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['tab_id'] } },
   // ── Page snapshot ─────────────────────────────────────────────────────────────
   { name: 'browser_page_snapshot', description: 'Get a structured text snapshot of the page: URL, title, scroll, interactive elements, headings, ARIA alerts — faster than a screenshot for understanding page state', inputSchema: { type: 'object', properties: {} } },
   // ── Page metadata ─────────────────────────────────────────────────────────────
@@ -312,7 +345,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.11.0' },
+    { name: 'claudebrowser', version: '1.12.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -522,6 +555,35 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_unregister_service_worker': return ok({ unregistered: await unregisterServiceWorker(cdp, a.scope_url as string) });
         case 'browser_update_service_worker':  { await updateServiceWorker(cdp, a.scope_url as string); return ok('Service worker updated'); }
         case 'browser_is_controlled_by_sw':    return ok({ controlled: await isControlledByServiceWorker(cdp) });
+        // DOM mutation observer
+        case 'browser_mutation_start':         { await startMutationObserver(cdp, a.observer_id as string, a.selector as string, { childList: a.child_list as boolean | undefined, attributes: a.attributes as boolean | undefined, characterData: a.character_data as boolean | undefined, subtree: a.subtree as boolean | undefined }); return ok('Mutation observer started'); }
+        case 'browser_mutation_get':           return ok(await getMutations(cdp, a.observer_id as string));
+        case 'browser_mutation_clear':         { await clearMutations(cdp, a.observer_id as string); return ok('Mutation buffer cleared'); }
+        case 'browser_mutation_stop':          return ok(await stopMutationObserver(cdp, a.observer_id as string));
+        case 'browser_mutation_stop_all':      { await stopAllMutationObservers(cdp); return ok('All mutation observers stopped'); }
+        case 'browser_wait_for_mutation':      return ok(await waitForMutation(cdp, a.observer_id as string, a.timeout_ms as number | undefined));
+        // Media
+        case 'browser_get_media':              return ok(await getMediaElements(cdp));
+        case 'browser_play_media':             { await playMedia(cdp, a.selector as string); return ok('Playing'); }
+        case 'browser_pause_media':            { await pauseMedia(cdp, a.selector as string); return ok('Paused'); }
+        case 'browser_seek_media':             { await seekMedia(cdp, a.selector as string, a.time as number); return ok('Seeked'); }
+        case 'browser_set_media_volume':       { await setMediaVolume(cdp, a.selector as string, a.volume as number); return ok('Volume set'); }
+        case 'browser_set_media_muted':        { await setMediaMuted(cdp, a.selector as string, a.muted as boolean); return ok('Muted state set'); }
+        case 'browser_set_playback_rate':      { await setPlaybackRate(cdp, a.selector as string, a.rate as number); return ok('Playback rate set'); }
+        case 'browser_wait_for_media_ready':   { await waitForMediaReady(cdp, a.selector as string, a.ready_state as number | undefined, a.timeout_ms as number | undefined); return ok('Media ready'); }
+        // DOM events & performance marks
+        case 'browser_dispatch_event':         { await dispatchDomEvent(cdp, a.selector as string, a.event_type as string, { bubbles: a.bubbles as boolean | undefined, cancelable: a.cancelable as boolean | undefined, detail: a.detail, key: a.key as string | undefined, ctrlKey: a.ctrl_key as boolean | undefined, shiftKey: a.shift_key as boolean | undefined, altKey: a.alt_key as boolean | undefined, metaKey: a.meta_key as boolean | undefined, button: a.button as number | undefined, clientX: a.client_x as number | undefined, clientY: a.client_y as number | undefined }); return ok('Event dispatched'); }
+        case 'browser_trigger_react_change':   { await triggerReactChange(cdp, a.selector as string, a.value as string); return ok('React change triggered'); }
+        case 'browser_wait_for_event':         return ok(await waitForEvent(cdp, a.selector as string, a.event_type as string, a.timeout_ms as number | undefined));
+        case 'browser_get_performance_marks':  return ok(await getPerformanceMarks(cdp));
+        case 'browser_set_performance_mark':   { await setPerformanceMark(cdp, a.name as string); return ok('Mark set'); }
+        case 'browser_measure_performance':    return ok({ durationMs: await measurePerformance(cdp, a.name as string, a.start_mark as string, a.end_mark as string) });
+        // Tab state
+        case 'browser_get_all_tabs':           return ok(await getAllTabSnapshots(cdp, config.debugPort));
+        case 'browser_find_tabs_by_url':       return ok(await findTabsByUrl(cdp, config.debugPort, a.url_pattern as string));
+        case 'browser_duplicate_tab':          return ok({ newTabId: await duplicateTab(config.debugPort, a.tab_id as string) });
+        case 'browser_get_tab_info':           return ok(await getTabInfo(cdp, config.debugPort, a.tab_id as string));
+        case 'browser_wait_for_tab_load':      { await waitForTabLoad(cdp, config.debugPort, a.tab_id as string, a.timeout_ms as number | undefined); return ok('Tab loaded'); }
         // Page snapshot
         case 'browser_page_snapshot':          return ok(await getPageSnapshot(cdp));
         // Page metadata
