@@ -1,0 +1,28 @@
+{
+  "name": "claudebrowser",
+  "version": "1.0.0",
+  "description": "Claude Code browser automation via Chrome CDP",
+  "bin": {
+    "claudebrowser": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc && node build.mjs",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "chrome-remote-interface": "^0.33.0",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome-remote-interface": "^0.31.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.21.0",
+    "pkg": "^5.8.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
