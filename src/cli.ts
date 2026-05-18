@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('claudebrowser')
   .description('Claude Code browser automation via Chrome CDP')
-  .version('1.2.2');
+  .version('1.3.0');
 
 program
   .command('init')
@@ -19,11 +19,12 @@ program
 program
   .command('serve')
   .description('Start MCP server for Claude Code')
-  .action(async () => {
+  .option('-s, --session <name>', 'Name this session (e.g. isi-house, client-project)')
+  .action(async (opts: { session?: string }) => {
     const { ensureChrome } = await import('./chrome');
     const { startServer } = await import('./server');
     await ensureChrome();
-    await startServer();
+    await startServer(opts.session);
   });
 
 program

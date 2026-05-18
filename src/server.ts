@@ -59,14 +59,14 @@ const TOOLS = [
   { name: 'browser_wait_for_auth', description: 'Wait up to 2 minutes for the user to log in on the current page. Use after telling the user a session has expired.', inputSchema: { type: 'object', properties: { platform: { type: 'string', description: 'Platform name matching an auth check preset (e.g. "Instagram")' }, timeout_ms: { type: 'number' } } } },
 ];
 
-export async function startServer(): Promise<void> {
+export async function startServer(sessionName?: string): Promise<void> {
   const config = readConfig();
   const cdp = new CdpClient(config.debugPort);
 
   // Session setup — one session per claudebrowser serve process
   pruneDeadSessions();
   const sessionId = generateSessionId();
-  registerSession(sessionId);
+  registerSession(sessionId, sessionName);
   const cleanup = () => unregisterSession(sessionId);
   process.on('exit', cleanup);
   process.on('SIGINT', () => { cleanup(); process.exit(0); });
@@ -123,7 +123,13 @@ export async function startServer(): Promise<void> {
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
           const target = await cdp.getActiveTarget();
-          return ok({ connected: true, port: config.debugPort, activeTab: target ? { url: target.url, title: target.title } : null });
+          return ok({
+            connected: true,
+            port: config.debugPort,
+            sessionId,
+            sessionName: sessionName ?? null,
+            activeTab: target ? { url: target.url, title: target.title } : null,
+          });
         }
         case 'browser_hover':         { await hoverAt(cdp, a.x as number, a.y as number); return ok('Hovered'); }
         case 'browser_hover_selector':{ await hoverSelector(cdp, a.selector as string); return ok('Hovered'); }

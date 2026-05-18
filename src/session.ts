@@ -6,6 +6,7 @@ export interface SessionEntry {
   pid: number;
   startedAt: string;
   tabs: string[];
+  name?: string;
 }
 
 export interface SessionRegistry {
@@ -50,12 +51,13 @@ export function writeSessions(registry: SessionRegistry): void {
   }
 }
 
-export function registerSession(sessionId: string): void {
+export function registerSession(sessionId: string, name?: string): void {
   const registry = readSessions();
   registry.sessions[sessionId] = {
     pid: process.pid,
     startedAt: new Date().toISOString(),
     tabs: [],
+    ...(name ? { name } : {}),
   };
   writeSessions(registry);
 }
@@ -124,14 +126,18 @@ export function pruneDeadSessions(): void {
 export function isTabOwnedByOther(
   sessionId: string,
   tabId: string
-): { owned: boolean; ownerSessionId?: string } {
+): { owned: boolean; ownerSessionId?: string; ownerName?: string } {
   const registry = readSessions();
   for (const [sid, entry] of Object.entries(registry.sessions)) {
     if (sid === sessionId) {
       continue;
     }
     if (entry.tabs.includes(tabId)) {
-      return { owned: true, ownerSessionId: sid };
+      return {
+        owned: true,
+        ownerSessionId: sid,
+        ...(entry.name ? { ownerName: entry.name } : {}),
+      };
     }
   }
   return { owned: false };
