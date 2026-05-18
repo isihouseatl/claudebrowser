@@ -17,10 +17,10 @@ class Claudebrowser < Formula
 
   def install
     arch = Hardware::CPU.arm? ? "arm64" : "x64"
-    bin.install "claudebrowser-macos-\#{arch}" => "claudebrowser"
+    bin.install "claudebrowser-macos-#{arch}" => "claudebrowser"
   end
 
   test do
-    assert_match version.to_s, shell_output("\#{bin}/claudebrowser --version")
+    assert_match version.to_s, shell_output("#{bin}/claudebrowser --version")
   end
 end
