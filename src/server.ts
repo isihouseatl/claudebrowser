@@ -25,7 +25,7 @@ import { getZIndex, getElementsAtPoint, getPixelColor, getColors, highlightEleme
 import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
 import { queryShadow, getShadowHtml, evaluateInShadow } from './cdp/shadow';
 import { setAttribute, removeAttribute, addClass, removeClass, injectCss, removeInjectedCss, submitForm, resetForm } from './cdp/dom';
-import { setClipboard, getClipboard } from './cdp/clipboard';
+import { writeClipboardText, readClipboardText, copyElementText, getSelectionText, selectAllText, clearSelection as clearPageSelection, hasClipboardAccess, pasteAtCursor } from './cdp/clipboard';
 import { listIndexedDatabases, getAllIndexedDb, getIndexedDb, clearIndexedDb } from './cdp/indexeddb';
 import { getPaintTiming, getNavigationTiming, getResourceTimings, clearPerformanceBuffer } from './cdp/performance';
 import { startWebSocketLog, getWebSocketMessages, getWebSocketConnections, clearWebSocketLog, stopWebSocketLog } from './cdp/websocket';
@@ -96,6 +96,8 @@ import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, get
 import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange } from './cdp/observer';
+import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
+import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -880,6 +882,28 @@ const TOOLS = [
   { name: 'browser_wait_value_change2', description: 'Wait (MutationObserver+input) for element value to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
   { name: 'browser_resize_info', description: 'Get size info for element: width, height, scrollWidth, scrollHeight, offsetWidth, offsetHeight', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_wait_attribute_change', description: 'Wait for a specific attribute on element to change', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, attribute: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector', 'attribute'] } },
+  // ── Clipboard extended ─────────────────────────────────────────────────────────
+  { name: 'browser_copy_element_text', description: 'Select element text and copy to clipboard using execCommand', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_selection_text', description: 'Get currently selected text on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_all_text', description: 'Select all text in an input, textarea, or element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_clipboard_access', description: 'Check if clipboard read/write access is available and its permission state', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paste_at_cursor', description: 'Paste text at cursor position in focused element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } },
+  // ── Storage2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_localstorage_keys', description: 'Get JSON array of all localStorage keys', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sessionstorage_keys', description: 'Get JSON array of all sessionStorage keys', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wipe_localstorage', description: 'Clear all localStorage entries', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wipe_sessionstorage', description: 'Clear all sessionStorage entries', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexeddb_databases', description: 'List all IndexedDB databases: name and version', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count_info', description: 'Get count of cookies visible to the current page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_quota', description: 'Get storage quota/usage from navigator.storage.estimate()', inputSchema: { type: 'object', properties: {} } },
+  // ── Network3 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_connection_type', description: 'Get network connection type, effectiveType, downlink, and rtt', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_online', description: 'Check if the browser reports being online via navigator.onLine', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_location', description: 'Get page hostname, port, and origin from location', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_websockets', description: 'Check WebSocket connection status (not enumerable from page context)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_registrations', description: 'List all service worker registrations: scope and state', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_beacon_support', description: 'Check if navigator.sendBeacon is supported', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_referrer', description: 'Get document.referrer for the current page', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1040,8 +1064,8 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_submit_form':            { await submitForm(cdp, a.selector as string); return ok('Form submitted'); }
         case 'browser_reset_form':             { await resetForm(cdp, a.selector as string); return ok('Form reset'); }
         // Clipboard
-        case 'browser_set_clipboard':          { await setClipboard(cdp, a.text as string); return ok('Clipboard set'); }
-        case 'browser_get_clipboard':          return ok({ text: await getClipboard(cdp) });
+        case 'browser_set_clipboard':          { await writeClipboardText(cdp, a.text as string); return ok('Clipboard set'); }
+        case 'browser_get_clipboard':          { const r = await readClipboardText(cdp); const parsed = JSON.parse(r.content[0].text.startsWith('Error') ? '{"text":""}' : r.content[0].text); return ok({ text: parsed.text }); }
         // IndexedDB
         case 'browser_list_indexed_databases': return ok(await listIndexedDatabases(cdp));
         case 'browser_get_all_indexed_db':     return ok(await getAllIndexedDb(cdp, a.db_name as string, a.store_name as string));
@@ -1746,6 +1770,30 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_wait_value_change2':       return await waitForValueChange2(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
         case 'browser_resize_info':              return await getResizeInfo(cdp, a.selector as string);
         case 'browser_wait_attribute_change':    return await waitForAttributeChange(cdp, a.selector as string, a.attribute as string, a.timeout_ms as number ?? 5000);
+                // clipboard extended
+        case 'browser_copy_element_text':        return await copyElementText(cdp, a.selector as string);
+        case 'browser_selection_text':           return await getSelectionText(cdp);
+        case 'browser_select_all_text':          return await selectAllText(cdp, a.selector as string);
+        case 'browser_clear_selection_alt':      return await clearPageSelection(cdp);
+        case 'browser_clipboard_access':         return await hasClipboardAccess(cdp);
+        case 'browser_paste_at_cursor':          return await pasteAtCursor(cdp, a.selector as string, a.text as string);
+        // storage2 new
+        case 'browser_localstorage_keys':        return await getLocalStorageKeys(cdp);
+        case 'browser_sessionstorage_keys':      return await getSessionStorageKeys(cdp);
+        case 'browser_localstorage_size_info':   return await getLocalStorageSizeInfo(cdp);
+        case 'browser_wipe_localstorage':        return await wipeLocalStorage(cdp);
+        case 'browser_wipe_sessionstorage':      return await wipeSessionStorage(cdp);
+        case 'browser_indexeddb_databases':      return await getIndexedDBDatabases(cdp);
+        case 'browser_cookie_count_info':        return await getCookieCountInfo(cdp);
+        case 'browser_storage_quota':            return await getStorageQuotaInfo(cdp);
+        // network3
+        case 'browser_connection_type':          return await getConnectionType(cdp);
+        case 'browser_is_online':                return await isOnline(cdp);
+        case 'browser_page_location':            return await getPageLocation(cdp);
+        case 'browser_open_websockets':          return await getOpenWebSockets(cdp);
+        case 'browser_service_worker_registrations': return await getServiceWorkerRegistrations(cdp);
+        case 'browser_beacon_support':           return await getBeaconSupport(cdp);
+        case 'browser_page_referrer':            return await getPageReferrer(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

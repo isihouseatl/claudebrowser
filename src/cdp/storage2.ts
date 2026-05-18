@@ -1,19 +1,30 @@
 // src/cdp/storage2.ts
 import { CdpClient } from './client';
 
+function ok(text: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text }] };
+}
+function err(text: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: `Error: ${text}` }] };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy functions — used by server.ts, keep exact return types
+// ---------------------------------------------------------------------------
+
 // Return the number of keys and total byte size of localStorage
 export async function getLocalStorageSize(client: CdpClient): Promise<{ keys: number; bytes: number }> {
-  const expression = `(() => {
-    const serialized = JSON.stringify(localStorage);
+  const expression = `(function() {
+    var serialized = JSON.stringify(Object.fromEntries(Object.entries(localStorage)));
     return { keys: localStorage.length, bytes: new TextEncoder().encode(serialized).length };
   })()`;
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression,
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in getLocalStorageSize: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in getLocalStorageSize: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   return result.value as { keys: number; bytes: number };
 }
@@ -23,15 +34,15 @@ export async function searchLocalStorage(
   client: CdpClient,
   query: string,
 ): Promise<Array<{ key: string; value: string }>> {
-  const escapedQuery = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const expression = `(() => {
-    const q = '${escapedQuery}'.toLowerCase();
-    const matches = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      const value = localStorage.getItem(key);
-      if (key.toLowerCase().includes(q) || (value !== null && value.toLowerCase().includes(q))) {
-        matches.push({ key, value: value ?? '' });
+  var escapedQuery = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const expression = `(function() {
+    var q = '${escapedQuery}'.toLowerCase();
+    var matches = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      var value = localStorage.getItem(key);
+      if (key.toLowerCase().indexOf(q) !== -1 || (value !== null && value.toLowerCase().indexOf(q) !== -1)) {
+        matches.push({ key: key, value: value !== null ? value : '' });
       }
     }
     return matches;
@@ -39,27 +50,27 @@ export async function searchLocalStorage(
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression,
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in searchLocalStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in searchLocalStorage: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   return (result.value ?? []) as Array<{ key: string; value: string }>;
 }
 
 // Return the number of keys and total byte size of sessionStorage
 export async function getSessionStorageSize(client: CdpClient): Promise<{ keys: number; bytes: number }> {
-  const expression = `(() => {
-    const serialized = JSON.stringify(sessionStorage);
+  const expression = `(function() {
+    var serialized = JSON.stringify(Object.fromEntries(Object.entries(sessionStorage)));
     return { keys: sessionStorage.length, bytes: new TextEncoder().encode(serialized).length };
   })()`;
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression,
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in getSessionStorageSize: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in getSessionStorageSize: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   return result.value as { keys: number; bytes: number };
 }
@@ -68,17 +79,19 @@ export async function getSessionStorageSize(client: CdpClient): Promise<{ keys: 
 export async function dumpAllStorage(
   client: CdpClient,
 ): Promise<{ localStorage: Record<string, string>; sessionStorage: Record<string, string> }> {
-  const expression = `(() => ({
-    localStorage: Object.fromEntries(Object.entries(localStorage)),
-    sessionStorage: Object.fromEntries(Object.entries(sessionStorage)),
-  }))()`;
+  const expression = `(function() {
+    return {
+      localStorage: Object.fromEntries(Object.entries(localStorage)),
+      sessionStorage: Object.fromEntries(Object.entries(sessionStorage))
+    };
+  })()`;
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression,
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in dumpAllStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in dumpAllStorage: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   return (result.value ?? { localStorage: {}, sessionStorage: {} }) as {
     localStorage: Record<string, string>;
@@ -88,14 +101,16 @@ export async function dumpAllStorage(
 
 // Count cookies accessible via document.cookie
 export async function getCookieCount(client: CdpClient): Promise<number> {
-  const expression = `document.cookie.split(';').filter(Boolean).length`;
+  const expression = `(function() {
+    return document.cookie.split(';').filter(function(s) { return s.trim().length > 0; }).length;
+  })()`;
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression,
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in getCookieCount: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in getCookieCount: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   return (result.value ?? 0) as number;
 }
@@ -126,7 +141,7 @@ export async function getStorageEstimate(
     awaitPromise: true,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error in getStorageEstimate: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error in getStorageEstimate: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   const estimate = result.value as { quota?: number; usage?: number };
   const quota = estimate?.quota ?? 0;
@@ -140,11 +155,189 @@ export async function clearOriginStorage(client: CdpClient): Promise<void> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: 'window.location.origin',
     returnByValue: true,
-    awaitPromise: true,
+    awaitPromise: false,
   });
   if (exceptionDetails) {
-    throw new Error(`JS error getting origin in clearOriginStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    throw new Error('JS error getting origin in clearOriginStorage: ' + (exceptionDetails.exception?.description ?? exceptionDetails.text));
   }
   const origin = result.value as string;
   await (client.raw.Storage as any).clearDataForOrigin({ origin, storageTypes: 'all' });
+}
+
+// ---------------------------------------------------------------------------
+// New tool-style functions — return { content: [{ type: 'text', text }] }
+// ---------------------------------------------------------------------------
+
+// Return JSON array of all localStorage keys
+export async function getLocalStorageKeys(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var keys = []; for (var i = 0; i < localStorage.length; i++) { keys.push(localStorage.key(i)); } return JSON.stringify(keys); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('localStorage.keys returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Return JSON array of all sessionStorage keys
+export async function getSessionStorageKeys(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var keys = []; for (var i = 0; i < sessionStorage.length; i++) { keys.push(sessionStorage.key(i)); } return JSON.stringify(keys); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('sessionStorage.keys returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Return JSON {count, estimatedBytes} — sum of (key.length + value.length) * 2 for all localStorage entries.
+// Named getLocalStorageSizeInfo to avoid conflict with the legacy getLocalStorageSize above.
+export async function getLocalStorageSizeInfo(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var count = localStorage.length; var bytes = 0; for (var i = 0; i < count; i++) { var k = localStorage.key(i); var v = localStorage.getItem(k); bytes += (k.length + (v ? v.length : 0)) * 2; } return JSON.stringify({ count: count, estimatedBytes: bytes }); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('localStorage size check returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Clear localStorage and return "Cleared".
+// Named wipeLocalStorage to avoid conflict with clearLocalStorage in storage.ts.
+export async function wipeLocalStorage(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { localStorage.clear(); return "Cleared"; })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    return ok('Cleared');
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Clear sessionStorage and return "Cleared".
+// Named wipeSessionStorage to avoid conflict with clearSessionStorage in storage.ts.
+export async function wipeSessionStorage(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { sessionStorage.clear(); return "Cleared"; })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    return ok('Cleared');
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Return JSON array of {name, version} for all IndexedDB databases on the current origin
+export async function getIndexedDBDatabases(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { return indexedDB.databases().then(function(dbs) { return JSON.stringify(dbs.map(function(d) { return { name: d.name, version: d.version }; })); }); })()',
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('indexedDB.databases() returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Return JSON {count} of cookies visible to the current page via document.cookie.
+// Named getCookieCountInfo to avoid conflict with the legacy getCookieCount above.
+export async function getCookieCountInfo(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var count = document.cookie.split(";").filter(function(s) { return s.trim().length > 0; }).length; return JSON.stringify({ count: count }); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('getCookieCountInfo returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// Return JSON {usage, quota, usagePercent} from navigator.storage.estimate()
+export async function getStorageQuota(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { return navigator.storage.estimate().then(function(est) { var pct = est.quota > 0 ? Math.round((est.usage / est.quota) * 10000) / 100 : 0; return JSON.stringify({ usage: est.usage, quota: est.quota, usagePercent: pct }); }); })()',
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('navigator.storage.estimate() returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
 }
