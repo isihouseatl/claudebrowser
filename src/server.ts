@@ -43,6 +43,10 @@ import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInI
 import { fillForm, detectFormFields, submitForm as autofillSubmitForm, clearForm, getFormState } from './cdp/autofill';
 import { waitForAny, waitForAll, waitForCondition, waitForStable, waitForValueChange, waitForCountChange, retryUntilSuccess } from './cdp/waiters';
 import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition } from './cdp/pointer';
+import { startRecording, stopRecording, getRecordedActions, clearRecording, isRecording } from './cdp/recorder';
+import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, findNearLabel, getElementSelector } from './cdp/finder';
+import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
+import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange } from './cdp/notify';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -365,6 +369,37 @@ const TOOLS = [
   { name: 'browser_context_click', description: 'Right-click at (x,y) to open a context menu', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
   { name: 'browser_middle_click', description: 'Middle-click at (x,y) to open a link in a new tab', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
   { name: 'browser_get_mouse_position', description: 'Get the last known mouse position {x, y}', inputSchema: { type: 'object', properties: {} } },
+  // ── Action recorder ───────────────────────────────────────────────────────────
+  { name: 'browser_record_start', description: 'Start recording user interactions (clicks, input, change, keydown) into a replayable action log', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_record_stop', description: 'Stop recording and return the full action log', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_record_get', description: 'Get all recorded actions so far without stopping', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_record_clear', description: 'Clear the recording buffer without stopping', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_recording', description: 'Check whether action recording is currently active', inputSchema: { type: 'object', properties: {} } },
+  // ── Semantic element finder ───────────────────────────────────────────────────
+  { name: 'browser_find_by_label', description: 'Find an input/select/textarea associated with a visible label containing the given text', inputSchema: { type: 'object', properties: { label_text: { type: 'string' } }, required: ['label_text'] } },
+  { name: 'browser_find_by_placeholder', description: 'Find an input whose placeholder attribute contains the given text', inputSchema: { type: 'object', properties: { placeholder: { type: 'string' } }, required: ['placeholder'] } },
+  { name: 'browser_find_button', description: 'Find a button or submit input whose visible text or value contains the given text', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_find_by_role', description: 'Find elements with a given ARIA role, optionally filtered by accessible name', inputSchema: { type: 'object', properties: { role: { type: 'string', description: 'ARIA role e.g. button, textbox, dialog, listbox' }, name: { type: 'string', description: 'Optional accessible name filter' } }, required: ['role'] } },
+  { name: 'browser_find_by_text', description: 'Find elements whose visible text contains the given string', inputSchema: { type: 'object', properties: { text: { type: 'string' }, tag_name: { type: 'string', description: 'Optional tag filter e.g. span, h1, button' } }, required: ['text'] } },
+  { name: 'browser_find_near_label', description: 'Find all interactive elements near a label with the given text (same container)', inputSchema: { type: 'object', properties: { label_text: { type: 'string' } }, required: ['label_text'] } },
+  { name: 'browser_get_element_selector', description: 'Get the best CSS selector for the element at a given (x, y) coordinate', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  // ── Advanced scrolling ────────────────────────────────────────────────────────
+  { name: 'browser_scroll_until_visible', description: 'Scroll down the page until an element comes into the viewport', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, max_scrolls: { type: 'number', description: 'Max scroll steps (default 20)' }, scroll_amount: { type: 'number', description: 'Pixels per step (default 300)' } }, required: ['selector'] } },
+  { name: 'browser_scroll_until_text', description: 'Scroll down until any element on the page contains the given text', inputSchema: { type: 'object', properties: { text: { type: 'string' }, max_scrolls: { type: 'number', description: 'Max scroll steps (default 30)' } }, required: ['text'] } },
+  { name: 'browser_scroll_container', description: 'Scroll an overflow container element (not the page) by a pixel amount', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, direction: { type: 'string', enum: ['up', 'down', 'left', 'right'] }, amount: { type: 'number' } }, required: ['selector', 'direction', 'amount'] } },
+  { name: 'browser_scroll_container_to_end', description: 'Scroll an overflow container to an edge (top, bottom, left, right)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, direction: { type: 'string', enum: ['top', 'bottom', 'left', 'right'] } }, required: ['selector', 'direction'] } },
+  { name: 'browser_get_container_scroll', description: 'Get scroll state of an overflow container: scrollTop, scrollLeft, atBottom, atTop, etc.', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_infinite_scroll', description: "Click a 'Load More' trigger repeatedly until a JS stop condition is true or maxClicks reached", inputSchema: { type: 'object', properties: { trigger_selector: { type: 'string', description: 'CSS selector for the Load More button' }, stop_condition: { type: 'string', description: 'JS expression that returns truthy to stop (e.g. "document.querySelectorAll(\'.item\').length >= 50")' }, max_clicks: { type: 'number', description: 'Max clicks (default 10)' } }, required: ['trigger_selector', 'stop_condition'] } },
+  { name: 'browser_smooth_scroll_to', description: 'Smoothly scroll the page to absolute coordinates using scroll behavior: smooth', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, duration_ms: { type: 'number', description: 'Wait time for animation in ms (default 500)' } }, required: ['x', 'y'] } },
+  // ── Toast & notification ──────────────────────────────────────────────────────
+  { name: 'browser_wait_for_toast', description: 'Wait for a toast/snackbar/alert banner to appear. Returns its text and selector.', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'Custom selector override (optional)' }, timeout_ms: { type: 'number' } } } },
+  { name: 'browser_get_toasts', description: 'Get all currently visible toast/snackbar/alert elements on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_toast_containing', description: 'Wait for a toast whose text contains the given string', inputSchema: { type: 'object', properties: { text: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['text'] } },
+  { name: 'browser_dismiss_toast', description: 'Try to dismiss a visible toast by clicking its close button', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'Custom toast selector (optional)' } } } },
+  { name: 'browser_intercept_notifications', description: 'Override the Notification API to capture browser notifications instead of showing them', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_notifications', description: 'Get all captured browser Notification API calls', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_notifications', description: 'Clear captured browser notification history', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_banner_change', description: "Wait until a status banner/element's text content changes", inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -413,7 +448,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.14.0' },
+    { name: 'claudebrowser', version: '1.15.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -747,6 +782,37 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_context_click':          { await contextClickAt(cdp, a.x as number, a.y as number); return ok('Context-clicked'); }
         case 'browser_middle_click':           { await middleClickAt(cdp, a.x as number, a.y as number); return ok('Middle-clicked'); }
         case 'browser_get_mouse_position':     return ok(await getMousePosition(cdp));
+        // Action recorder
+        case 'browser_record_start':           { await startRecording(cdp); return ok('Recording started'); }
+        case 'browser_record_stop':            return ok(await stopRecording(cdp));
+        case 'browser_record_get':             return ok(await getRecordedActions(cdp));
+        case 'browser_record_clear':           { await clearRecording(cdp); return ok('Recording cleared'); }
+        case 'browser_is_recording':           return ok({ recording: isRecording(cdp) });
+        // Semantic element finder
+        case 'browser_find_by_label':          return ok(await findByLabel(cdp, a.label_text as string));
+        case 'browser_find_by_placeholder':    return ok(await findByPlaceholder(cdp, a.placeholder as string));
+        case 'browser_find_button':            return ok(await findButton(cdp, a.text as string));
+        case 'browser_find_by_role':           return ok(await findByRole(cdp, a.role as string, a.name as string | undefined));
+        case 'browser_find_by_text':           return ok(await findByText(cdp, a.text as string, a.tag_name as string | undefined));
+        case 'browser_find_near_label':        return ok(await findNearLabel(cdp, a.label_text as string));
+        case 'browser_get_element_selector':   return ok({ selector: await getElementSelector(cdp, a.x as number, a.y as number) });
+        // Advanced scrolling
+        case 'browser_scroll_until_visible':   return ok({ found: await scrollUntilVisible(cdp, a.selector as string, a.max_scrolls as number | undefined, a.scroll_amount as number | undefined) });
+        case 'browser_scroll_until_text':      return ok({ found: await scrollUntilText(cdp, a.text as string, a.max_scrolls as number | undefined) });
+        case 'browser_scroll_container':       { await scrollContainer(cdp, a.selector as string, a.direction as 'up' | 'down' | 'left' | 'right', a.amount as number); return ok('Scrolled'); }
+        case 'browser_scroll_container_to_end': { await scrollContainerToEnd(cdp, a.selector as string, a.direction as 'top' | 'bottom' | 'left' | 'right'); return ok('Scrolled to end'); }
+        case 'browser_get_container_scroll':   return ok(await getContainerScrollState(cdp, a.selector as string));
+        case 'browser_infinite_scroll':        return ok({ stopped: await infiniteScrollUntil(cdp, a.trigger_selector as string, a.stop_condition as string, a.max_clicks as number | undefined) });
+        case 'browser_smooth_scroll_to':       { await smoothScrollTo(cdp, a.x as number, a.y as number, a.duration_ms as number | undefined); return ok('Scrolled'); }
+        // Toast & notification
+        case 'browser_wait_for_toast':         return ok(await waitForToast(cdp, { selector: a.selector as string | undefined, timeoutMs: a.timeout_ms as number | undefined }));
+        case 'browser_get_toasts':             return ok(await getToasts(cdp));
+        case 'browser_wait_for_toast_containing': return ok(await waitForToastContaining(cdp, a.text as string, a.timeout_ms as number | undefined));
+        case 'browser_dismiss_toast':          return ok({ dismissed: await dismissToast(cdp, a.selector as string | undefined) });
+        case 'browser_intercept_notifications': { await interceptBrowserNotification(cdp); return ok('Notification API intercepted'); }
+        case 'browser_get_notifications':      return ok(await getCapturedNotifications(cdp));
+        case 'browser_clear_notifications':    { await clearCapturedNotifications(cdp); return ok('Notifications cleared'); }
+        case 'browser_wait_for_banner_change': return ok({ text: await waitForBannerChange(cdp, a.selector as string, a.timeout_ms as number | undefined) });
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
