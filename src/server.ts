@@ -63,6 +63,10 @@ import { getWorkerList, evaluateInWorker, getWorkerCount, terminateWorker, getDe
 import { countRecords, getRecord, putRecord, deleteRecord, getAllKeys, queryRecords, getObjectStoreNames, clearObjectStore } from './cdp/indexeddb2';
 import { getPageFonts, getElementFont, findElementsByFont, getFontStack, checkFontLoaded, getLoadedFonts, waitForFontsReady, getFontMetrics } from './cdp/fonts';
 import { denyPermission, checkPermission, grantGeolocation, grantNotifications, grantClipboardAccess, getPermissionState } from './cdp/permissions';
+import { getCssVariables, setCssVariable, getStylesheets, getMatchingRules, getInlineStyle, setInlineStyle, removeInlineStyle, getUsedCssProperties } from './cdp/css';
+import { getSelectionRange, selectText, clearSelection, getCaretPosition, setCaretInElement, copySelectionToClipboard } from './cdp/selection';
+import { touchTap, touchDoubleTap, touchLongPress, touchSwipe, touchPinch, touchScroll, touchDrag, getTouchSupport } from './cdp/touch';
+import { setDarkMode, setLightMode, clearColorScheme, getColorScheme, setContrastPreference, getThemeColors, takeThemeScreenshots } from './cdp/darkmode';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -552,6 +556,39 @@ const TOOLS = [
   { name: 'browser_grant_notifications', description: 'Grant the notifications permission for an origin', inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] } },
   { name: 'browser_grant_clipboard', description: 'Grant clipboard-read and clipboard-write for an origin', inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] } },
   { name: 'browser_get_permission_state', description: 'Get state of all standard permissions (geolocation, notifications, camera, microphone, clipboard)', inputSchema: { type: 'object', properties: {} } },
+  // ── CSS inspection ────────────────────────────────────────────────────────────
+  { name: 'browser_get_css_vars', description: 'Get all CSS custom properties (--name: value) from an element or :root', inputSchema: { type: 'object', properties: { selector: { type: 'string' } } } },
+  { name: 'browser_set_css_var', description: 'Set a CSS custom property on an element or :root', inputSchema: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' }, selector: { type: 'string' } }, required: ['name', 'value'] } },
+  { name: 'browser_get_stylesheets', description: 'List all stylesheets on the page (href, type, disabled, rulesCount)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_matching_rules', description: 'Find CSS rules whose selectorText matches a substring', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_inline_style', description: 'Get all inline style properties on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_set_inline_style', description: 'Set a CSS property on an element inline style', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, property: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'property', 'value'] } },
+  { name: 'browser_remove_inline_style', description: 'Remove a CSS property from an element inline style', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, property: { type: 'string' } }, required: ['selector', 'property'] } },
+  { name: 'browser_get_used_css', description: 'Get computed values for specific CSS properties on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, properties: { type: 'array', items: { type: 'string' } } }, required: ['selector', 'properties'] } },
+  // ── Text selection / caret ────────────────────────────────────────────────────
+  { name: 'browser_get_selection_range', description: 'Get start/end offsets and container info for the current text selection', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_text_range', description: 'Select a range of text inside an element by start/end character offset', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, start_offset: { type: 'number' }, end_offset: { type: 'number' } }, required: ['selector', 'start_offset', 'end_offset'] } },
+  { name: 'browser_clear_selection', description: 'Clear the current text selection', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_caret', description: 'Get caret position (collapsed selection) offset and container', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_caret', description: 'Place the caret at a specific offset within an element text node', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, offset: { type: 'number' } }, required: ['selector', 'offset'] } },
+  { name: 'browser_copy_selection', description: 'Copy selected text to clipboard and return the text', inputSchema: { type: 'object', properties: {} } },
+  // ── Touch events ──────────────────────────────────────────────────────────────
+  { name: 'browser_touch_tap', description: 'Dispatch a touch tap at coordinates', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_touch_double_tap', description: 'Dispatch a double touch tap at coordinates', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_touch_long_press', description: 'Dispatch a long press touch gesture', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, duration_ms: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_touch_swipe', description: 'Swipe from start to end coordinates with configurable steps', inputSchema: { type: 'object', properties: { start_x: { type: 'number' }, start_y: { type: 'number' }, end_x: { type: 'number' }, end_y: { type: 'number' }, steps: { type: 'number' } }, required: ['start_x', 'start_y', 'end_x', 'end_y'] } },
+  { name: 'browser_touch_pinch', description: 'Simulate a two-finger pinch/zoom gesture at a center point', inputSchema: { type: 'object', properties: { center_x: { type: 'number' }, center_y: { type: 'number' }, scale: { type: 'number' } }, required: ['center_x', 'center_y', 'scale'] } },
+  { name: 'browser_touch_scroll', description: 'Scroll via synthesizeScrollGesture from a touch position', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, delta_x: { type: 'number' }, delta_y: { type: 'number' } }, required: ['x', 'y', 'delta_x', 'delta_y'] } },
+  { name: 'browser_touch_drag', description: 'Drag from start to end via touch events', inputSchema: { type: 'object', properties: { start_x: { type: 'number' }, start_y: { type: 'number' }, end_x: { type: 'number' }, end_y: { type: 'number' } }, required: ['start_x', 'start_y', 'end_x', 'end_y'] } },
+  { name: 'browser_get_touch_support', description: 'Check browser touch support (maxTouchPoints, ontouchstart, PointerEvent)', inputSchema: { type: 'object', properties: {} } },
+  // ── Dark mode / color scheme ──────────────────────────────────────────────────
+  { name: 'browser_dark_mode', description: 'Emulate prefers-color-scheme: dark', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_light_mode', description: 'Emulate prefers-color-scheme: light', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_color_scheme', description: 'Clear prefers-color-scheme emulation', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_color_scheme', description: 'Get the current color scheme preference (dark/light/no-preference)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_contrast', description: 'Emulate prefers-contrast (more/less/no-preference)', inputSchema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] } },
+  { name: 'browser_get_theme_colors', description: 'Get background, foreground, and accent colors from the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_screenshots', description: 'Capture screenshots in both light and dark mode, returns {light, dark} base64 PNGs', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -600,7 +637,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.19.0' },
+    { name: 'claudebrowser', version: '1.20.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -1101,6 +1138,39 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_grant_notifications':    { await grantNotifications(cdp, a.origin as string); return ok('Notifications granted'); }
         case 'browser_grant_clipboard':        { await grantClipboardAccess(cdp, a.origin as string); return ok('Clipboard access granted'); }
         case 'browser_get_permission_state':   return ok(await getPermissionState(cdp));
+        // CSS inspection
+        case 'browser_get_css_vars':           return ok(await getCssVariables(cdp, a.selector as string | undefined));
+        case 'browser_set_css_var':            { await setCssVariable(cdp, a.name as string, a.value as string, a.selector as string | undefined); return ok('CSS variable set'); }
+        case 'browser_get_stylesheets':        return ok(await getStylesheets(cdp));
+        case 'browser_get_matching_rules':     return ok(await getMatchingRules(cdp, a.selector as string));
+        case 'browser_get_inline_style':       return ok(await getInlineStyle(cdp, a.selector as string));
+        case 'browser_set_inline_style':       { await setInlineStyle(cdp, a.selector as string, a.property as string, a.value as string); return ok('Inline style set'); }
+        case 'browser_remove_inline_style':    { await removeInlineStyle(cdp, a.selector as string, a.property as string); return ok('Inline style removed'); }
+        case 'browser_get_used_css':           return ok(await getUsedCssProperties(cdp, a.selector as string, a.properties as string[]));
+        // Text selection / caret
+        case 'browser_get_selection_range':    return ok(await getSelectionRange(cdp));
+        case 'browser_select_text_range':      { await selectText(cdp, a.selector as string, a.start_offset as number, a.end_offset as number); return ok('Text selected'); }
+        case 'browser_clear_selection':        { await clearSelection(cdp); return ok('Selection cleared'); }
+        case 'browser_get_caret':              return ok(await getCaretPosition(cdp));
+        case 'browser_set_caret':              { await setCaretInElement(cdp, a.selector as string, a.offset as number); return ok('Caret set'); }
+        case 'browser_copy_selection':         return ok({ text: await copySelectionToClipboard(cdp) });
+        // Touch events
+        case 'browser_touch_tap':              { await touchTap(cdp, a.x as number, a.y as number); return ok('Touch tap sent'); }
+        case 'browser_touch_double_tap':       { await touchDoubleTap(cdp, a.x as number, a.y as number); return ok('Touch double tap sent'); }
+        case 'browser_touch_long_press':       { await touchLongPress(cdp, a.x as number, a.y as number, a.duration_ms as number | undefined); return ok('Long press sent'); }
+        case 'browser_touch_swipe':            { await touchSwipe(cdp, a.start_x as number, a.start_y as number, a.end_x as number, a.end_y as number, a.steps as number | undefined); return ok('Touch swipe sent'); }
+        case 'browser_touch_pinch':            { await touchPinch(cdp, a.center_x as number, a.center_y as number, a.scale as number); return ok('Touch pinch sent'); }
+        case 'browser_touch_scroll':           { await touchScroll(cdp, a.x as number, a.y as number, a.delta_x as number, a.delta_y as number); return ok('Touch scroll sent'); }
+        case 'browser_touch_drag':             { await touchDrag(cdp, a.start_x as number, a.start_y as number, a.end_x as number, a.end_y as number); return ok('Touch drag sent'); }
+        case 'browser_get_touch_support':      return ok(await getTouchSupport(cdp));
+        // Dark mode / color scheme
+        case 'browser_dark_mode':              { await setDarkMode(cdp); return ok('Dark mode set'); }
+        case 'browser_light_mode':             { await setLightMode(cdp); return ok('Light mode set'); }
+        case 'browser_clear_color_scheme':     { await clearColorScheme(cdp); return ok('Color scheme cleared'); }
+        case 'browser_get_color_scheme':       return ok({ scheme: await getColorScheme(cdp) });
+        case 'browser_set_contrast':           { await setContrastPreference(cdp, a.value as 'more' | 'less' | 'no-preference'); return ok('Contrast set'); }
+        case 'browser_get_theme_colors':       return ok(await getThemeColors(cdp));
+        case 'browser_theme_screenshots':      return ok(await takeThemeScreenshots(cdp));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
