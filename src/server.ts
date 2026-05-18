@@ -3,7 +3,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CdpClient } from './cdp/client';
-import { listTabs, newTab, closeTab, activateTab } from './cdp/tabs';
+import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
+import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
 import { navigate, reload, goBack, scroll, waitForSelector } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, selectOption, setValue } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
@@ -27,7 +28,8 @@ function fail(message: string, code: string, suggestion?: string) {
 
 const TOOLS = [
   { name: 'browser_navigate', description: 'Navigate to a URL', inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'URL to navigate to' } }, required: ['url'] } },
-  { name: 'browser_tabs', description: 'List all open tabs', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tabs', description: 'List tabs owned by this session. Pass all:true to see every tab in Chrome.', inputSchema: { type: 'object', properties: { all: { type: 'boolean', description: 'Show all Chrome tabs, not just this session\'s' } } } },
+  { name: 'browser_sessions', description: 'List all active claudebrowser sessions (one per terminal)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_new_tab', description: 'Open a new tab', inputSchema: { type: 'object', properties: { url: { type: 'string' } } } },
   { name: 'browser_close_tab', description: 'Close a tab by id', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'browser_switch_tab', description: 'Switch to a tab by id', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
@@ -52,6 +54,15 @@ const TOOLS = [
 export async function startServer(): Promise<void> {
   const config = readConfig();
   const cdp = new CdpClient(config.debugPort);
+
+  // Session setup — one session per claudebrowser serve process
+  pruneDeadSessions();
+  const sessionId = generateSessionId();
+  registerSession(sessionId);
+  const cleanup = () => unregisterSession(sessionId);
+  process.on('exit', cleanup);
+  process.on('SIGINT', () => { cleanup(); process.exit(0); });
+  process.on('SIGTERM', () => { cleanup(); process.exit(0); });
 
   try {
     await cdp.connect();
@@ -80,9 +91,10 @@ export async function startServer(): Promise<void> {
     try {
       switch (name) {
         case 'browser_navigate':      return ok(await navigate(cdp, a.url as string, config.navigationTimeoutMs));
-        case 'browser_tabs':          return ok(await listTabs(cdp));
-        case 'browser_new_tab':       return ok({ id: await newTab(config.debugPort, a.url as string | undefined) });
-        case 'browser_close_tab':     { await closeTab(config.debugPort, a.id as string); return ok('Tab closed'); }
+        case 'browser_tabs':          return ok(a.all ? await listTabs(cdp) : await listSessionTabs(cdp, sessionId));
+        case 'browser_sessions':      return ok(getAllSessions());
+        case 'browser_new_tab':       return ok({ id: await newTab(config.debugPort, a.url as string | undefined, sessionId) });
+        case 'browser_close_tab':     { await closeTab(config.debugPort, a.id as string, sessionId); return ok('Tab closed'); }
         case 'browser_switch_tab':    { await activateTab(config.debugPort, a.id as string); await cdp.disconnect(); await cdp.connect(a.id as string); return ok('Switched'); }
         case 'browser_back':          return ok({ url: await goBack(cdp) });
         case 'browser_reload':        { await reload(cdp, config.navigationTimeoutMs); return ok('Reloaded'); }
