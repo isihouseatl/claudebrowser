@@ -59,6 +59,10 @@ import { setGeolocationCoords, setGeolocationCity, clearGeolocationOverride, get
 import { setDevicePreset, setCustomViewport, getViewportSize, resetViewport, checkMediaQuery, getActiveBreakpoints, responsiveScreenshots, findHorizontalOverflow } from './cdp/responsive';
 import { hashString, hashElementContent, generateUuid, randomBytes, randomInt, base64Encode, base64Decode, hmacSha256 } from './cdp/crypto2';
 import { getWebVitals, getNavigationTiming2, getSlowResources, getTimeToInteractive, getRenderBlockingResources, getMemoryUsage, getDomNodeCount, getLoadTimeline } from './cdp/pageload';
+import { getWorkerList, evaluateInWorker, getWorkerCount, terminateWorker, getDedicatedWorkers, getWorkerByUrl, waitForWorker, postMessageToWorker } from './cdp/workers';
+import { countRecords, getRecord, putRecord, deleteRecord, getAllKeys, queryRecords, getObjectStoreNames, clearObjectStore } from './cdp/indexeddb2';
+import { getPageFonts, getElementFont, findElementsByFont, getFontStack, checkFontLoaded, getLoadedFonts, waitForFontsReady, getFontMetrics } from './cdp/fonts';
+import { denyPermission, checkPermission, grantGeolocation, grantNotifications, grantClipboardAccess, getPermissionState } from './cdp/permissions';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -514,6 +518,40 @@ const TOOLS = [
   { name: 'browser_memory_usage', description: 'Get JS heap memory usage (Chrome only)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_dom_node_count', description: 'Count total DOM nodes (elements, text, comment)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_load_timeline', description: 'Get a sorted timeline of page load milestones (ms from navStart)', inputSchema: { type: 'object', properties: {} } },
+  // ── Web Workers ───────────────────────────────────────────────────────────────
+  { name: 'browser_get_workers', description: 'List all active workers (dedicated + service workers)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_evaluate_in_worker', description: 'Evaluate a JS expression inside a specific worker by its workerId', inputSchema: { type: 'object', properties: { worker_id: { type: 'string' }, expression: { type: 'string' } }, required: ['worker_id', 'expression'] } },
+  { name: 'browser_worker_count', description: 'Count active workers (all types)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_terminate_worker', description: 'Terminate a worker by its workerId', inputSchema: { type: 'object', properties: { worker_id: { type: 'string' } }, required: ['worker_id'] } },
+  { name: 'browser_get_dedicated_workers', description: 'List dedicated workers only (excludes service workers)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_worker_by_url', description: 'Find the first worker whose URL contains a fragment', inputSchema: { type: 'object', properties: { url_fragment: { type: 'string' } }, required: ['url_fragment'] } },
+  { name: 'browser_wait_for_worker', description: 'Wait until a worker with URL matching a fragment appears', inputSchema: { type: 'object', properties: { url_fragment: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['url_fragment'] } },
+  { name: 'browser_post_to_worker', description: 'Post a message into a worker via self.postMessage', inputSchema: { type: 'object', properties: { worker_id: { type: 'string' }, message: {} }, required: ['worker_id', 'message'] } },
+  // ── IndexedDB (record-level) ──────────────────────────────────────────────────
+  { name: 'browser_idb_count', description: 'Count records in an IndexedDB object store', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' } }, required: ['db_name', 'store_name'] } },
+  { name: 'browser_idb_get', description: 'Get a single record from IndexedDB by key', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' }, key: {} }, required: ['db_name', 'store_name', 'key'] } },
+  { name: 'browser_idb_put', description: 'Put (insert or update) a record in IndexedDB', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' }, value: {}, key: {} }, required: ['db_name', 'store_name', 'value'] } },
+  { name: 'browser_idb_delete', description: 'Delete a record from IndexedDB by key', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' }, key: {} }, required: ['db_name', 'store_name', 'key'] } },
+  { name: 'browser_idb_get_keys', description: 'Get all keys from an IndexedDB object store', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' } }, required: ['db_name', 'store_name'] } },
+  { name: 'browser_idb_query', description: 'Query IndexedDB records via an index (pass empty string for no index)', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' }, index_name: { type: 'string' }, query: {} }, required: ['db_name', 'store_name', 'index_name', 'query'] } },
+  { name: 'browser_idb_store_names', description: 'Get all object store names in an IndexedDB database', inputSchema: { type: 'object', properties: { db_name: { type: 'string' } }, required: ['db_name'] } },
+  { name: 'browser_idb_clear_store', description: 'Clear all records from an IndexedDB object store', inputSchema: { type: 'object', properties: { db_name: { type: 'string' }, store_name: { type: 'string' } }, required: ['db_name', 'store_name'] } },
+  // ── Fonts ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_get_page_fonts', description: 'Get the top 20 most common font combinations on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_element_font', description: 'Get computed font properties for a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_find_by_font', description: 'Find elements using a specific font family (substring match)', inputSchema: { type: 'object', properties: { font_family: { type: 'string' } }, required: ['font_family'] } },
+  { name: 'browser_get_font_stack', description: 'Get the full font-family stack for an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_check_font_loaded', description: 'Check if a font family is currently loaded in document.fonts', inputSchema: { type: 'object', properties: { font_family: { type: 'string' } }, required: ['font_family'] } },
+  { name: 'browser_get_loaded_fonts', description: 'Get all loaded font family names from document.fonts', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_fonts_ready', description: 'Wait until document.fonts.ready resolves', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  { name: 'browser_get_font_metrics', description: 'Get ascent/descent/baseline metrics for the font at a selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Permissions ───────────────────────────────────────────────────────────────
+  { name: 'browser_deny_permission', description: 'Revoke a permission for an origin (resets to prompt state)', inputSchema: { type: 'object', properties: { permission: { type: 'string' }, origin: { type: 'string' } }, required: ['permission', 'origin'] } },
+  { name: 'browser_check_permission', description: 'Check current state of a permission (granted/denied/prompt)', inputSchema: { type: 'object', properties: { permission_name: { type: 'string' } }, required: ['permission_name'] } },
+  { name: 'browser_grant_geolocation', description: 'Grant the geolocation permission for an origin', inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] } },
+  { name: 'browser_grant_notifications', description: 'Grant the notifications permission for an origin', inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] } },
+  { name: 'browser_grant_clipboard', description: 'Grant clipboard-read and clipboard-write for an origin', inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] } },
+  { name: 'browser_get_permission_state', description: 'Get state of all standard permissions (geolocation, notifications, camera, microphone, clipboard)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -562,7 +600,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.18.0' },
+    { name: 'claudebrowser', version: '1.19.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -1029,6 +1067,40 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_memory_usage':           return ok(await getMemoryUsage(cdp));
         case 'browser_dom_node_count':         return ok(await getDomNodeCount(cdp));
         case 'browser_load_timeline':          return ok(await getLoadTimeline(cdp));
+        // Web Workers
+        case 'browser_get_workers':            return ok(await getWorkerList(cdp));
+        case 'browser_evaluate_in_worker':     return ok({ result: await evaluateInWorker(cdp, a.worker_id as string, a.expression as string) });
+        case 'browser_worker_count':           return ok({ count: await getWorkerCount(cdp) });
+        case 'browser_terminate_worker':       { await terminateWorker(cdp, a.worker_id as string); return ok('Worker terminated'); }
+        case 'browser_get_dedicated_workers':  return ok(await getDedicatedWorkers(cdp));
+        case 'browser_get_worker_by_url':      return ok(await getWorkerByUrl(cdp, a.url_fragment as string));
+        case 'browser_wait_for_worker':        return ok(await waitForWorker(cdp, a.url_fragment as string, a.timeout_ms as number | undefined));
+        case 'browser_post_to_worker':         { await postMessageToWorker(cdp, a.worker_id as string, a.message); return ok('Message posted'); }
+        // IndexedDB record-level
+        case 'browser_idb_count':              return ok({ count: await countRecords(cdp, a.db_name as string, a.store_name as string) });
+        case 'browser_idb_get':                return ok(await getRecord(cdp, a.db_name as string, a.store_name as string, a.key));
+        case 'browser_idb_put':                { await putRecord(cdp, a.db_name as string, a.store_name as string, a.value, a.key); return ok('Record written'); }
+        case 'browser_idb_delete':             { await deleteRecord(cdp, a.db_name as string, a.store_name as string, a.key); return ok('Record deleted'); }
+        case 'browser_idb_get_keys':           return ok(await getAllKeys(cdp, a.db_name as string, a.store_name as string));
+        case 'browser_idb_query':              return ok(await queryRecords(cdp, a.db_name as string, a.store_name as string, a.index_name as string, a.query));
+        case 'browser_idb_store_names':        return ok(await getObjectStoreNames(cdp, a.db_name as string));
+        case 'browser_idb_clear_store':        { await clearObjectStore(cdp, a.db_name as string, a.store_name as string); return ok('Store cleared'); }
+        // Fonts
+        case 'browser_get_page_fonts':         return ok(await getPageFonts(cdp));
+        case 'browser_get_element_font':       return ok(await getElementFont(cdp, a.selector as string));
+        case 'browser_find_by_font':           return ok(await findElementsByFont(cdp, a.font_family as string));
+        case 'browser_get_font_stack':         return ok(await getFontStack(cdp, a.selector as string));
+        case 'browser_check_font_loaded':      return ok({ loaded: await checkFontLoaded(cdp, a.font_family as string) });
+        case 'browser_get_loaded_fonts':       return ok(await getLoadedFonts(cdp));
+        case 'browser_wait_fonts_ready':       { await waitForFontsReady(cdp, a.timeout_ms as number | undefined); return ok('Fonts ready'); }
+        case 'browser_get_font_metrics':       return ok(await getFontMetrics(cdp, a.selector as string));
+        // Permissions
+        case 'browser_deny_permission':        { await denyPermission(cdp, a.permission as string, a.origin as string); return ok('Permission revoked'); }
+        case 'browser_check_permission':       return ok({ state: await checkPermission(cdp, a.permission_name as string) });
+        case 'browser_grant_geolocation':      { await grantGeolocation(cdp, a.origin as string); return ok('Geolocation granted'); }
+        case 'browser_grant_notifications':    { await grantNotifications(cdp, a.origin as string); return ok('Notifications granted'); }
+        case 'browser_grant_clipboard':        { await grantClipboardAccess(cdp, a.origin as string); return ok('Clipboard access granted'); }
+        case 'browser_get_permission_state':   return ok(await getPermissionState(cdp));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
