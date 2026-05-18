@@ -39,6 +39,10 @@ import { getAllTabSnapshots, findTabsByUrl, duplicateTab, getTabInfo, waitForTab
 import { startDownloadMonitor, getDownloads, clearDownloads, stopDownloadMonitor, waitForDownload } from './cdp/download';
 import { getAxSubtree, getFocusedElement, getInteractiveAxNodes, getLiveRegions } from './cdp/accessibility';
 import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
+import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInIframe, waitForIframe } from './cdp/iframe';
+import { fillForm, detectFormFields, submitForm as autofillSubmitForm, clearForm, getFormState } from './cdp/autofill';
+import { waitForAny, waitForAll, waitForCondition, waitForStable, waitForValueChange, waitForCountChange, retryUntilSuccess } from './cdp/waiters';
+import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition } from './cdp/pointer';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -331,6 +335,36 @@ const TOOLS = [
   { name: 'browser_wait_for_dialog', description: 'Wait for a browser dialog (alert/confirm/prompt) to appear, then handle it', inputSchema: { type: 'object', properties: { accept: { type: 'boolean', description: 'true = accept/OK, false = dismiss/Cancel (default true)' }, prompt_text: { type: 'string', description: 'Text for prompt dialogs' }, timeout_ms: { type: 'number' } } } },
   { name: 'browser_is_dialog_open', description: 'Check whether a browser dialog is currently open (non-blocking)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_dismiss_print_dialog', description: 'Dismiss an open print dialog if one exists', inputSchema: { type: 'object', properties: {} } },
+  // ── Iframes (CDP-level) ───────────────────────────────────────────────────────
+  { name: 'browser_list_iframes', description: 'List all iframes on the page with frameId, URL, and name', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_evaluate_in_iframe', description: 'Evaluate JavaScript inside an iframe by frameId or URL substring', inputSchema: { type: 'object', properties: { frame: { type: 'string', description: 'frameId or URL substring to match' }, expression: { type: 'string' } }, required: ['frame', 'expression'] } },
+  { name: 'browser_get_iframe_content', description: 'Get the full HTML content of an iframe', inputSchema: { type: 'object', properties: { frame: { type: 'string', description: 'frameId or URL substring' } }, required: ['frame'] } },
+  { name: 'browser_click_in_iframe', description: 'Click an element by CSS selector inside an iframe', inputSchema: { type: 'object', properties: { frame: { type: 'string' }, selector: { type: 'string' } }, required: ['frame', 'selector'] } },
+  { name: 'browser_type_in_iframe', description: 'Focus and type into an input inside an iframe', inputSchema: { type: 'object', properties: { frame: { type: 'string' }, selector: { type: 'string' }, text: { type: 'string' } }, required: ['frame', 'selector', 'text'] } },
+  { name: 'browser_wait_for_iframe', description: 'Wait until an iframe whose URL matches a pattern exists', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['url_pattern'] } },
+  // ── Smart form fill ───────────────────────────────────────────────────────────
+  { name: 'browser_fill_form', description: 'Fill multiple form fields at once — handles text, select, checkbox, radio, date, range', inputSchema: { type: 'object', properties: { fields: { type: 'array', items: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' }, checked: { type: 'boolean' } }, required: ['selector', 'value'] } } }, required: ['fields'] } },
+  { name: 'browser_detect_form_fields', description: 'Scan for all fillable fields in a form: selectors, types, labels, current values', inputSchema: { type: 'object', properties: { form_selector: { type: 'string', description: 'CSS selector for a specific form (optional)' } } } },
+  { name: 'browser_smart_submit_form', description: 'Click the submit button or call form.submit() — smarter than browser_submit_form', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } } } },
+  { name: 'browser_clear_form', description: 'Clear all text inputs and textareas in a form (React/Vue safe)', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } } } },
+  { name: 'browser_get_form_state', description: 'Snapshot all field values in a form: selector, type, value, checked', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } } } },
+  // ── Composite waiters ─────────────────────────────────────────────────────────
+  { name: 'browser_wait_for_any', description: 'Wait until ANY of the given selectors appears in the DOM. Returns the first matching selector.', inputSchema: { type: 'object', properties: { selectors: { type: 'array', items: { type: 'string' } }, timeout_ms: { type: 'number' } }, required: ['selectors'] } },
+  { name: 'browser_wait_for_all', description: 'Wait until ALL given selectors are present in the DOM simultaneously', inputSchema: { type: 'object', properties: { selectors: { type: 'array', items: { type: 'string' } }, timeout_ms: { type: 'number' } }, required: ['selectors'] } },
+  { name: 'browser_wait_for_condition', description: 'Poll a JS expression every 200ms until it returns truthy', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['expression'] } },
+  { name: 'browser_wait_for_stable', description: "Wait until an element's bounding box stops changing (layout stable)", inputSchema: { type: 'object', properties: { selector: { type: 'string' }, stable_ms: { type: 'number', description: 'How long box must be unchanged in ms (default 500)' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_for_value_change', description: "Wait until an element's value or textContent changes from its current state", inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_wait_for_count_change', description: 'Wait until the count of elements matching a selector changes', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, direction: { type: 'string', enum: ['increase', 'decrease', 'any'] }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_retry_until_success', description: 'Retry a JS expression up to N times (default 5) until it returns truthy without throwing', inputSchema: { type: 'object', properties: { expression: { type: 'string' }, max_attempts: { type: 'number' }, delay_ms: { type: 'number' } }, required: ['expression'] } },
+  // ── Advanced pointer ──────────────────────────────────────────────────────────
+  { name: 'browser_mouse_path', description: 'Move the mouse through a series of (x,y) points with smooth interpolation', inputSchema: { type: 'object', properties: { points: { type: 'array', items: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } }, delay_ms: { type: 'number', description: 'Delay between points in ms (default 16)' } }, required: ['points'] } },
+  { name: 'browser_smooth_drag', description: 'Drag smoothly from one coordinate to another in N interpolated steps with mousedown held', inputSchema: { type: 'object', properties: { from_x: { type: 'number' }, from_y: { type: 'number' }, to_x: { type: 'number' }, to_y: { type: 'number' }, steps: { type: 'number', description: 'Interpolation steps (default 20)' } }, required: ['from_x', 'from_y', 'to_x', 'to_y'] } },
+  { name: 'browser_drag_selector', description: 'Drag from center of one element to center of another by CSS selector', inputSchema: { type: 'object', properties: { source_selector: { type: 'string' }, target_selector: { type: 'string' } }, required: ['source_selector', 'target_selector'] } },
+  { name: 'browser_hover_sequence', description: 'Hover over multiple elements in sequence with a delay between each (for revealing dropdowns)', inputSchema: { type: 'object', properties: { selectors: { type: 'array', items: { type: 'string' } }, delay_ms: { type: 'number', description: 'Delay between hovers in ms (default 300)' } }, required: ['selectors'] } },
+  { name: 'browser_multi_click', description: 'Click N times at a coordinate with a delay between clicks', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, count: { type: 'number' }, delay_ms: { type: 'number' } }, required: ['x', 'y', 'count'] } },
+  { name: 'browser_context_click', description: 'Right-click at (x,y) to open a context menu', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_middle_click', description: 'Middle-click at (x,y) to open a link in a new tab', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_get_mouse_position', description: 'Get the last known mouse position {x, y}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -379,7 +413,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.13.0' },
+    { name: 'claudebrowser', version: '1.14.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -683,6 +717,36 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_wait_for_dialog':        return ok(await waitForDialog(cdp, { accept: (a.accept as boolean) ?? true, promptText: a.prompt_text as string | undefined, timeoutMs: a.timeout_ms as number | undefined }));
         case 'browser_is_dialog_open':         return ok({ open: await isDialogOpen(cdp) });
         case 'browser_dismiss_print_dialog':   { await dismissPrintDialog(cdp); return ok('Print dialog dismissed'); }
+        // Iframes (CDP-level)
+        case 'browser_list_iframes':           return ok(await listIframes(cdp));
+        case 'browser_evaluate_in_iframe':     return ok(await evaluateInIframe(cdp, a.frame as string, a.expression as string));
+        case 'browser_get_iframe_content':     return ok(await getIframeContent(cdp, a.frame as string));
+        case 'browser_click_in_iframe':        { await clickInIframe(cdp, a.frame as string, a.selector as string); return ok('Clicked'); }
+        case 'browser_type_in_iframe':         { await typeInIframe(cdp, a.frame as string, a.selector as string, a.text as string); return ok('Typed'); }
+        case 'browser_wait_for_iframe':        return ok(await waitForIframe(cdp, a.url_pattern as string, a.timeout_ms as number | undefined));
+        // Smart form fill
+        case 'browser_fill_form':              return ok(await fillForm(cdp, a.fields as any[]));
+        case 'browser_detect_form_fields':     return ok(await detectFormFields(cdp, a.form_selector as string | undefined));
+        case 'browser_smart_submit_form':      { await autofillSubmitForm(cdp, a.form_selector as string | undefined); return ok('Form submitted'); }
+        case 'browser_clear_form':             { await clearForm(cdp, a.form_selector as string | undefined); return ok('Form cleared'); }
+        case 'browser_get_form_state':         return ok(await getFormState(cdp, a.form_selector as string | undefined));
+        // Composite waiters
+        case 'browser_wait_for_any':           return ok({ matched: await waitForAny(cdp, a.selectors as string[], a.timeout_ms as number | undefined) });
+        case 'browser_wait_for_all':           { await waitForAll(cdp, a.selectors as string[], a.timeout_ms as number | undefined); return ok('All found'); }
+        case 'browser_wait_for_condition':     return ok(await waitForCondition(cdp, a.expression as string, a.timeout_ms as number | undefined));
+        case 'browser_wait_for_stable':        { await waitForStable(cdp, a.selector as string, a.stable_ms as number | undefined, a.timeout_ms as number | undefined); return ok('Stable'); }
+        case 'browser_wait_for_value_change':  return ok({ value: await waitForValueChange(cdp, a.selector as string, a.timeout_ms as number | undefined) });
+        case 'browser_wait_for_count_change':  return ok({ count: await waitForCountChange(cdp, a.selector as string, a.direction as 'increase' | 'decrease' | 'any' | undefined, a.timeout_ms as number | undefined) });
+        case 'browser_retry_until_success':    return ok(await retryUntilSuccess(cdp, a.expression as string, a.max_attempts as number | undefined, a.delay_ms as number | undefined));
+        // Advanced pointer
+        case 'browser_mouse_path':             { await mousePath(cdp, a.points as Array<{x: number; y: number}>, a.delay_ms as number | undefined); return ok('Path traced'); }
+        case 'browser_smooth_drag':            { await smoothDrag(cdp, a.from_x as number, a.from_y as number, a.to_x as number, a.to_y as number, a.steps as number | undefined); return ok('Dragged'); }
+        case 'browser_drag_selector':          { await dragSelector(cdp, a.source_selector as string, a.target_selector as string); return ok('Dragged'); }
+        case 'browser_hover_sequence':         { await hoverSequence(cdp, a.selectors as string[], a.delay_ms as number | undefined); return ok('Hover sequence done'); }
+        case 'browser_multi_click':            { await multiClick(cdp, a.x as number, a.y as number, a.count as number, a.delay_ms as number | undefined); return ok('Clicked'); }
+        case 'browser_context_click':          { await contextClickAt(cdp, a.x as number, a.y as number); return ok('Context-clicked'); }
+        case 'browser_middle_click':           { await middleClickAt(cdp, a.x as number, a.y as number); return ok('Middle-clicked'); }
+        case 'browser_get_mouse_position':     return ok(await getMousePosition(cdp));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
