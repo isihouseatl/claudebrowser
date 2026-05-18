@@ -443,3 +443,67 @@ export async function scrollIntoView(client: CdpClient, x: number, y: number): P
     throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
   }
 }
+
+// Get all <meta> tags as array of {name, property, content, httpEquiv}
+export async function getMetaTags(
+  client: CdpClient,
+): Promise<Array<{ name?: string; property?: string; content?: string; httpEquiv?: string }>> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify(Array.from(document.querySelectorAll('meta')).map(m => ({
+  name: m.getAttribute('name') ?? undefined,
+  property: m.getAttribute('property') ?? undefined,
+  content: m.getAttribute('content') ?? undefined,
+  httpEquiv: m.getAttribute('http-equiv') ?? undefined,
+})))`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return JSON.parse(result.value as string);
+}
+
+// Get all <link rel="..."> tags as array of {rel, href, type, media}
+export async function getLinkTags(
+  client: CdpClient,
+): Promise<Array<{ rel?: string; href?: string; type?: string; media?: string }>> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify(Array.from(document.querySelectorAll('link')).map(l => ({
+  rel: l.getAttribute('rel') ?? undefined,
+  href: l.getAttribute('href') ?? undefined,
+  type: l.getAttribute('type') ?? undefined,
+  media: l.getAttribute('media') ?? undefined,
+})))`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return JSON.parse(result.value as string);
+}
+
+// Get the document ready state: 'loading' | 'interactive' | 'complete'
+export async function getReadyState(client: CdpClient): Promise<string> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: 'document.readyState',
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return result.value as string;
+}
+
+// Wait for document readyState to become 'complete' (or timeout)
+export async function waitForDOMContentLoaded(client: CdpClient, timeoutMs = 15000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: `document.readyState === 'complete'`,
+      returnByValue: true,
+    });
+    if (result.value) return;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  throw new Error(`waitForDOMContentLoaded: readyState did not reach 'complete' within ${timeoutMs}ms`);
+}

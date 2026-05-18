@@ -5,10 +5,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
-import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText, getScrollPosition, scrollToCoords, scrollToTop, scrollToBottom, waitForAttribute, waitForElementCount, getPageSource, getHistoryLength, goToHistoryIndex, scrollIntoView } from './cdp/page';
+import { navigate, reload, goBack, goForward, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics, getUrl, getTitle, waitForElementRemoved, waitForText, getScrollPosition, scrollToCoords, scrollToTop, scrollToBottom, waitForAttribute, waitForElementCount, getPageSource, getHistoryLength, goToHistoryIndex, scrollIntoView, getMetaTags, getLinkTags, getReadyState, waitForDOMContentLoaded } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues, setRangeValue, setDateValue, setColorValue, setSelectionRange, tapAt, swipeAt, pinchZoom } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
-import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog } from './cdp/evaluate';
+import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog, evaluateOnElement, getWindowGlobals } from './cdp/evaluate';
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
 import { getText, getAttribute, isVisible, findText, getAllText, getAllAttributes } from './cdp/query';
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
@@ -29,6 +29,10 @@ import { getPaintTiming, getNavigationTiming, getResourceTimings, clearPerforman
 import { startWebSocketLog, getWebSocketMessages, getWebSocketConnections, clearWebSocketLog, stopWebSocketLog } from './cdp/websocket';
 import { startCssCoverage, stopCssCoverage, startJsCoverage, takeJsCoverage, stopJsCoverage } from './cdp/coverage';
 import { listServiceWorkers, unregisterServiceWorker, updateServiceWorker, isControlledByServiceWorker } from './cdp/serviceworker';
+import { getPageSnapshot } from './cdp/snapshot';
+import { startDownloadMonitor, getDownloads, clearDownloads, stopDownloadMonitor, waitForDownload } from './cdp/download';
+import { getAxSubtree, getFocusedElement, getInteractiveAxNodes, getLiveRegions } from './cdp/accessibility';
+import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -235,6 +239,31 @@ const TOOLS = [
   { name: 'browser_unregister_service_worker', description: 'Unregister a service worker by scope URL', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_update_service_worker', description: 'Force a service worker registration to update (re-fetch)', inputSchema: { type: 'object', properties: { scope_url: { type: 'string' } }, required: ['scope_url'] } },
   { name: 'browser_is_controlled_by_sw', description: 'Check whether the current page is controlled by a service worker', inputSchema: { type: 'object', properties: {} } },
+  // ── Page snapshot ─────────────────────────────────────────────────────────────
+  { name: 'browser_page_snapshot', description: 'Get a structured text snapshot of the page: URL, title, scroll, interactive elements, headings, ARIA alerts — faster than a screenshot for understanding page state', inputSchema: { type: 'object', properties: {} } },
+  // ── Page metadata ─────────────────────────────────────────────────────────────
+  { name: 'browser_get_meta_tags', description: 'Get all <meta> tags as array of {name, property, content, httpEquiv}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_link_tags', description: 'Get all <link rel="..."> tags (stylesheets, canonical, preloads, etc.)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_ready_state', description: 'Get the document readyState: "loading", "interactive", or "complete"', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_load', description: 'Wait for document readyState to become "complete"', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  // ── Evaluate helpers ──────────────────────────────────────────────────────────
+  { name: 'browser_evaluate_on_element', description: 'Run a JS expression with the matched element as argument (e.g. "(el) => el.value")', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, script: { type: 'string', description: 'JS expression — can be arrow fn like (el) => el.value or plain expression like el.value' } }, required: ['selector', 'script'] } },
+  { name: 'browser_get_window_globals', description: 'Get all app-defined global variables on the window object (filters out standard browser builtins)', inputSchema: { type: 'object', properties: {} } },
+  // ── Downloads ─────────────────────────────────────────────────────────────────
+  { name: 'browser_download_start', description: 'Start monitoring file downloads. Files are saved to downloadPath (default /tmp).', inputSchema: { type: 'object', properties: { download_path: { type: 'string', description: 'Directory to save downloads (default /tmp)' } } } },
+  { name: 'browser_download_get', description: 'Get all captured download events (in-progress and completed)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_download_clear', description: 'Clear the download buffer without stopping monitoring', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_download_stop', description: 'Stop download monitoring and return the final event list', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_for_download', description: 'Wait for a file download to complete. Optionally filter by URL pattern.', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string', description: 'URL substring to match (optional)' }, timeout_ms: { type: 'number' } } } },
+  // ── Accessibility (extended) ──────────────────────────────────────────────────
+  { name: 'browser_get_ax_subtree', description: 'Get the accessibility tree subtree rooted at the element matching a CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_focused_element', description: 'Get the accessibility info for the currently focused element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_interactive_ax_nodes', description: 'Get all interactive accessibility nodes (buttons, links, inputs, etc.) that are not disabled', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_live_regions', description: 'Get ARIA live region content: role="alert", role="status", role="log"', inputSchema: { type: 'object', properties: {} } },
+  // ── Dialog ────────────────────────────────────────────────────────────────────
+  { name: 'browser_wait_for_dialog', description: 'Wait for a browser dialog (alert/confirm/prompt) to appear, then handle it', inputSchema: { type: 'object', properties: { accept: { type: 'boolean', description: 'true = accept/OK, false = dismiss/Cancel (default true)' }, prompt_text: { type: 'string', description: 'Text for prompt dialogs' }, timeout_ms: { type: 'number' } } } },
+  { name: 'browser_is_dialog_open', description: 'Check whether a browser dialog is currently open (non-blocking)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dismiss_print_dialog', description: 'Dismiss an open print dialog if one exists', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -283,7 +312,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.10.0' },
+    { name: 'claudebrowser', version: '1.11.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -299,7 +328,7 @@ export async function startServer(sessionName?: string): Promise<void> {
       }
     }
 
-    const NO_TIMEOUT = new Set(['browser_wait_for_auth', 'browser_auth_check', 'browser_status', 'browser_wait_for_response', 'browser_wait_for_new_tab']);
+    const NO_TIMEOUT = new Set(['browser_wait_for_auth', 'browser_auth_check', 'browser_status', 'browser_wait_for_response', 'browser_wait_for_new_tab', 'browser_wait_for_download', 'browser_wait_for_dialog']);
 
     const run = async () => {
       switch (name) {
@@ -493,6 +522,31 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_unregister_service_worker': return ok({ unregistered: await unregisterServiceWorker(cdp, a.scope_url as string) });
         case 'browser_update_service_worker':  { await updateServiceWorker(cdp, a.scope_url as string); return ok('Service worker updated'); }
         case 'browser_is_controlled_by_sw':    return ok({ controlled: await isControlledByServiceWorker(cdp) });
+        // Page snapshot
+        case 'browser_page_snapshot':          return ok(await getPageSnapshot(cdp));
+        // Page metadata
+        case 'browser_get_meta_tags':          return ok(await getMetaTags(cdp));
+        case 'browser_get_link_tags':          return ok(await getLinkTags(cdp));
+        case 'browser_get_ready_state':        return ok({ readyState: await getReadyState(cdp) });
+        case 'browser_wait_for_load':          { await waitForDOMContentLoaded(cdp, a.timeout_ms as number | undefined); return ok('Page loaded'); }
+        // Evaluate helpers
+        case 'browser_evaluate_on_element':    return ok(await evaluateOnElement(cdp, a.selector as string, a.script as string));
+        case 'browser_get_window_globals':     return ok(await getWindowGlobals(cdp));
+        // Downloads
+        case 'browser_download_start':         { await startDownloadMonitor(cdp, a.download_path as string | undefined); return ok('Download monitoring started'); }
+        case 'browser_download_get':           return ok(getDownloads(cdp));
+        case 'browser_download_clear':         { clearDownloads(cdp); return ok('Download buffer cleared'); }
+        case 'browser_download_stop':          return ok(await stopDownloadMonitor(cdp));
+        case 'browser_wait_for_download':      return ok(await waitForDownload(cdp, a.url_pattern as string | undefined, a.timeout_ms as number | undefined));
+        // Accessibility (extended)
+        case 'browser_get_ax_subtree':         return ok(await getAxSubtree(cdp, a.selector as string));
+        case 'browser_get_focused_element':    return ok(await getFocusedElement(cdp));
+        case 'browser_get_interactive_ax_nodes': return ok(await getInteractiveAxNodes(cdp));
+        case 'browser_get_live_regions':       return ok(await getLiveRegions(cdp));
+        // Dialog
+        case 'browser_wait_for_dialog':        return ok(await waitForDialog(cdp, { accept: (a.accept as boolean) ?? true, promptText: a.prompt_text as string | undefined, timeoutMs: a.timeout_ms as number | undefined }));
+        case 'browser_is_dialog_open':         return ok({ open: await isDialogOpen(cdp) });
+        case 'browser_dismiss_print_dialog':   { await dismissPrintDialog(cdp); return ok('Print dialog dismissed'); }
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
