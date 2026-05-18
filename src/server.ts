@@ -55,6 +55,10 @@ import { readClipboard, writeClipboard, clearClipboard, readClipboardHtml, write
 import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
 import { getCanvasElements, canvasToDataUrl, getCanvasDimensions, getCanvasPixelColor, clearCanvas, drawTextOnCanvas, drawRectOnCanvas, canvasEquals } from './cdp/canvas';
 import { findTextMatches, countTextOccurrences, getSelectedText, selectAllTextInElement, highlightAllText, clearHighlights, replaceTextInElement, scrollToText } from './cdp/search';
+import { setGeolocationCoords, setGeolocationCity, clearGeolocationOverride, getCurrentGeolocation, setTimezone, getTimezone, setLocale, getLocale } from './cdp/geolocation2';
+import { setDevicePreset, setCustomViewport, getViewportSize, resetViewport, checkMediaQuery, getActiveBreakpoints, responsiveScreenshots, findHorizontalOverflow } from './cdp/responsive';
+import { hashString, hashElementContent, generateUuid, randomBytes, randomInt, base64Encode, base64Decode, hmacSha256 } from './cdp/crypto2';
+import { getWebVitals, getNavigationTiming2, getSlowResources, getTimeToInteractive, getRenderBlockingResources, getMemoryUsage, getDomNodeCount, getLoadTimeline } from './cdp/pageload';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -477,6 +481,39 @@ const TOOLS = [
   { name: 'browser_clear_highlights', description: 'Remove all highlights added by browser_highlight_all_text', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_replace_text_in', description: 'Replace first occurrence of text in an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, search_text: { type: 'string' }, replacement: { type: 'string' } }, required: ['selector', 'search_text', 'replacement'] } },
   { name: 'browser_scroll_to_text', description: 'Scroll to the first occurrence of text on the page', inputSchema: { type: 'object', properties: { search_text: { type: 'string' }, case_sensitive: { type: 'boolean' } }, required: ['search_text'] } },
+  // ── Geolocation / locale ──────────────────────────────────────────────────────
+  { name: 'browser_set_geolocation_city', description: 'Override browser geolocation to a named city (e.g. "Atlanta", "Lagos", "London")', inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] } },
+  { name: 'browser_get_geolocation', description: 'Get the current geolocation via navigator.geolocation', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  { name: 'browser_set_timezone', description: 'Override the browser timezone (e.g. "America/New_York", "Africa/Lagos")', inputSchema: { type: 'object', properties: { timezone_id: { type: 'string' } }, required: ['timezone_id'] } },
+  { name: 'browser_get_timezone', description: 'Get the current browser timezone string', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_locale', description: 'Override the browser locale (e.g. "en-US", "fr-FR", "yo-NG")', inputSchema: { type: 'object', properties: { locale: { type: 'string' } }, required: ['locale'] } },
+  { name: 'browser_get_locale', description: 'Get the current browser locale (navigator.language)', inputSchema: { type: 'object', properties: {} } },
+  // ── Responsive / viewport ─────────────────────────────────────────────────────
+  { name: 'browser_set_device', description: 'Emulate a device preset (iPhone 14, iPad, Galaxy S23, MacBook Pro, Desktop 1080p, etc.)', inputSchema: { type: 'object', properties: { device_name: { type: 'string' } }, required: ['device_name'] } },
+  { name: 'browser_get_viewport', description: 'Get current viewport width, height, and devicePixelRatio', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_reset_viewport', description: 'Reset viewport to default 1280x800', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_check_media_query', description: 'Evaluate a CSS media query (e.g. "(max-width: 768px)")', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'browser_get_breakpoints', description: 'Get all CSS media queries active in loaded stylesheets', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_responsive_screenshots', description: 'Capture screenshots at multiple viewport sizes and return base64 images', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_find_overflow', description: 'Find elements with horizontal overflow (layout bugs)', inputSchema: { type: 'object', properties: {} } },
+  // ── Crypto / hashing ──────────────────────────────────────────────────────────
+  { name: 'browser_hash_string', description: 'Hash a string using Web Crypto (sha-256 by default). Returns hex digest.', inputSchema: { type: 'object', properties: { input: { type: 'string' }, algorithm: { type: 'string' } }, required: ['input'] } },
+  { name: 'browser_hash_element', description: 'Hash the text content of a page element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, algorithm: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_generate_uuid', description: 'Generate a cryptographically random UUID v4', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_random_bytes', description: 'Generate N random bytes as a hex string', inputSchema: { type: 'object', properties: { count: { type: 'number' } }, required: ['count'] } },
+  { name: 'browser_random_int', description: 'Generate a random integer between min and max (inclusive)', inputSchema: { type: 'object', properties: { min: { type: 'number' }, max: { type: 'number' } }, required: ['min', 'max'] } },
+  { name: 'browser_base64_encode', description: 'Base64-encode a string', inputSchema: { type: 'object', properties: { input: { type: 'string' } }, required: ['input'] } },
+  { name: 'browser_base64_decode', description: 'Base64-decode a string', inputSchema: { type: 'object', properties: { input: { type: 'string' } }, required: ['input'] } },
+  { name: 'browser_hmac_sha256', description: 'Compute HMAC-SHA256 of a message with a key. Returns hex.', inputSchema: { type: 'object', properties: { key: { type: 'string' }, message: { type: 'string' } }, required: ['key', 'message'] } },
+  // ── Page load / performance ───────────────────────────────────────────────────
+  { name: 'browser_web_vitals', description: 'Get Web Vitals: LCP, FID, CLS, FCP, TTFB, DCL, load (all in ms)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_navigation_timing', description: 'Get full Navigation Timing API data (fetchStart, TTFB, domInteractive, etc.)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slow_resources', description: 'Get top 20 slowest resources by load duration', inputSchema: { type: 'object', properties: { min_duration_ms: { type: 'number' } } } },
+  { name: 'browser_time_to_interactive', description: 'Get time-to-interactive estimate (ms from navigation start)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_render_blocking', description: 'Find render-blocking stylesheets and scripts in <head>', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_memory_usage', description: 'Get JS heap memory usage (Chrome only)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dom_node_count', description: 'Count total DOM nodes (elements, text, comment)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_load_timeline', description: 'Get a sorted timeline of page load milestones (ms from navStart)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -525,7 +562,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.17.0' },
+    { name: 'claudebrowser', version: '1.18.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -959,6 +996,39 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_clear_highlights':       { await clearHighlights(cdp); return ok('Highlights cleared'); }
         case 'browser_replace_text_in':        return ok({ replaced: await replaceTextInElement(cdp, a.selector as string, a.search_text as string, a.replacement as string) });
         case 'browser_scroll_to_text':         return ok({ found: await scrollToText(cdp, a.search_text as string, a.case_sensitive as boolean | undefined) });
+        // Geolocation / locale
+        case 'browser_set_geolocation_city':   return ok(await setGeolocationCity(cdp, a.city as string));
+        case 'browser_get_geolocation':        return ok(await getCurrentGeolocation(cdp, a.timeout_ms as number | undefined));
+        case 'browser_set_timezone':           { await setTimezone(cdp, a.timezone_id as string); return ok('Timezone set'); }
+        case 'browser_get_timezone':           return ok({ timezone: await getTimezone(cdp) });
+        case 'browser_set_locale':             { await setLocale(cdp, a.locale as string); return ok('Locale set'); }
+        case 'browser_get_locale':             return ok({ locale: await getLocale(cdp) });
+        // Responsive / viewport
+        case 'browser_set_device':             return ok(await setDevicePreset(cdp, a.device_name as string));
+        case 'browser_get_viewport':           return ok(await getViewportSize(cdp));
+        case 'browser_reset_viewport':         { await resetViewport(cdp); return ok('Viewport reset'); }
+        case 'browser_check_media_query':      return ok({ matches: await checkMediaQuery(cdp, a.query as string) });
+        case 'browser_get_breakpoints':        return ok(await getActiveBreakpoints(cdp));
+        case 'browser_responsive_screenshots': return ok(await responsiveScreenshots(cdp));
+        case 'browser_find_overflow':          return ok(await findHorizontalOverflow(cdp));
+        // Crypto / hashing
+        case 'browser_hash_string':            return ok({ hash: await hashString(cdp, a.input as string, a.algorithm as 'sha-1' | 'sha-256' | 'sha-384' | 'sha-512' | undefined) });
+        case 'browser_hash_element':           return ok({ hash: await hashElementContent(cdp, a.selector as string, a.algorithm as string | undefined) });
+        case 'browser_generate_uuid':          return ok({ uuid: await generateUuid(cdp) });
+        case 'browser_random_bytes':           return ok({ hex: await randomBytes(cdp, a.count as number) });
+        case 'browser_random_int':             return ok({ value: await randomInt(cdp, a.min as number, a.max as number) });
+        case 'browser_base64_encode':          return ok({ encoded: await base64Encode(cdp, a.input as string) });
+        case 'browser_base64_decode':          return ok({ decoded: await base64Decode(cdp, a.input as string) });
+        case 'browser_hmac_sha256':            return ok({ hmac: await hmacSha256(cdp, a.key as string, a.message as string) });
+        // Page load / performance
+        case 'browser_web_vitals':             return ok(await getWebVitals(cdp));
+        case 'browser_navigation_timing':      return ok(await getNavigationTiming2(cdp));
+        case 'browser_slow_resources':         return ok(await getSlowResources(cdp, a.min_duration_ms as number | undefined));
+        case 'browser_time_to_interactive':    return ok({ tti: await getTimeToInteractive(cdp) });
+        case 'browser_render_blocking':        return ok(await getRenderBlockingResources(cdp));
+        case 'browser_memory_usage':           return ok(await getMemoryUsage(cdp));
+        case 'browser_dom_node_count':         return ok(await getDomNodeCount(cdp));
+        case 'browser_load_timeline':          return ok(await getLoadTimeline(cdp));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
