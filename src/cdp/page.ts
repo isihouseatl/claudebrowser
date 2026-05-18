@@ -130,6 +130,32 @@ export async function waitForNetworkIdle(
   });
 }
 
+export async function scrollToElement(
+  client: CdpClient,
+  selector: string,
+): Promise<{ x: number; y: number }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  if (!el) return null;
+  el.scrollIntoView({ behavior: 'instant', block: 'center' });
+  const rect = el.getBoundingClientRect();
+  return {
+    x: Math.round(rect.left + rect.width / 2),
+    y: Math.round(rect.top + rect.height / 2),
+  };
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    throw new Error(`Element not found: ${selector}`);
+  }
+  return result.value as { x: number; y: number };
+}
+
 export async function waitForUrl(
   client: CdpClient,
   pattern: string,

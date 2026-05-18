@@ -1,12 +1,18 @@
 // src/cdp/evaluate.ts
 import { CdpClient } from './client';
 
-export async function evaluate(client: CdpClient, script: string): Promise<unknown> {
-  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+export async function evaluate(
+  client: CdpClient,
+  script: string,
+  contextId?: number,
+): Promise<unknown> {
+  const params: Parameters<typeof client.raw.Runtime.evaluate>[0] = {
     expression: script,
     returnByValue: true,
     awaitPromise: true,
-  });
+  };
+  if (contextId !== undefined) params.contextId = contextId;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate(params);
   if (exceptionDetails) {
     throw new Error(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
   }

@@ -28,9 +28,37 @@ export async function typeText(client: CdpClient, text: string): Promise<void> {
   }
 }
 
-export async function pressKey(client: CdpClient, key: string): Promise<void> {
-  await client.raw.Input.dispatchKeyEvent({ type: 'keyDown', key });
-  await client.raw.Input.dispatchKeyEvent({ type: 'keyUp', key });
+const MODIFIER_BITS: Record<string, number> = {
+  alt: 1,
+  ctrl: 2,
+  control: 2,
+  meta: 4,
+  shift: 8,
+};
+
+function resolveModifiers(modifiers?: string[]): number {
+  if (!modifiers || modifiers.length === 0) return 0;
+  return modifiers.reduce((bits, name) => bits | (MODIFIER_BITS[name.toLowerCase()] ?? 0), 0);
+}
+
+export async function pressKey(
+  client: CdpClient,
+  key: string,
+  modifiers?: string[],
+): Promise<void> {
+  const modifierBits = resolveModifiers(modifiers);
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyDown', key, modifiers: modifierBits });
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyUp', key, modifiers: modifierBits });
+}
+
+export async function keyChord(
+  client: CdpClient,
+  modifiers: string[],
+  key: string,
+): Promise<void> {
+  const modifierBits = resolveModifiers(modifiers);
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyDown', key, modifiers: modifierBits });
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyUp', key, modifiers: modifierBits });
 }
 
 export async function selectOption(client: CdpClient, selector: string, value: string): Promise<void> {
