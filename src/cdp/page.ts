@@ -6,13 +6,17 @@ export async function navigate(
   url: string,
   timeoutMs = 10000
 ): Promise<{ url: string; title: string }> {
-  const loadPromise = new Promise<void>((resolve, reject) => {
+  const raw = client.raw;
+  await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Navigation timeout after ${timeoutMs}ms`)), timeoutMs);
-    client.raw.Page.loadEventFired(() => { clearTimeout(timer); resolve(); });
+    const done = () => { clearTimeout(timer); resolve(); };
+    raw.Page.loadEventFired(done);
+    raw.Page.frameNavigated(done);
+    // Fallback: resolve 2s after navigation call regardless
+    raw.Page.navigate({ url }).then(() => setTimeout(done, 2000)).catch(reject);
   });
-  await client.raw.Page.navigate({ url });
-  await loadPromise;
-  const { result } = await client.raw.Runtime.evaluate({
+  await new Promise(r => setTimeout(r, 300)); // DOM stabilize
+  const { result } = await raw.Runtime.evaluate({
     expression: 'JSON.stringify({ url: location.href, title: document.title })',
     returnByValue: true,
   });
@@ -60,4 +64,86 @@ export async function waitForSelector(
     await new Promise(r => setTimeout(r, 200));
   }
   throw new Error(`Element "${selector}" not found within ${timeoutMs}ms`);
+}
+
+export async function waitForNetworkIdle(
+  client: CdpClient,
+  idleMs = 500,
+  timeoutMs = 15000
+): Promise<void> {
+  const raw = client.raw;
+  await raw.Network.enable({});
+
+  return new Promise<void>((resolve, reject) => {
+    let inFlight = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
+    const cleanup = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+    };
+
+    const done = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) reject(err);
+      else resolve();
+    };
+
+    const startIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => done(), idleMs);
+    };
+
+    const cancelIdleTimer = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+    };
+
+    timeoutTimer = setTimeout(() => done(new Error(`waitForNetworkIdle timeout after ${timeoutMs}ms`)), timeoutMs);
+
+    raw.Network.requestWillBeSent(() => {
+      if (settled) return;
+      inFlight++;
+      cancelIdleTimer();
+    });
+
+    raw.Network.responseReceived(() => {
+      if (settled) return;
+      inFlight = Math.max(0, inFlight - 1);
+      if (inFlight === 0) startIdleTimer();
+    });
+
+    raw.Network.loadingFailed(() => {
+      if (settled) return;
+      inFlight = Math.max(0, inFlight - 1);
+      if (inFlight === 0) startIdleTimer();
+    });
+
+    // Start idle timer immediately in case there are no in-flight requests
+    startIdleTimer();
+  });
+}
+
+export async function waitForUrl(
+  client: CdpClient,
+  pattern: string,
+  timeoutMs = 10000
+): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await client.raw.Runtime.evaluate({
+      expression: 'location.href',
+      returnByValue: true,
+    });
+    const href = result.value as string;
+    if (href.includes(pattern)) return href;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  throw new Error(`URL matching "${pattern}" not seen within ${timeoutMs}ms`);
 }

@@ -48,3 +48,26 @@ export async function ensureChrome(): Promise<void> {
   launchChrome();
   await waitForDebugPort(config.debugPort);
 }
+
+export function startWatchdog(
+  port: number,
+  onRestart: () => void,
+  intervalMs = 30000
+): NodeJS.Timeout {
+  return setInterval(async () => {
+    const alive = await isDebugPortOpen(port);
+    if (!alive) {
+      launchChrome();
+      try {
+        await waitForDebugPort(port, 5000);
+      } catch {
+        // ignore — Chrome may still be starting
+      }
+      onRestart();
+    }
+  }, intervalMs);
+}
+
+export function stopWatchdog(handle: NodeJS.Timeout): void {
+  clearInterval(handle);
+}

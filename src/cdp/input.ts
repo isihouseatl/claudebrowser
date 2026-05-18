@@ -89,3 +89,34 @@ export async function uploadFile(client: CdpClient, selector: string, filePaths:
   if (!nodeId) throw new Error(`File input not found: ${selector}`);
   await client.raw.DOM.setFileInputFiles({ nodeId, files: filePaths });
 }
+
+export async function doubleClickAt(client: CdpClient, x: number, y: number): Promise<void> {
+  await client.raw.Input.dispatchMouseEvent({ type: 'mousePressed', x, y, button: 'left', clickCount: 2 });
+  await client.raw.Input.dispatchMouseEvent({ type: 'mouseReleased', x, y, button: 'left', clickCount: 2 });
+  await client.raw.Input.dispatchMouseEvent({ type: 'mousePressed', x, y, button: 'left', clickCount: 2 });
+  await client.raw.Input.dispatchMouseEvent({ type: 'mouseReleased', x, y, button: 'left', clickCount: 2 });
+}
+
+export async function clearInput(client: CdpClient, selector: string): Promise<void> {
+  const { result } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`,
+    returnByValue: true,
+  });
+  if (!result.value) throw new Error(`Element not found: ${selector}`);
+  const { x, y } = result.value as { x: number; y: number };
+  await clickAt(client, x, y);
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyDown', key: 'a', modifiers: 2 }); // modifier 2 = Ctrl
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyUp', key: 'a', modifiers: 2 });
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyDown', key: 'Backspace' });
+  await client.raw.Input.dispatchKeyEvent({ type: 'keyUp', key: 'Backspace' });
+}
+
+export async function rightClickAt(client: CdpClient, x: number, y: number): Promise<void> {
+  await client.raw.Input.dispatchMouseEvent({ type: 'mousePressed', x, y, button: 'right', clickCount: 1 });
+  await client.raw.Input.dispatchMouseEvent({ type: 'mouseReleased', x, y, button: 'right', clickCount: 1 });
+}

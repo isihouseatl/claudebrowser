@@ -17,13 +17,38 @@ const SESSIONS_DIR = path.join(os.homedir(), ".claudebrowser");
 const SESSIONS_FILE = path.join(SESSIONS_DIR, "sessions.json");
 const SESSIONS_TMP = path.join(SESSIONS_DIR, "sessions.json.tmp");
 
-export function generateSessionId(): string {
-  const pid = process.pid;
-  const ts = Date.now().toString(16);
-  return `${pid}-${ts}`;
+const SESSIONS_LOCK = path.join(SESSIONS_DIR, "sessions.lock");
+const LOCK_TIMEOUT_MS = 5000;
+const LOCK_RETRY_MS = 20;
+
+function acquireLock(): void {
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+      fs.writeFileSync(SESSIONS_LOCK, String(process.pid), { flag: "wx" });
+      return; // acquired
+    } catch {
+      // lock held by another process — spin
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      // synchronous sleep via busy-wait (sessions.json ops are fast, <5ms)
+      const end = Date.now() + Math.min(LOCK_RETRY_MS, remaining);
+      while (Date.now() < end) { /* spin */ }
+    }
+  }
+  // Timed out — stale lock. Remove and take it.
+  try { fs.unlinkSync(SESSIONS_LOCK); } catch { /* ignore */ }
+  fs.writeFileSync(SESSIONS_LOCK, String(process.pid), { flag: "wx" });
 }
 
-export function readSessions(): SessionRegistry {
+function releaseLock(): void {
+  try { fs.unlinkSync(SESSIONS_LOCK); } catch { /* ignore */ }
+}
+
+// Internal helpers — perform raw I/O without acquiring the lock.
+// These are used inside lock-holding callers to avoid double-locking.
+function readSessionsRaw(): SessionRegistry {
   try {
     const raw = fs.readFileSync(SESSIONS_FILE, "utf8");
     const parsed = JSON.parse(raw);
@@ -41,7 +66,7 @@ export function readSessions(): SessionRegistry {
   }
 }
 
-export function writeSessions(registry: SessionRegistry): void {
+function writeSessionsRaw(registry: SessionRegistry): void {
   try {
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
     fs.writeFileSync(SESSIONS_TMP, JSON.stringify(registry, null, 2), "utf8");
@@ -51,43 +76,80 @@ export function writeSessions(registry: SessionRegistry): void {
   }
 }
 
+export function generateSessionId(): string {
+  const pid = process.pid;
+  const ts = Date.now().toString(16);
+  return `${pid}-${ts}`;
+}
+
+export function readSessions(): SessionRegistry {
+  return readSessionsRaw();
+}
+
+export function writeSessions(registry: SessionRegistry): void {
+  acquireLock();
+  try {
+    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    fs.writeFileSync(SESSIONS_TMP, JSON.stringify(registry, null, 2), "utf8");
+    fs.renameSync(SESSIONS_TMP, SESSIONS_FILE);
+  } catch {
+    // leave sessions.json as-is
+  } finally {
+    releaseLock();
+  }
+}
+
 export function registerSession(sessionId: string, name?: string): void {
-  const registry = readSessions();
-  registry.sessions[sessionId] = {
-    pid: process.pid,
-    startedAt: new Date().toISOString(),
-    tabs: [],
-    ...(name ? { name } : {}),
-  };
-  writeSessions(registry);
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    registry.sessions[sessionId] = {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      tabs: [],
+      ...(name ? { name } : {}),
+    };
+    writeSessionsRaw(registry);
+  } finally {
+    releaseLock();
+  }
 }
 
 export function unregisterSession(sessionId: string): void {
-  const registry = readSessions();
-  delete registry.sessions[sessionId];
-  writeSessions(registry);
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    delete registry.sessions[sessionId];
+    writeSessionsRaw(registry);
+  } finally {
+    releaseLock();
+  }
 }
 
 export function claimTab(sessionId: string, tabId: string): void {
-  const registry = readSessions();
-  const session = registry.sessions[sessionId];
-  if (!session) {
-    return;
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    const session = registry.sessions[sessionId];
+    if (!session) return;
+    if (!session.tabs.includes(tabId)) session.tabs.push(tabId);
+    writeSessionsRaw(registry);
+  } finally {
+    releaseLock();
   }
-  if (!session.tabs.includes(tabId)) {
-    session.tabs.push(tabId);
-  }
-  writeSessions(registry);
 }
 
 export function releaseTab(sessionId: string, tabId: string): void {
-  const registry = readSessions();
-  const session = registry.sessions[sessionId];
-  if (!session) {
-    return;
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    const session = registry.sessions[sessionId];
+    if (!session) return;
+    session.tabs = session.tabs.filter((t) => t !== tabId);
+    writeSessionsRaw(registry);
+  } finally {
+    releaseLock();
   }
-  session.tabs = session.tabs.filter((t) => t !== tabId);
-  writeSessions(registry);
 }
 
 export function getSessionTabs(sessionId: string): string[] {
@@ -104,22 +166,27 @@ export function getAllSessions(): SessionRegistry {
 }
 
 export function pruneDeadSessions(): void {
-  const registry = readSessions();
-  let changed = false;
-  for (const [sessionId, entry] of Object.entries(registry.sessions)) {
-    let alive = true;
-    try {
-      process.kill(entry.pid, 0);
-    } catch {
-      alive = false;
+  acquireLock();
+  try {
+    const registry = readSessionsRaw();
+    let changed = false;
+    for (const [sessionId, entry] of Object.entries(registry.sessions)) {
+      let alive = true;
+      try {
+        process.kill(entry.pid, 0);
+      } catch {
+        alive = false;
+      }
+      if (!alive) {
+        delete registry.sessions[sessionId];
+        changed = true;
+      }
     }
-    if (!alive) {
-      delete registry.sessions[sessionId];
-      changed = true;
+    if (changed) {
+      writeSessionsRaw(registry);
     }
-  }
-  if (changed) {
-    writeSessions(registry);
+  } finally {
+    releaseLock();
   }
 }
 
