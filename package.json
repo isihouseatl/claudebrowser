@@ -1,6 +1,6 @@
 {
   "name": "claudebrowser",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Claude Code browser automation via Chrome CDP",
   "bin": {
     "claudebrowser": "./dist/cli.js"
@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/chrome-remote-interface": "^0.31.0",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.1",
     "@yao-pkg/pkg": "^6.19.0",
     "esbuild": "^0.21.0",
     "pkg": "^5.8.0",
