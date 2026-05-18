@@ -139,3 +139,65 @@ export async function clearLocalStorage(client: CdpClient): Promise<void> {
     throw new Error(`JS error in clearLocalStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
   }
 }
+
+// Read a sessionStorage key. Returns null if not set.
+export async function getSessionStorage(client: CdpClient, key: string): Promise<string | null> {
+  const escaped = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `sessionStorage.getItem('${escaped}')`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error in getSessionStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === undefined || result.value === null) return null;
+  return result.value as string;
+}
+
+// Set a sessionStorage key
+export async function setSessionStorage(client: CdpClient, key: string, value: string): Promise<void> {
+  const escapedKey = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `sessionStorage.setItem('${escapedKey}', '${escapedValue}')`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error in setSessionStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+}
+
+// Remove a sessionStorage key
+export async function removeSessionStorage(client: CdpClient, key: string): Promise<void> {
+  const escaped = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `sessionStorage.removeItem('${escaped}')`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error in removeSessionStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+}
+
+// Get all sessionStorage entries as key-value object
+export async function getAllSessionStorage(client: CdpClient): Promise<Record<string, string>> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: 'Object.fromEntries(Object.entries(sessionStorage))',
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error in getAllSessionStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return (result.value ?? {}) as Record<string, string>;
+}
+
+// Clear all sessionStorage for the current page
+export async function clearSessionStorage(client: CdpClient): Promise<void> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: 'sessionStorage.clear()',
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(`JS error in clearSessionStorage: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+}

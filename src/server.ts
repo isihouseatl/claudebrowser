@@ -6,15 +6,19 @@ import { CdpClient } from './cdp/client';
 import { listTabs, listSessionTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { generateSessionId, registerSession, unregisterSession, pruneDeadSessions, getAllSessions } from './session';
 import { navigate, reload, goBack, scroll, waitForSelector, waitForNetworkIdle, waitForUrl, scrollToElement, setViewport, printToPDF, waitForNewTab, getPageMetrics } from './cdp/page';
-import { clickAt, clickSelector, typeText, pressKey, keyChord, selectOption, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues } from './cdp/input';
+import { clickAt, clickSelector, typeText, pressKey, keyChord, setValue, hoverAt, hoverSelector, handleDialog, uploadFile, doubleClickAt, clearInput, rightClickAt, dragAndDrop, focusElement, blurActiveElement, getFormValues } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
 import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor, startConsoleMonitor, resetConsoleMonitor, getConsoleMessages, clearNetworkLog, clearConsoleLog } from './cdp/evaluate';
 import { checkAllAuth, waitForAuth, AUTH_PRESETS } from './cdp/auth';
 import { getText, getAttribute, isVisible, findText } from './cdp/query';
 import { startFrameMonitor, getFrames, evaluateInFrame, switchToFrame, switchToMainFrame } from './cdp/frame';
 import { applyStealthPatches } from './cdp/stealth';
-import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage } from './cdp/storage';
+import { getCookies, setCookie, deleteCookies, clearAllCookies, getLocalStorage, setLocalStorage, removeLocalStorage, getAllLocalStorage, clearLocalStorage, getSessionStorage, setSessionStorage, removeSessionStorage, getAllSessionStorage, clearSessionStorage } from './cdp/storage';
 import { waitForResponse, interceptRequest, clearInterceptions } from './cdp/network';
+import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle as getElementComputedStyle, selectOption as elementSelectOption, getSelectOptions } from './cdp/element';
+import { startConsoleMonitor as startCdpConsole, getConsoleMessages as getCdpConsoleMessages, clearConsoleMessages as clearCdpConsoleMessages, getJsErrors, clearJsErrors, stopConsoleMonitor as stopCdpConsole } from './cdp/console';
+import { startNetworkLog, getNetworkLog, clearNetworkLog as clearNetLog, stopNetworkLog } from './cdp/netlog';
+import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions } from './cdp/emulation';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -102,6 +106,36 @@ const TOOLS = [
   { name: 'browser_remove_local_storage', description: 'Remove a localStorage key', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   { name: 'browser_get_all_local_storage', description: 'Get all localStorage entries as a key-value object', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clear_local_storage', description: 'Clear all localStorage for the current page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_session_storage', description: 'Read a sessionStorage key', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_set_session_storage', description: 'Set a sessionStorage key', inputSchema: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] } },
+  { name: 'browser_remove_session_storage', description: 'Remove a sessionStorage key', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_get_all_session_storage', description: 'Get all sessionStorage entries as a key-value object', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_session_storage', description: 'Clear all sessionStorage for the current page', inputSchema: { type: 'object', properties: {} } },
+  // ── Element state ─────────────────────────────────────────────────────────────
+  { name: 'browser_is_enabled', description: 'Check if an element is enabled (not disabled)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_checked', description: 'Check if a checkbox or radio input is checked', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_bounding_box', description: 'Get the bounding box of an element: {x, y, width, height}', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_count_elements', description: 'Count how many elements match a CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_computed_style', description: 'Get a computed CSS property value for an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, property: { type: 'string', description: 'CSS property name e.g. "color", "display"' } }, required: ['selector', 'property'] } },
+  { name: 'browser_get_select_options', description: 'List all options in a <select> element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── JS errors ─────────────────────────────────────────────────────────────────
+  { name: 'browser_get_js_errors', description: 'Get JavaScript errors thrown on the page since monitoring started', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_js_errors', description: 'Clear the JavaScript error buffer', inputSchema: { type: 'object', properties: {} } },
+  // ── Network capture (manual, full request log) ────────────────────────────────
+  { name: 'browser_network_log_start', description: 'Start capturing all network requests and responses to a buffer', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_log_get', description: 'Get all captured network requests since log was started', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_log_clear', description: 'Clear the network capture buffer without stopping capture', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_log_stop', description: 'Stop network capture and return the final log', inputSchema: { type: 'object', properties: {} } },
+  // ── Device & environment emulation ───────────────────────────────────────────
+  { name: 'browser_set_user_agent', description: 'Override the browser User-Agent string', inputSchema: { type: 'object', properties: { user_agent: { type: 'string' } }, required: ['user_agent'] } },
+  { name: 'browser_set_device_metrics', description: 'Emulate a device: set viewport size, scale factor, and mobile mode', inputSchema: { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' }, device_scale_factor: { type: 'number' }, mobile: { type: 'boolean' } }, required: ['width', 'height'] } },
+  { name: 'browser_clear_device_metrics', description: 'Clear device metric overrides (restore actual screen)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_network_conditions', description: 'Simulate network throttling (e.g. slow 3G, offline)', inputSchema: { type: 'object', properties: { offline: { type: 'boolean' }, latency: { type: 'number', description: 'Latency in ms' }, download_throughput: { type: 'number', description: 'bytes/sec, -1 = no throttle' }, upload_throughput: { type: 'number', description: 'bytes/sec, -1 = no throttle' }, connection_type: { type: 'string', description: 'cellular2g|cellular3g|cellular4g|wifi|ethernet|none' } } } },
+  { name: 'browser_clear_network_conditions', description: 'Remove network throttling (restore full speed)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_geolocation', description: 'Spoof GPS location (latitude, longitude)', inputSchema: { type: 'object', properties: { latitude: { type: 'number' }, longitude: { type: 'number' }, accuracy: { type: 'number', description: 'Accuracy in meters (default 100)' } }, required: ['latitude', 'longitude'] } },
+  { name: 'browser_clear_geolocation', description: 'Remove geolocation override', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_grant_permission', description: 'Grant a browser permission (geolocation, notifications, camera, microphone, clipboard-read, clipboard-write)', inputSchema: { type: 'object', properties: { permission: { type: 'string' }, origin: { type: 'string', description: 'Origin to grant for (e.g. https://example.com). Omit for all origins.' } }, required: ['permission'] } },
+  { name: 'browser_reset_permissions', description: 'Reset all browser permission overrides to default', inputSchema: { type: 'object', properties: {} } },
   // ── Network interception ──────────────────────────────────────────────────────
   { name: 'browser_intercept_request', description: 'Mock a network request — matching URLs get the given response body instead of hitting the server', inputSchema: { type: 'object', properties: { url_pattern: { type: 'string' }, status: { type: 'number' }, body: { type: 'string' }, content_type: { type: 'string' } }, required: ['url_pattern'] } },
   { name: 'browser_clear_interceptions', description: 'Remove all active request interceptions', inputSchema: { type: 'object', properties: {} } },
@@ -133,6 +167,7 @@ export async function startServer(sessionName?: string): Promise<void> {
       startNetworkMonitor(cdp);
       startConsoleMonitor(cdp);
       startFrameMonitor(cdp);
+      await startCdpConsole(cdp);
     } catch { /* retry on next watchdog tick */ }
   };
 
@@ -149,6 +184,7 @@ export async function startServer(sessionName?: string): Promise<void> {
     startNetworkMonitor(cdp);
     startConsoleMonitor(cdp);
     startFrameMonitor(cdp);
+    await startCdpConsole(cdp);
     await applyStealthPatches(cdp);
     watchdogHandle = startWatchdog(config.debugPort, reconnect);
   } catch {
@@ -156,7 +192,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.6.0' },
+    { name: 'claudebrowser', version: '1.7.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -221,7 +257,7 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_clear_input':            { await clearInput(cdp, a.selector as string); return ok('Input cleared'); }
         case 'browser_focus':                  { await focusElement(cdp, a.selector as string); return ok('Focused'); }
         case 'browser_blur':                   { await blurActiveElement(cdp); return ok('Blurred'); }
-        case 'browser_select_option':          { await selectOption(cdp, a.selector as string, a.value as string); return ok('Selected'); }
+        case 'browser_select_option':          { await elementSelectOption(cdp, a.selector as string, a.value as string); return ok('Selected'); }
         case 'browser_set_value':              { await setValue(cdp, a.selector as string, a.value as string); return ok('Value set'); }
         case 'browser_get_form_values':        return ok(await getFormValues(cdp, a.selector as string));
         case 'browser_handle_dialog':          { await handleDialog(cdp, a.accept as boolean, a.prompt_text as string | undefined); return ok('Dialog handled'); }
@@ -242,6 +278,36 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_remove_local_storage':   { await removeLocalStorage(cdp, a.key as string); return ok('localStorage key removed'); }
         case 'browser_get_all_local_storage':  return ok(await getAllLocalStorage(cdp));
         case 'browser_clear_local_storage':    { await clearLocalStorage(cdp); return ok('localStorage cleared'); }
+        case 'browser_get_session_storage':    return ok(await getSessionStorage(cdp, a.key as string));
+        case 'browser_set_session_storage':    { await setSessionStorage(cdp, a.key as string, a.value as string); return ok('sessionStorage set'); }
+        case 'browser_remove_session_storage': { await removeSessionStorage(cdp, a.key as string); return ok('sessionStorage key removed'); }
+        case 'browser_get_all_session_storage':return ok(await getAllSessionStorage(cdp));
+        case 'browser_clear_session_storage':  { await clearSessionStorage(cdp); return ok('sessionStorage cleared'); }
+        // Element state
+        case 'browser_is_enabled':             return ok({ enabled: await isEnabled(cdp, a.selector as string) });
+        case 'browser_is_checked':             return ok({ checked: await isChecked(cdp, a.selector as string) });
+        case 'browser_get_bounding_box':       return ok(await getBoundingBox(cdp, a.selector as string));
+        case 'browser_count_elements':         return ok({ count: await countElements(cdp, a.selector as string) });
+        case 'browser_get_computed_style':     return ok({ value: await getElementComputedStyle(cdp, a.selector as string, a.property as string) });
+        case 'browser_get_select_options':     return ok(await getSelectOptions(cdp, a.selector as string));
+        // JS errors
+        case 'browser_get_js_errors':          return ok(getJsErrors(cdp));
+        case 'browser_clear_js_errors':        { clearJsErrors(cdp); return ok('JS error buffer cleared'); }
+        // Network capture
+        case 'browser_network_log_start':      { await startNetworkLog(cdp); return ok('Network capture started'); }
+        case 'browser_network_log_get':        return ok(getNetworkLog(cdp));
+        case 'browser_network_log_clear':      { clearNetLog(cdp); return ok('Network capture buffer cleared'); }
+        case 'browser_network_log_stop':       return ok(await stopNetworkLog(cdp));
+        // Emulation
+        case 'browser_set_user_agent':         { await setUserAgent(cdp, a.user_agent as string); return ok('User-Agent set'); }
+        case 'browser_set_device_metrics':     { await setDeviceMetrics(cdp, { width: a.width as number, height: a.height as number, deviceScaleFactor: a.device_scale_factor as number | undefined, mobile: a.mobile as boolean | undefined }); return ok('Device metrics set'); }
+        case 'browser_clear_device_metrics':   { await clearDeviceMetrics(cdp); return ok('Device metrics cleared'); }
+        case 'browser_set_network_conditions': { await setNetworkConditions(cdp, { offline: a.offline as boolean | undefined, latency: a.latency as number | undefined, downloadThroughput: a.download_throughput as number | undefined, uploadThroughput: a.upload_throughput as number | undefined, connectionType: a.connection_type as string | undefined }); return ok('Network conditions set'); }
+        case 'browser_clear_network_conditions':{ await clearNetworkConditions(cdp); return ok('Network conditions cleared'); }
+        case 'browser_set_geolocation':        { await setGeolocation(cdp, a.latitude as number, a.longitude as number, a.accuracy as number | undefined); return ok('Geolocation set'); }
+        case 'browser_clear_geolocation':      { await clearGeolocation(cdp); return ok('Geolocation cleared'); }
+        case 'browser_grant_permission':       { await grantPermission(cdp, a.permission as string, a.origin as string | undefined); return ok('Permission granted'); }
+        case 'browser_reset_permissions':      { await resetPermissions(cdp); return ok('Permissions reset'); }
         // Network interception
         case 'browser_intercept_request': {
           const cleanup = await interceptRequest(cdp, { urlPattern: a.url_pattern as string, status: a.status as number | undefined, body: a.body as string | undefined, contentType: a.content_type as string | undefined });
