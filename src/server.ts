@@ -39,7 +39,7 @@ import { getAllTabSnapshots, findTabsByUrl, duplicateTab, getTabInfo, waitForTab
 import { startDownloadMonitor, getDownloads, clearDownloads, stopDownloadMonitor, waitForDownload } from './cdp/download';
 import { getAxSubtree, getFocusedElement, getInteractiveAxNodes, getLiveRegions } from './cdp/accessibility';
 import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
-import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInIframe, waitForIframe } from './cdp/iframe';
+import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInIframe, waitForIframe, getIframes, getIframeCount, isIframeSandboxed, getIframeSrc, setIframeSrc, scrollIframeIntoView, getIframePosition, isIframeVisible } from './cdp/iframe';
 import { fillForm, detectFormFields, submitForm as autofillSubmitForm, clearForm, getFormState } from './cdp/autofill';
 import { waitForAny, waitForAll, waitForCondition, waitForStable, waitForValueChange, waitForCountChange, retryUntilSuccess } from './cdp/waiters';
 import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition } from './cdp/pointer';
@@ -91,6 +91,8 @@ import { getFormFields, getFormValidationErrors, isFormValid, getRequiredFields,
 import { getVideoState, muteMedia, unmuteMedia } from './cdp/media2';
 import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, setAnimationPlaybackRate, getPageAnimationCount, cancelAnimations } from './cdp/animation';
 import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
+import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyEvent, triggerInputEvent, triggerFocusEvent, waitForDomMutation, getFormSubmitUrl } from './cdp/events2';
+import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, getResourceTimings as getResourceTimings3, getLongTasks, getMemoryInfo, getCLS, getFCP, getLCP } from './cdp/performance2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -821,6 +823,33 @@ const TOOLS = [
   { name: 'browser_heading_structure', description: 'Get all headings h1-h6 with level and text', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_get_landmarks', description: 'Find all landmark elements (header, nav, main, aside, footer, roles)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_aria_labelledby', description: 'Resolve aria-labelledby for an element and return referenced text', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Iframe inspection ─────────────────────────────────────────────────────────
+  { name: 'browser_get_iframes', description: 'List all iframes: index, src, name, id, width, height, sandbox', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_iframe_count', description: 'Count iframes on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_iframe_sandboxed', description: 'Check if iframe has sandbox attribute', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_iframe_src', description: 'Get src attribute of an iframe', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_set_iframe_src', description: 'Set src attribute of an iframe', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, src: { type: 'string' } }, required: ['selector', 'src'] } },
+  { name: 'browser_scroll_iframe_into_view', description: 'Smooth-scroll an iframe into the visible area', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_iframe_position', description: 'Get bounding rect of an iframe: x, y, width, height, top, left', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_iframe_visible', description: 'Return true if iframe is visible and in the DOM', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── DOM events ──────────────────────────────────────────────────────────────────
+  { name: 'browser_check_event_handlers', description: 'Check which inline event handlers (onclick, oninput, etc.) are set on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_dispatch_custom_event', description: 'Dispatch a CustomEvent with a detail payload on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, event_name: { type: 'string' }, detail: { type: 'string', description: 'JSON string for event.detail' } }, required: ['selector', 'event_name'] } },
+  { name: 'browser_trigger_mouse_event', description: 'Dispatch a MouseEvent (click, mousedown, mouseover, etc.) on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, event_type: { type: 'string' } }, required: ['selector', 'event_type'] } },
+  { name: 'browser_trigger_key_event', description: 'Dispatch a KeyboardEvent (keydown, keyup, keypress) on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, event_type: { type: 'string' }, key: { type: 'string' } }, required: ['selector', 'event_type', 'key'] } },
+  { name: 'browser_trigger_input_event', description: 'Dispatch input and change events on element (notify frameworks of value change)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_focus_event', description: 'Dispatch focus or blur event on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, type: { type: 'string', description: 'focus or blur' } }, required: ['selector', 'type'] } },
+  { name: 'browser_wait_for_dom_mutation', description: 'Wait for any DOM mutation on an element (childList, attributes, subtree)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  { name: 'browser_form_submit_url', description: 'Get action URL and method of a form element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Performance metrics ─────────────────────────────────────────────────────────
+  { name: 'browser_perf_entries', description: 'Get all performance entries (first 50): name, entryType, startTime, duration', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_timing', description: 'Get navigation timing: domContentLoaded, load, TTFB, domInteractive', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_timings', description: 'Get resource timing entries (first 30): name, duration, transferSize, initiatorType', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_long_tasks', description: 'Get long tasks (>50ms) count and entries', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_memory_info', description: 'Get JS heap size info (Chrome only): used/total/limit', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cls', description: 'Get Cumulative Layout Shift score and shift count', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fcp', description: 'Get First Contentful Paint time in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lcp', description: 'Get Largest Contentful Paint time in ms', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1633,6 +1662,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_heading_structure':      return await getHeadingStructure(cdp);
         case 'browser_get_landmarks':          return await getLandmarks(cdp);
         case 'browser_aria_labelledby':        return await getAriaLabelledBy(cdp, a.selector as string);
+                // iframe new tools
+        case 'browser_get_iframes':            return ok(await getIframes(cdp));
+        case 'browser_iframe_count':           return ok(await getIframeCount(cdp));
+        case 'browser_is_iframe_sandboxed':    return ok(await isIframeSandboxed(cdp, a.selector as string));
+        case 'browser_iframe_src':             return ok(await getIframeSrc(cdp, a.selector as string));
+        case 'browser_set_iframe_src':         { await setIframeSrc(cdp, a.selector as string, a.src as string); return ok('Source set'); }
+        case 'browser_scroll_iframe_into_view': { await scrollIframeIntoView(cdp, a.selector as string); return ok('Scrolled into view'); }
+        case 'browser_iframe_position':        return ok(await getIframePosition(cdp, a.selector as string));
+        case 'browser_is_iframe_visible':      return ok(await isIframeVisible(cdp, a.selector as string));
+        // events2
+        case 'browser_check_event_handlers':   return await checkEventHandlers(cdp, a.selector as string);
+        case 'browser_dispatch_custom_event':  return await dispatchCustomEvent(cdp, a.selector as string, a.event_name as string, a.detail as string ?? '{}');
+        case 'browser_trigger_mouse_event':    return await triggerMouseEvent(cdp, a.selector as string, a.event_type as string);
+        case 'browser_trigger_key_event':      return await triggerKeyEvent(cdp, a.selector as string, a.event_type as string, a.key as string);
+        case 'browser_trigger_input_event':    return await triggerInputEvent(cdp, a.selector as string);
+        case 'browser_trigger_focus_event':    return await triggerFocusEvent(cdp, a.selector as string, a.type as string);
+        case 'browser_wait_for_dom_mutation':  return await waitForDomMutation(cdp, a.selector as string, a.timeout_ms as number ?? 5000);
+        case 'browser_form_submit_url':        return await getFormSubmitUrl(cdp, a.selector as string);
+        // performance2
+        case 'browser_perf_entries':           return await getPerformanceEntries(cdp);
+        case 'browser_nav_timing':             return await getNavigationTiming3(cdp);
+        case 'browser_resource_timings':       return await getResourceTimings3(cdp);
+        case 'browser_long_tasks':             return await getLongTasks(cdp);
+        case 'browser_memory_info':            return await getMemoryInfo(cdp);
+        case 'browser_cls':                    return await getCLS(cdp);
+        case 'browser_fcp':                    return await getFCP(cdp);
+        case 'browser_lcp':                    return await getLCP(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
