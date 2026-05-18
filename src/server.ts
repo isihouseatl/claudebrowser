@@ -47,6 +47,10 @@ import { startRecording, stopRecording, getRecordedActions, clearRecording, isRe
 import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, findNearLabel, getElementSelector } from './cdp/finder';
 import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
 import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange } from './cdp/notify';
+import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow, clickTableCell, getTableColumn, getTableHeaders, filterTableRows } from './cdp/table2';
+import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
+import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
+import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -400,6 +404,39 @@ const TOOLS = [
   { name: 'browser_get_notifications', description: 'Get all captured browser Notification API calls', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clear_notifications', description: 'Clear captured browser notification history', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_wait_for_banner_change', description: "Wait until a status banner/element's text content changes", inputSchema: { type: 'object', properties: { selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['selector'] } },
+  // ── Table interaction ─────────────────────────────────────────────────────────
+  { name: 'browser_table_headers', description: 'Get all column header texts from a table', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector for the <table>' } }, required: ['selector'] } },
+  { name: 'browser_table_row_count', description: 'Count the number of data rows in a table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_column_values', description: 'Get all cell values in a column by 0-based index', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, column_index: { type: 'number' } }, required: ['selector', 'column_index'] } },
+  { name: 'browser_table_column_by_name', description: 'Get all cell values in a named column (finds index by header text)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, column_name: { type: 'string' } }, required: ['selector', 'column_name'] } },
+  { name: 'browser_table_find_row', description: 'Find the first row containing text in any cell. Returns {rowIndex, cells[]}', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, search_text: { type: 'string' } }, required: ['selector', 'search_text'] } },
+  { name: 'browser_table_filter_rows', description: 'Return all rows where a specific column contains matching text', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, column_index: { type: 'number' }, match_text: { type: 'string' } }, required: ['selector', 'column_index', 'match_text'] } },
+  { name: 'browser_table_click_header', description: 'Click a column header to trigger sort (find by header text)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, column_name: { type: 'string' } }, required: ['selector', 'column_name'] } },
+  { name: 'browser_table_click_cell', description: 'Click a table cell at given row and column index (both 0-based)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' }, column_index: { type: 'number' } }, required: ['selector', 'row_index', 'column_index'] } },
+  // ── File upload (advanced) ────────────────────────────────────────────────────
+  { name: 'browser_find_file_inputs', description: 'Find all <input type="file"> elements and return their selectors and accept types', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_files_cdp', description: 'Set files on a file input using native CDP DOM.setFileInputFiles (more reliable than evaluate)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, file_paths: { type: 'array', items: { type: 'string' } } }, required: ['selector', 'file_paths'] } },
+  { name: 'browser_wait_upload_complete', description: 'Wait for an upload progress indicator to reach 100% or disappear', inputSchema: { type: 'object', properties: { progress_selector: { type: 'string' }, timeout_ms: { type: 'number' } }, required: ['progress_selector'] } },
+  { name: 'browser_get_upload_progress', description: 'Read current upload progress percentage from a progress element', inputSchema: { type: 'object', properties: { progress_selector: { type: 'string' } }, required: ['progress_selector'] } },
+  { name: 'browser_simulate_file_drop', description: 'Simulate dropping a file onto a drag-and-drop upload zone', inputSchema: { type: 'object', properties: { drop_zone_selector: { type: 'string' }, file_name: { type: 'string' }, file_content: { type: 'string', description: 'Plain text file content' }, mime_type: { type: 'string', description: 'MIME type (default text/plain)' } }, required: ['drop_zone_selector', 'file_name', 'file_content'] } },
+  { name: 'browser_click_and_upload', description: 'Click a button to trigger a file chooser then immediately set files without a dialog', inputSchema: { type: 'object', properties: { button_selector: { type: 'string' }, file_paths: { type: 'array', items: { type: 'string' } }, timeout_ms: { type: 'number' } }, required: ['button_selector', 'file_paths'] } },
+  // ── Layout & positioning ──────────────────────────────────────────────────────
+  { name: 'browser_get_viewport_elements', description: 'Get all elements currently visible in the viewport with their positions and text (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_in_viewport', description: 'Check if an element is fully within the visible viewport', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_element_center', description: 'Get the center (x, y) coordinates of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_relative_position', description: 'Get the relative position of one element vs another: above/below/left/right/overlapping + distance in px', inputSchema: { type: 'object', properties: { selector1: { type: 'string' }, selector2: { type: 'string' } }, required: ['selector1', 'selector2'] } },
+  { name: 'browser_get_elements_in_region', description: 'Find all elements whose bounding box intersects a given rectangular region (x, y, width, height)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' } }, required: ['x', 'y', 'width', 'height'] } },
+  { name: 'browser_get_page_dimensions', description: 'Get full page dimensions: scrollWidth, scrollHeight, viewportWidth, viewportHeight, devicePixelRatio', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_layout_shift', description: 'Get the cumulative layout shift (CLS) score for the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_absolute_position', description: 'Get element position relative to the document (accounts for scroll)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Debug & diagnostics ───────────────────────────────────────────────────────
+  { name: 'browser_get_obstruction', description: 'Check if an element is obscured by another element at the same position', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_clickable_state', description: 'Check all conditions for whether an element can be clicked: exists, visible, in viewport, enabled, not obscured', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_event_listeners', description: 'Get all event listeners attached to an element (type, useCapture, passive, once)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_page_diagnostic', description: 'Quick page health check: URL, title, readyState, error counts, visible element count, scroll position', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_find_stale_elements', description: 'Check which selectors in a list no longer match any element in the DOM', inputSchema: { type: 'object', properties: { selectors: { type: 'array', items: { type: 'string' } } }, required: ['selectors'] } },
+  { name: 'browser_get_computed_properties', description: 'Get multiple computed CSS properties for an element in a single round-trip', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, properties: { type: 'array', items: { type: 'string' }, description: 'CSS property names e.g. ["color", "display", "opacity"]' } }, required: ['selector', 'properties'] } },
+  { name: 'browser_check_visibility', description: 'Detailed visibility breakdown: exists, hasSize, cssVisible, display, opacity, overflowHidden, parentHidden', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -448,7 +485,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.15.0' },
+    { name: 'claudebrowser', version: '1.16.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -813,6 +850,39 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_get_notifications':      return ok(await getCapturedNotifications(cdp));
         case 'browser_clear_notifications':    { await clearCapturedNotifications(cdp); return ok('Notifications cleared'); }
         case 'browser_wait_for_banner_change': return ok({ text: await waitForBannerChange(cdp, a.selector as string, a.timeout_ms as number | undefined) });
+        // Table (advanced)
+        case 'browser_table_headers':          return ok(await getTableHeaders(cdp, a.selector as string));
+        case 'browser_table_row_count':        return ok({ count: await getTableRowCount(cdp, a.selector as string) });
+        case 'browser_table_column_values':    return ok(await getTableColumnValues(cdp, a.selector as string, a.column_index as number));
+        case 'browser_table_column_by_name':   return ok(await getTableColumn(cdp, a.selector as string, a.column_name as string));
+        case 'browser_table_find_row':         return ok(await findTableRow(cdp, a.selector as string, a.search_text as string));
+        case 'browser_table_filter_rows':      return ok(await filterTableRows(cdp, a.selector as string, a.column_index as number, a.filter_text as string));
+        case 'browser_table_click_header':     { await clickTableHeader(cdp, a.selector as string, a.column_name as string); return ok('Clicked header'); }
+        case 'browser_table_click_cell':       { await clickTableCell(cdp, a.selector as string, a.row_index as number, a.column_index as number); return ok('Clicked cell'); }
+        // File upload (advanced)
+        case 'browser_find_file_inputs':       return ok(await findFileInputs(cdp));
+        case 'browser_set_files_cdp':          { await setFilesOnInput(cdp, a.selector as string, a.files as string[]); return ok('Files set'); }
+        case 'browser_wait_upload_complete':   return ok(await waitForUploadComplete(cdp, a.selector as string, a.timeout_ms as number | undefined));
+        case 'browser_get_upload_progress':    return ok(await getUploadProgress(cdp, a.selector as string));
+        case 'browser_simulate_file_drop':     { await simulateDragDropFile(cdp, a.selector as string, a.file_name as string, a.file_content as string, a.mime_type as string | undefined); return ok('File dropped'); }
+        case 'browser_click_and_upload':       { await clickAndUpload(cdp, a.selector as string, a.files as string[]); return ok('Files uploaded'); }
+        // Layout & positioning
+        case 'browser_get_viewport_elements':  return ok(await getViewportElements(cdp));
+        case 'browser_is_in_viewport':         return ok(await isInViewport(cdp, a.selector as string));
+        case 'browser_get_element_center':     return ok(await getElementCenter(cdp, a.selector as string));
+        case 'browser_get_relative_position':  return ok(await getRelativePosition(cdp, a.selector as string, a.reference_selector as string));
+        case 'browser_get_elements_in_region': return ok(await getElementsInRegion(cdp, a.x as number, a.y as number, a.width as number, a.height as number));
+        case 'browser_get_page_dimensions':    return ok(await getPageDimensions(cdp));
+        case 'browser_get_layout_shift':       return ok(await getLayoutShift(cdp));
+        case 'browser_get_absolute_position':  return ok(await getAbsolutePosition(cdp, a.selector as string));
+        // Debug & diagnostics
+        case 'browser_get_obstruction':        return ok(await getElementObstruction(cdp, a.selector as string));
+        case 'browser_get_clickable_state':    return ok(await getClickableState(cdp, a.selector as string));
+        case 'browser_get_event_listeners':    return ok(await getEventListeners(cdp, a.selector as string));
+        case 'browser_page_diagnostic':        return ok(await getPageDiagnostic(cdp));
+        case 'browser_find_stale_elements':    return ok(await findStaleElements(cdp, (a.selectors as string[] | undefined) ?? []));
+        case 'browser_get_computed_properties':return ok(await getComputedProperties(cdp, a.selector as string, a.properties as string[]));
+        case 'browser_check_visibility':       return ok(await checkVisibility(cdp, a.selector as string));
         // Status
         case 'browser_status': {
           if (!cdp.isConnected()) return ok({ connected: false, port: config.debugPort });
