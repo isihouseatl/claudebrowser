@@ -1,4 +1,5 @@
 // src/cdp/page.ts
+import CDP from 'chrome-remote-interface';
 import { CdpClient } from './client';
 
 export async function navigate(
@@ -172,4 +173,98 @@ export async function waitForUrl(
     await new Promise(r => setTimeout(r, 300));
   }
   throw new Error(`URL matching "${pattern}" not seen within ${timeoutMs}ms`);
+}
+
+export async function setViewport(
+  client: CdpClient,
+  width: number,
+  height: number,
+  deviceScaleFactor = 1,
+  mobile = false,
+): Promise<void> {
+  await client.raw.Emulation.setDeviceMetricsOverride({
+    width,
+    height,
+    deviceScaleFactor,
+    mobile,
+  });
+  await client.raw.Emulation.setVisibleSize({ width, height });
+}
+
+// Returns base64-encoded PDF of the current page
+export async function printToPDF(
+  client: CdpClient,
+  options?: {
+    landscape?: boolean;
+    printBackground?: boolean;
+    scale?: number;
+  }
+): Promise<string> {
+  const result = await client.raw.Page.printToPDF({
+    landscape: options?.landscape,
+    printBackground: options?.printBackground,
+    scale: options?.scale,
+  });
+  return result.data;
+}
+
+// Wait for a new browser tab to open (e.g. after clicking a link that opens in a new window/tab).
+// Returns the new tab's targetId.
+export async function waitForNewTab(
+  client: CdpClient,
+  timeoutMs = 10000,
+): Promise<string> {
+  const before = await CDP.List({ port: client.port });
+  const beforeIds = new Set(before.map((t: CDP.Target) => t.id));
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 300));
+    const current = await CDP.List({ port: client.port });
+    const newTab = current.find(
+      (t: CDP.Target) => t.type === 'page' && !beforeIds.has(t.id)
+    );
+    if (newTab) return newTab.id;
+  }
+  throw new Error(`waitForNewTab: no new tab appeared within ${timeoutMs}ms`);
+}
+
+export interface PageMetrics {
+  url: string;
+  title: string;
+  domNodes: number;
+  jsEventListeners: number;
+  jsHeapSizeBytes: number;
+}
+
+export async function getPageMetrics(client: CdpClient): Promise<PageMetrics> {
+  await client.raw.Performance.enable({});
+
+  const { metrics } = await client.raw.Performance.getMetrics();
+
+  const find = (name: string): number => {
+    const entry = (metrics as Array<{ name: string; value: number }>).find(m => m.name === name);
+    return entry ? entry.value : 0;
+  };
+
+  const domNodes = find('Nodes');
+  const jsEventListeners = find('JSEventListeners');
+  const jsHeapSizeBytes = find('JSHeapUsedSize');
+
+  const { result: urlResult } = await client.raw.Runtime.evaluate({
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  const { result: titleResult } = await client.raw.Runtime.evaluate({
+    expression: 'document.title',
+    returnByValue: true,
+  });
+
+  return {
+    url: urlResult.value as string,
+    title: titleResult.value as string,
+    domNodes,
+    jsEventListeners,
+    jsHeapSizeBytes,
+  };
 }
