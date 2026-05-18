@@ -87,6 +87,10 @@ import { getFocusedSelector, tabToNext, tabToPrev, getFocusableElements, trapFoc
 import { findElementsByText, getPageTextBlocks, findByRegex, getHeadings, getParagraphs, getListItems, countWords, extractEmails } from './cdp/search2';
 import { getBrowserInfo, getScreenInfo, isMobileDevice, isTouchDevice, getMediaCapabilities, getFeatureSupport, getNetworkType, getTimeInfo } from './cdp/device';
 import { startWatchdog, stopWatchdog } from './chrome';
+import { getFormFields, getFormValidationErrors, isFormValid, getRequiredFields, getEmptyRequiredFields, listSelectOptions, setMultipleSelectValues, getCheckedCheckboxes } from './cdp/form2';
+import { getVideoState, muteMedia, unmuteMedia } from './cdp/media2';
+import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, setAnimationPlaybackRate, getPageAnimationCount, cancelAnimations } from './cdp/animation';
+import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -788,6 +792,35 @@ const TOOLS = [
   { name: 'browser_feature_support', description: 'Test browser feature availability: serviceWorker, indexedDB, geolocation, etc.', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_network_type', description: 'Get connection type/effectiveType/downlink/rtt, null if not available', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_time_info', description: 'Get timezone, UTC offset, and locale', inputSchema: { type: 'object', properties: {} } },
+  // ── Form inspection ───────────────────────────────────────────────────────────
+  { name: 'browser_form_fields', description: 'List all input/textarea/select fields in a form with name/type/value/required', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  { name: 'browser_form_validation_errors', description: 'Return validation errors for form fields as {name, message}[]', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  { name: 'browser_is_form_valid', description: 'Return true if form.checkValidity() passes', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  { name: 'browser_required_fields', description: 'List names of required inputs in a form', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  { name: 'browser_empty_required_fields', description: 'List required fields that are currently empty', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  { name: 'browser_list_select_options', description: 'List all option values/texts for a <select> element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_set_multi_select', description: 'Set multiple selected values on a <select multiple> element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, values: { type: 'array', items: { type: 'string' } } }, required: ['selector', 'values'] } },
+  { name: 'browser_checked_checkboxes', description: 'Return names of all checked checkboxes within a form', inputSchema: { type: 'object', properties: { form_selector: { type: 'string' } }, required: ['form_selector'] } },
+  // ── Media detail ────────────────────────────────────────────────────────────────
+  { name: 'browser_get_video_state', description: 'Get detailed state of a video/audio element: src, time, duration, volume, buffered, etc.', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_mute_media', description: 'Mute a media element (sets muted=true)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_unmute_media', description: 'Unmute a media element (sets muted=false)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Element animations ─────────────────────────────────────────────────────────
+  { name: 'browser_pause_element_anims', description: 'Pause all animations on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_play_element_anims', description: 'Play (resume) all animations on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_transitions', description: 'Get computed CSS transition property string for an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_element_anim_count', description: 'Count animations currently running on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_element_anim_rate', description: 'Set animation playback rate on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, rate: { type: 'number' } }, required: ['selector', 'rate'] } },
+  { name: 'browser_page_anim_count', description: 'Count total animations running on the whole page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cancel_element_anims', description: 'Cancel all animations on a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Accessibility inspection ────────────────────────────────────────────────────
+  { name: 'browser_aria_attributes', description: 'Get all aria-* attributes on an element as {name, value}[]', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_role', description: 'Get ARIA role of element (explicit role attribute or tag name)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_get_tabindex', description: 'Get tabIndex value of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_check_image_alts', description: 'Audit all <img> elements for missing alt attributes', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_heading_structure', description: 'Get all headings h1-h6 with level and text', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_landmarks', description: 'Find all landmark elements (header, nav, main, aside, footer, roles)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_labelledby', description: 'Resolve aria-labelledby for an element and return referenced text', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1436,7 +1469,171 @@ export async function startServer(sessionName?: string): Promise<void> {
           if (!check) return fail(`Unknown platform: ${platformName}`, 'AUTH_PLATFORM_NOT_FOUND', `Known: ${checks.map(c => c.name).join(', ')}`);
           return ok({ loggedIn: await waitForAuth(cdp, check, (a.timeout_ms as number) ?? 120000), platform: check.name });
         }
-        default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+        // highlight2
+        case 'browser_highlight_elements':     return ok(await highlightElements(cdp, a.selector as string, a.color as string | undefined));
+        case 'browser_remove_highlights':      { await removeHighlights(cdp); return ok('Highlights removed'); }
+        case 'browser_highlight_with_label':   return ok(await highlightWithLabel(cdp, a.selector as string, a.label as string));
+        case 'browser_flash_element':          { await flashElement(cdp, a.selector as string, a.times as number | undefined); return ok('Flashed'); }
+        case 'browser_get_bounding_boxes':     return ok(await getBoundingBoxes(cdp, a.selector as string));
+        case 'browser_draw_overlay':           return ok({ overlayId: await drawOverlay(cdp, a.x as number, a.y as number, a.width as number, a.height as number, a.color as string | undefined) });
+        case 'browser_remove_overlay':         { await removeOverlay(cdp, a.overlay_id as string); return ok('Overlay removed'); }
+        case 'browser_clear_overlays':         { await clearAllOverlays(cdp); return ok('All overlays removed'); }
+        // input2
+        case 'browser_type_with_delay':        { await typeWithDelay(cdp, a.text as string, a.delay_ms as number); return ok('Typed'); }
+        case 'browser_clear_and_type':         { await clearAndType(cdp, a.selector as string, a.text as string); return ok('Cleared and typed'); }
+        case 'browser_press_key_combo':        { await pressKeyCombo(cdp, a.keys as string[]); return ok('Keys pressed'); }
+        case 'browser_fill_by_label':          { await fillInputByLabel(cdp, a.label as string, a.value as string); return ok('Filled'); }
+        case 'browser_check_checkbox':         { await checkCheckbox(cdp, a.selector as string); return ok('Checked'); }
+        case 'browser_uncheck_checkbox':       { await uncheckCheckbox(cdp, a.selector as string); return ok('Unchecked'); }
+        case 'browser_select_radio':           { await selectRadio(cdp, a.selector as string); return ok('Selected'); }
+        case 'browser_type_contenteditable':   { await typeIntoContentEditable(cdp, a.selector as string, a.text as string); return ok('Typed'); }
+        // pageinfo
+        case 'browser_page_language':          return ok({ language: await getPageLanguage(cdp) });
+        case 'browser_page_charset':           return ok({ charset: await getCharset(cdp) });
+        case 'browser_canonical_url':          return ok({ url: await getCanonicalUrl(cdp) });
+        case 'browser_og_tags':                return ok(await getOpenGraphTags(cdp));
+        case 'browser_twitter_tags':           return ok(await getTwitterCardTags(cdp));
+        case 'browser_structured_data':        return ok(await getStructuredData(cdp));
+        case 'browser_word_count':             return ok({ count: await getPageWordCount(cdp) });
+        case 'browser_external_links':         return ok(await getExternalLinks(cdp));
+        // network2
+        case 'browser_network_timings':        return ok(await getNetworkTimings(cdp));
+        case 'browser_largest_requests':       return ok(await getLargestRequests(cdp, a.limit as number | undefined));
+        case 'browser_failed_requests':        return ok(await getFailedRequests(cdp));
+        case 'browser_request_count':          return ok(await getRequestCount(cdp));
+        case 'browser_service_worker_info':    return ok(await getServiceWorkerInfo(cdp));
+        case 'browser_page_protocol':          return ok({ protocol: await getPageProtocol(cdp) });
+        case 'browser_dns_lookup_time':        return ok({ ms: await getDnsLookupTime(cdp, a.hostname as string) });
+        case 'browser_cached_requests':        return ok(await getCachedRequests(cdp));
+        // storage2
+        case 'browser_localstorage_size':      return ok(await getLocalStorageSize(cdp));
+        case 'browser_search_localstorage':    return ok(await searchLocalStorage(cdp, a.query as string));
+        case 'browser_sessionstorage_size':    return ok(await getSessionStorageSize(cdp));
+        case 'browser_dump_storage':           return ok(await dumpAllStorage(cdp));
+        case 'browser_cookie_count':           return ok({ count: await getCookieCount(cdp) });
+        case 'browser_cookie_domains':         return ok(await getCookieDomains(cdp));
+        case 'browser_storage_estimate':       return ok(await getStorageEstimate(cdp));
+        case 'browser_clear_origin_storage':   { await clearOriginStorage(cdp); return ok('Storage cleared'); }
+        // dom2
+        case 'browser_create_element':         return ok(await createElement(cdp, a.parent_selector as string, a.tag as string, a.attrs as Record<string,string> | undefined, a.text as string | undefined));
+        case 'browser_remove_element':         return ok({ removed: await removeElement(cdp, a.selector as string) });
+        case 'browser_wrap_element':           { await wrapElement(cdp, a.selector as string, a.wrapper_tag as string, a.wrapper_class as string | undefined); return ok('Wrapped'); }
+        case 'browser_unwrap_element':         { await unwrapElement(cdp, a.selector as string); return ok('Unwrapped'); }
+        case 'browser_clone_element':          { await cloneElement(cdp, a.selector as string, a.target_parent as string); return ok('Cloned'); }
+        case 'browser_move_element':           { await moveElement(cdp, a.selector as string, a.target_parent as string); return ok('Moved'); }
+        case 'browser_set_element_text':       { await setElementText(cdp, a.selector as string, a.text as string); return ok('Text set'); }
+        case 'browser_get_element_count':      return ok({ count: await getElementCount(cdp, a.selector as string) });
+        // modal
+        case 'browser_is_modal_open':          return ok({ open: await isModalOpen(cdp) });
+        case 'browser_get_modal_content':      return ok({ content: await getModalContent(cdp) });
+        case 'browser_close_modal':            return ok({ closed: await closeModal(cdp) });
+        case 'browser_wait_for_modal':         return ok({ found: await waitForModal(cdp, a.timeout_ms as number | undefined) });
+        case 'browser_get_modal_buttons':      return ok(await getModalButtons(cdp));
+        case 'browser_click_modal_button':     { await clickModalButton(cdp, a.button_text as string); return ok('Clicked'); }
+        case 'browser_is_overlay_blocking':    return ok({ blocking: await isOverlayBlocking(cdp, a.selector as string) });
+        case 'browser_dismiss_overlay':        { await dismissOverlay(cdp); return ok('Dismissed'); }
+        // url2
+        case 'browser_get_url_parts':          return ok(await getUrlParts(cdp));
+        case 'browser_get_query_params':       return ok(await getQueryParams(cdp));
+        case 'browser_set_query_param':        { await setQueryParam(cdp, a.key as string, a.value as string); return ok('Set'); }
+        case 'browser_remove_query_param':     { await removeQueryParam(cdp, a.key as string); return ok('Removed'); }
+        case 'browser_get_hash':               return ok({ hash: await getHashFragment(cdp) });
+        case 'browser_set_hash':               { await setHashFragment(cdp, a.hash as string); return ok('Hash set'); }
+        case 'browser_navigate_to_hash':       { await navigateToHash(cdp, a.element_id as string); return ok('Navigated'); }
+        case 'browser_navigation_history':     return ok(await getNavigationHistory(cdp));
+        // table3
+        case 'browser_get_full_table_data':    return ok(await getFullTableData(cdp, a.selector as string));
+        case 'browser_get_table_row_data':     return ok(await getTableRowData(cdp, a.selector as string, a.row_index as number));
+        case 'browser_get_table_cell_text':    return ok({ text: await getTableCellText(cdp, a.selector as string, a.row_index as number, a.col_index as number) });
+        case 'browser_sort_table_column':      { await sortTableByColumn(cdp, a.selector as string, a.col_index as number); return ok('Sorted'); }
+        case 'browser_table_page_info':        return ok(await getTablePageInfo(cdp, a.selector as string));
+        case 'browser_export_table_csv':       return ok({ csv: await exportTableAsCsv(cdp, a.selector as string) });
+        case 'browser_get_selected_rows':      return ok(await getSelectedTableRows(cdp, a.selector as string));
+        case 'browser_highlight_table_row':    { await highlightTableRow(cdp, a.selector as string, a.row_index as number, a.color as string | undefined); return ok('Row highlighted'); }
+        // geolocation3
+        case 'browser_set_geolocation_accuracy': { await setGeolocationAccuracy(cdp, a.accuracy as number); return ok('Accuracy set'); }
+        case 'browser_simulate_movement':      { await simulateMovement(cdp, a.steps as any[], a.interval_ms as number | undefined); return ok('Movement simulated'); }
+        case 'browser_high_accuracy_mode':     { await setHighAccuracyMode(cdp, a.lat as number, a.lng as number); return ok('High accuracy mode set'); }
+        case 'browser_low_accuracy_mode':      { await setLowAccuracyMode(cdp, a.lat as number, a.lng as number); return ok('Low accuracy mode set'); }
+        case 'browser_set_battery_level':      { await setBatteryLevel(cdp, a.level as number, a.charging as boolean | undefined); return ok('Battery level set'); }
+        case 'browser_clear_battery_override': { await clearBatteryOverride(cdp); return ok('Battery override cleared'); }
+        case 'browser_set_screen_orientation': { await setScreenOrientation(cdp, a.type as 'portraitPrimary' | 'landscapePrimary' | 'portraitSecondary' | 'landscapeSecondary', a.angle as number); return ok('Orientation set'); }
+        case 'browser_clear_screen_orientation': { await clearScreenOrientation(cdp); return ok('Orientation cleared'); }
+        // capture2
+        case 'browser_screenshot_full_page':   return ok(await takeFullPageScreenshot(cdp));
+        case 'browser_screenshot_viewport':    return ok(await takeViewportScreenshot(cdp));
+        case 'browser_screenshot_region':      return ok(await takeRegionScreenshot(cdp, a.x as number, a.y as number, a.width as number, a.height as number));
+        case 'browser_screenshot_jpeg':        return ok(await takeJpegScreenshot(cdp, a.quality as number | undefined));
+        case 'browser_compare_screenshots':    return ok(compareScreenshots(cdp, a.base64a as string, a.base64b as string));
+        case 'browser_full_page_dimensions2':  return ok(await getFullPageDimensions2(cdp));
+        case 'browser_screenshot_after_delay': return ok(await takeScreenshotAfterDelay(cdp, a.delay_ms as number));
+        case 'browser_screenshot_selector':    return ok(await screenshotSelector(cdp, a.selector as string));
+        // scroll3
+        case 'browser_scroll_depth':           return ok(await getScrollDepth(cdp));
+        case 'browser_is_at_bottom':           return ok({ bottom: await isScrolledToBottom(cdp) });
+        case 'browser_is_at_top':              return ok({ top: await isScrolledToTop(cdp) });
+        case 'browser_get_scrollable_parent':  return ok({ parent: await getScrollableParent(cdp, a.selector as string) });
+        case 'browser_scroll_by':              { await scrollByAmount(cdp, a.x as number, a.y as number); return ok('Scrolled'); }
+        case 'browser_scroll_element_by':      { await scrollElementBy(cdp, a.selector as string, a.x as number, a.y as number); return ok('Scrolled'); }
+        case 'browser_scrollbar_width':        return ok({ width: await getScrollbarWidth(cdp) });
+        case 'browser_scroll_to_percent':      { await scrollToPercent(cdp, a.percent as number); return ok('Scrolled'); }
+        // focus
+        case 'browser_get_focused_selector':   return ok({ selector: await getFocusedSelector(cdp) });
+        case 'browser_tab_next':               { await tabToNext(cdp); return ok('Tabbed forward'); }
+        case 'browser_tab_prev':               { await tabToPrev(cdp); return ok('Tabbed backward'); }
+        case 'browser_get_focusable':          return ok(await getFocusableElements(cdp));
+        case 'browser_trap_focus':             { await trapFocusInElement(cdp, a.selector as string); return ok('Focus trapped'); }
+        case 'browser_is_focus_trapped':       return ok({ trapped: await isFocusTrapped(cdp) });
+        case 'browser_release_focus_trap':     { await releaseFocusTrap(cdp); return ok('Focus trap released'); }
+        case 'browser_focus_nth':              { await focusNthElement(cdp, a.selector as string, a.n as number); return ok('Focused'); }
+        // search2
+        case 'browser_find_elements_by_text':  return ok(await findElementsByText(cdp, a.text as string, a.tag as string | undefined));
+        case 'browser_get_text_blocks':        return ok(await getPageTextBlocks(cdp));
+        case 'browser_find_by_regex':          return ok(await findByRegex(cdp, a.pattern as string, a.flags as string | undefined));
+        case 'browser_get_headings':           return ok(await getHeadings(cdp));
+        case 'browser_get_paragraphs':         return ok(await getParagraphs(cdp));
+        case 'browser_get_list_items':         return ok(await getListItems(cdp));
+        case 'browser_count_words':            return ok({ count: await countWords(cdp, a.selector as string | undefined) });
+        case 'browser_extract_emails':         return ok(await extractEmails(cdp));
+        // device
+        case 'browser_get_browser_info':       return ok(await getBrowserInfo(cdp));
+        case 'browser_get_screen_info':        return ok(await getScreenInfo(cdp));
+        case 'browser_is_mobile':              return ok({ mobile: await isMobileDevice(cdp) });
+        case 'browser_is_touch':               return ok({ touch: await isTouchDevice(cdp) });
+        case 'browser_media_capabilities':     return ok(await getMediaCapabilities(cdp));
+        case 'browser_feature_support':        return ok(await getFeatureSupport(cdp));
+        case 'browser_network_type':           return ok(await getNetworkType(cdp));
+        case 'browser_time_info':              return ok(await getTimeInfo(cdp));
+        // form2
+        case 'browser_form_fields':            return ok(await getFormFields(cdp, a.form_selector as string));
+        case 'browser_form_validation_errors': return ok(await getFormValidationErrors(cdp, a.form_selector as string));
+        case 'browser_is_form_valid':          return ok({ valid: await isFormValid(cdp, a.form_selector as string) });
+        case 'browser_required_fields':        return ok(await getRequiredFields(cdp, a.form_selector as string));
+        case 'browser_empty_required_fields':  return ok(await getEmptyRequiredFields(cdp, a.form_selector as string));
+        case 'browser_list_select_options':    return ok(await listSelectOptions(cdp, a.selector as string));
+        case 'browser_set_multi_select':       { await setMultipleSelectValues(cdp, a.selector as string, a.values as string[]); return ok('Values set'); }
+        case 'browser_checked_checkboxes':     return ok(await getCheckedCheckboxes(cdp, a.form_selector as string));
+        // media2
+        case 'browser_get_video_state':        return await getVideoState(cdp, a.selector as string);
+        case 'browser_mute_media':             return await muteMedia(cdp, a.selector as string);
+        case 'browser_unmute_media':           return await unmuteMedia(cdp, a.selector as string);
+        // animation
+        case 'browser_pause_element_anims':    return await pauseAnimations(cdp, a.selector as string);
+        case 'browser_play_element_anims':     return await playAnimations(cdp, a.selector as string);
+        case 'browser_get_transitions':        return await getTransitions(cdp, a.selector as string);
+        case 'browser_element_anim_count':     return await getAnimationCount(cdp, a.selector as string);
+        case 'browser_element_anim_rate':      return await setAnimationPlaybackRate(cdp, a.selector as string, a.rate as number);
+        case 'browser_page_anim_count':        return await getPageAnimationCount(cdp);
+        case 'browser_cancel_element_anims':   return await cancelAnimations(cdp, a.selector as string);
+        // accessibility2
+        case 'browser_aria_attributes':        return await getAriaAttributes(cdp, a.selector as string);
+        case 'browser_get_role':               return await getRole(cdp, a.selector as string);
+        case 'browser_get_tabindex':           return await getTabIndex(cdp, a.selector as string);
+        case 'browser_check_image_alts':       return await checkImageAlts(cdp);
+        case 'browser_heading_structure':      return await getHeadingStructure(cdp);
+        case 'browser_get_landmarks':          return await getLandmarks(cdp);
+        case 'browser_aria_labelledby':        return await getAriaLabelledBy(cdp, a.selector as string);
+                default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
 
