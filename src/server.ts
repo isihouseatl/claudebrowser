@@ -7,7 +7,7 @@ import { listTabs, newTab, closeTab, activateTab } from './cdp/tabs';
 import { navigate, reload, goBack, scroll, waitForSelector } from './cdp/page';
 import { clickAt, clickSelector, typeText, pressKey, selectOption, setValue } from './cdp/input';
 import { takeScreenshot, getAccessibilityTree, getDom } from './cdp/capture';
-import { evaluate, getNetworkRequests, startNetworkMonitor } from './cdp/evaluate';
+import { evaluate, getNetworkRequests, startNetworkMonitor, resetNetworkMonitor } from './cdp/evaluate';
 import { readConfig } from './config';
 
 function ok(content: unknown) {
@@ -72,7 +72,7 @@ export async function startServer(): Promise<void> {
     const a = args as Record<string, unknown>;
 
     if (!cdp.isConnected() && name !== 'browser_status') {
-      try { await cdp.connect(); startNetworkMonitor(cdp); } catch {
+      try { resetNetworkMonitor(); await cdp.connect(); startNetworkMonitor(cdp); } catch {
         return fail('Chrome not connected. Is it running? Run: claudebrowser init', 'CDP_DISCONNECTED', 'claudebrowser status');
       }
     }

@@ -22,15 +22,30 @@ interface NetworkRequest {
 }
 
 const requestLog: Map<string, Partial<NetworkRequest>> = new Map();
+const MAX_LOG_SIZE = 500;
+const EVICT_COUNT = 100;
+let monitorStarted = false;
 
 export function startNetworkMonitor(client: CdpClient): void {
+  if (monitorStarted) return;
+  monitorStarted = true;
+
   client.raw.Network.requestWillBeSent(({ requestId, request, type, timestamp }) => {
+    if (requestLog.size >= MAX_LOG_SIZE) {
+      const keys = requestLog.keys();
+      for (let i = 0; i < EVICT_COUNT; i++) requestLog.delete(keys.next().value!);
+    }
     requestLog.set(requestId, { url: request.url, method: request.method, resourceType: type ?? 'Other', timestamp, status: null });
   });
   client.raw.Network.responseReceived(({ requestId, response }) => {
     const existing = requestLog.get(requestId);
     if (existing) requestLog.set(requestId, { ...existing, status: response.status });
   });
+}
+
+export function resetNetworkMonitor(): void {
+  monitorStarted = false;
+  requestLog.clear();
 }
 
 export function getNetworkRequests(filter?: string): NetworkRequest[] {
