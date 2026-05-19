@@ -341,3 +341,225 @@ export async function getStorageQuota(
     return err(e?.message ?? String(e));
   }
 }
+
+// ---------------------------------------------------------------------------
+// New storage inspection functions (storage2 batch)
+// Names with suffix 2 avoid conflicts with existing exports in this file or
+// storage.ts imports in server.ts.
+// ---------------------------------------------------------------------------
+
+// 1. List all IndexedDB databases: name, version
+// Renamed getIndexedDBDatabases2 — getIndexedDBDatabases already exported above.
+export async function getIndexedDBDatabases2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(async function() { if (typeof indexedDB === "undefined" || typeof indexedDB.databases !== "function") { return JSON.stringify([]); } var dbs = await indexedDB.databases(); return JSON.stringify(dbs.map(function(d) { return { name: d.name, version: d.version }; })); })()',
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('indexedDB.databases() returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 2. Open an IndexedDB by name and list its object stores: name, keyPath, autoIncrement
+export async function getIndexedDBObjectStores(
+  client: CdpClient,
+  dbName: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const escaped = dbName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(async function() {
+  return new Promise(function(resolve, reject) {
+    var req = indexedDB.open('${escaped}');
+    req.onerror = function() { reject(req.error ? req.error.message : 'open failed'); };
+    req.onsuccess = function() {
+      var db = req.result;
+      var stores = [];
+      for (var i = 0; i < db.objectStoreNames.length; i++) {
+        var name = db.objectStoreNames[i];
+        var tx = db.transaction(name, 'readonly');
+        var store = tx.objectStore(name);
+        stores.push({ name: name, keyPath: store.keyPath, autoIncrement: store.autoIncrement });
+      }
+      db.close();
+      resolve(JSON.stringify(stores));
+    };
+    req.onupgradeneeded = function() {
+      var db = req.result;
+      db.close();
+      resolve(JSON.stringify([]));
+    };
+  });
+})()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('getIndexedDBObjectStores returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 3. Get all sessionStorage keys
+// Renamed getSessionStorageKeys2 — getSessionStorageKeys already exported above.
+export async function getSessionStorageKeys2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var keys = []; for (var i = 0; i < sessionStorage.length; i++) { keys.push(sessionStorage.key(i)); } return JSON.stringify(keys); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('sessionStorage.keys returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 4. Get a specific sessionStorage item value
+export async function getSessionStorageItem(
+  client: CdpClient,
+  key: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const escaped = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() { var v = sessionStorage.getItem('${escaped}'); return JSON.stringify({ key: '${escaped}', value: v }); })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('getSessionStorageItem returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 5. Set a sessionStorage item
+export async function setSessionStorageItem(
+  client: CdpClient,
+  key: string,
+  value: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const escapedKey = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const escapedVal = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() { sessionStorage.setItem('${escapedKey}', '${escapedVal}'); return "ok"; })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    return ok(JSON.stringify({ key, set: true }));
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 6. Clear all sessionStorage
+// Renamed clearSessionStorage2 — clearSessionStorage is already imported from storage.ts in server.ts.
+export async function clearSessionStorage2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { sessionStorage.clear(); return "cleared"; })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    return ok(JSON.stringify({ cleared: true }));
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 7. Get estimated sizes: localStorageKeys count, sessionStorageKeys count, storageEstimate if available
+export async function getStorageSizes(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(async function() {
+  var lsCount = localStorage.length;
+  var ssCount = sessionStorage.length;
+  var estimate = null;
+  if (typeof navigator !== "undefined" && navigator.storage && typeof navigator.storage.estimate === "function") {
+    try { estimate = await navigator.storage.estimate(); } catch(e) { estimate = null; }
+  }
+  return JSON.stringify({
+    localStorageKeys: lsCount,
+    sessionStorageKeys: ssCount,
+    storageEstimate: estimate ? { usage: estimate.usage, quota: estimate.quota } : null
+  });
+})()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('getStorageSizes returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}
+
+// 8. Count cookies via document.cookie, return {count, names: string[]}
+// Renamed getCookieCount2 — getCookieCount already exported above (returns number, different signature).
+export async function getCookieCount2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: '(function() { var raw = document.cookie; var parts = raw.split(";").map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; }); var names = parts.map(function(p) { var eq = p.indexOf("="); return eq >= 0 ? p.substring(0, eq).trim() : p.trim(); }); return JSON.stringify({ count: names.length, names: names }); })()',
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('getCookieCount2 returned null or undefined');
+    }
+    return ok(result.value as string);
+  } catch (e: any) {
+    return err(e?.message ?? String(e));
+  }
+}

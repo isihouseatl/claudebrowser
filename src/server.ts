@@ -95,7 +95,7 @@ import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyE
 import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, getResourceTimings as getResourceTimings3, getLongTasks, getMemoryInfo, getCLS, getFCP, getLCP } from './cdp/performance2';
 import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
-import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange } from './cdp/observer';
+import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount } from './cdp/canvas2';
@@ -115,7 +115,8 @@ import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getE
 import { getStylesheets2, getInlineStyles, getComputedStyles, getCssVariables2 as getCssVariables3, getMediaQueries, getAnimations2, getTransitions2, countCssRules } from './cdp/css2';
 import { injectWsMonitor, getWsConnections, getWsMessages, clearWsMonitor, getWsStatus, sendWsMessage, closeWsConnection, getWsReadyState } from './cdp/websocket2';
 import { getIframes2, getIframeCount2, queryInIframe, getIframeTitle, getIframeSrc2, isIframeSandboxed2, getIframeDocument, focusIframe } from './cdp/iframe2';
-import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
+import { getCdpTargets, getCdpVersion, enableCdpDomain, getCdpMetricNames, setDeviceMetrics2, clearDeviceMetrics2, getCdpDomains, captureNetworkLog } from './cdp/devtools';
+import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
@@ -1153,6 +1154,33 @@ const TOOLS = [
   { name: 'browser_iframe_sandboxed2', description: 'Check if iframe has sandbox attribute and list its permission tokens', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_iframe_document', description: 'Get document info from same-origin iframe: title, url, readyState', inputSchema: { type: 'object', properties: { iframe_name: { type: 'string' } }, required: ['iframe_name'] } },
   { name: 'browser_focus_iframe', description: 'Call focus() on an iframe element matching CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Observer ────────────────────────────────────────────────────────────────────
+  { name: 'browser_inject_mutation_monitor', description: 'Inject MutationObserver on document.body, records DOM changes to window.__mutationLog', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mutation_log', description: 'Get recorded DOM mutations: type, target tag/id, addedNodes, removedNodes, attributeName (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_mutation_log', description: 'Clear window.__mutationLog (observer keeps running)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wait_mutation2', description: 'Poll mutation log for 1 new entry, timeout in ms (default 3000)', inputSchema: { type: 'object', properties: { timeout_ms: { type: 'number' } } } },
+  { name: 'browser_inject_intersection_monitor', description: 'Inject IntersectionObserver on elements matching selector, records visibility changes', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_intersection_log', description: 'Get intersection visibility log: selector, isIntersecting, ratio', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_intersection_log', description: 'Clear window.__intersectionLog (observer keeps running)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_element_visible', description: 'Check if element is currently intersecting viewport using IntersectionObserver', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Storage2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_indexeddb_databases', description: 'List all IndexedDB databases: name, version', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexeddb_stores', description: 'List object stores in an IndexedDB database: name, keyPath, autoIncrement', inputSchema: { type: 'object', properties: { db_name: { type: 'string' } }, required: ['db_name'] } },
+  { name: 'browser_session_storage_keys', description: 'Get all sessionStorage keys', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage_get', description: 'Get a specific sessionStorage item value', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_session_storage_set', description: 'Set a sessionStorage item', inputSchema: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } }, required: ['key', 'value'] } },
+  { name: 'browser_clear_session_storage', description: 'Clear all sessionStorage', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_sizes', description: 'Get storage sizes: localStorage key count, sessionStorage key count, storageEstimate if available', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count', description: 'Count cookies via document.cookie and return names list', inputSchema: { type: 'object', properties: {} } },
+  // ── DevTools ────────────────────────────────────────────────────────────────────
+  { name: 'browser_cdp_targets', description: 'List all CDP targets: targetId, type, title, url', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cdp_version', description: 'Get Chrome version info: protocolVersion, product, revision, userAgent', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_enable_cdp_domain', description: 'Enable a CDP domain by name (e.g. DOM, CSS, Network)', inputSchema: { type: 'object', properties: { domain: { type: 'string' } }, required: ['domain'] } },
+  { name: 'browser_cdp_metric_names', description: 'Get names of all Performance metrics available via CDP Performance domain', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_device_metrics', description: 'Override device viewport via CDP Emulation.setDeviceMetricsOverride', inputSchema: { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' }, mobile: { type: 'boolean' } }, required: ['width', 'height'] } },
+  { name: 'browser_clear_device_metrics', description: 'Restore normal viewport via Emulation.clearDeviceMetricsOverride', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cdp_domains', description: 'List all available CDP domains: name, version', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_capture_network_log', description: 'Enable CDP Network domain to start capturing requests', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2273,6 +2301,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_iframe_sandboxed2':        return await isIframeSandboxed2(cdp, a.selector as string);
         case 'browser_iframe_document':          return await getIframeDocument(cdp, a.iframe_name as string);
         case 'browser_focus_iframe':             return await focusIframe(cdp, a.selector as string);
+                // observer new
+        case 'browser_inject_mutation_monitor':  return await injectMutationMonitor(cdp);
+        case 'browser_mutation_log':             return await getMutationLog(cdp);
+        case 'browser_clear_mutation_log':       return await clearMutationLog(cdp);
+        case 'browser_wait_mutation2':           return await waitForMutation2(cdp, a.timeout_ms as number | undefined);
+        case 'browser_inject_intersection_monitor': return await injectIntersectionMonitor(cdp, a.selector as string);
+        case 'browser_intersection_log':         return await getIntersectionLog(cdp);
+        case 'browser_clear_intersection_log':   return await clearIntersectionLog(cdp);
+        case 'browser_is_element_visible':       return await isElementVisible(cdp, a.selector as string);
+        // storage2 new
+        case 'browser_indexeddb_databases':      return await getIndexedDBDatabases2(cdp);
+        case 'browser_indexeddb_stores':         return await getIndexedDBObjectStores(cdp, a.db_name as string);
+        case 'browser_session_storage_keys':     return await getSessionStorageKeys2(cdp);
+        case 'browser_session_storage_get':      return await getSessionStorageItem(cdp, a.key as string);
+        case 'browser_session_storage_set':      return await setSessionStorageItem(cdp, a.key as string, a.value as string);
+        case 'browser_clear_session_storage':    return await clearSessionStorage2(cdp);
+        case 'browser_storage_sizes':            return await getStorageSizes(cdp);
+        case 'browser_cookie_count':             return await getCookieCount2(cdp);
+        // devtools
+        case 'browser_cdp_targets':              return await getCdpTargets(cdp);
+        case 'browser_cdp_version':              return await getCdpVersion(cdp);
+        case 'browser_enable_cdp_domain':        return await enableCdpDomain(cdp, a.domain as string);
+        case 'browser_cdp_metric_names':         return await getCdpMetricNames(cdp);
+        case 'browser_set_device_metrics':       return await setDeviceMetrics2(cdp, a.width as number, a.height as number, a.mobile as boolean ?? false);
+        case 'browser_clear_device_metrics':     return await clearDeviceMetrics2(cdp);
+        case 'browser_cdp_domains':              return await getCdpDomains(cdp);
+        case 'browser_capture_network_log':      return await captureNetworkLog(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
