@@ -482,3 +482,253 @@ export async function triggerSubmitEvent(
   }
   return ok(result.value);
 }
+
+// ---------------------------------------------------------------------------
+// New inspection functions (8 named exports)
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements with onclick attribute or role=button/link/menuitem.
+ * Returns { elements: [{tag, id, text_preview}], count }. Max 30.
+ */
+export async function getClickableElements(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('[onclick], [role="button"], [role="link"], [role="menuitem"]');
+  for (var i = 0; i < all.length && results.length < 30; i++) {
+    var el = all[i];
+    var text = (el.textContent || '').trim().slice(0, 30);
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      text_preview: text
+    });
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Find elements with onkeydown/onkeyup/onkeypress attributes.
+ * Returns { elements: [{tag, id, class}], count }. Max 20.
+ */
+export async function getKeyboardHandlers(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('[onkeydown], [onkeyup], [onkeypress]');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      class: el.className || ''
+    });
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Find forms with onsubmit attribute or heuristic submit listener patterns.
+ * Returns { forms: [{id, action, method}], count }. Max 10.
+ */
+export async function getFormSubmitHandlers(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var forms = document.querySelectorAll('form');
+  for (var i = 0; i < forms.length && results.length < 10; i++) {
+    var f = forms[i];
+    var hasOnsubmit = f.hasAttribute('onsubmit') || typeof f.onsubmit === 'function';
+    var hasSubmitBtn = f.querySelector('[type="submit"]') !== null;
+    if (hasOnsubmit || hasSubmitBtn) {
+      results.push({
+        id: f.id || '',
+        action: f.getAttribute('action') || '',
+        method: (f.getAttribute('method') || 'get').toLowerCase()
+      });
+    }
+  }
+  return JSON.stringify({ forms: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Count interactive elements with onclick, keyboard, and form handlers (heuristic).
+ * Returns { clickHandlers, keyHandlers, formHandlers }.
+ * NOTE: renamed getEventListenerCount2 to avoid conflict with existing getEventListenerCount(client, selector).
+ */
+export async function getEventListenerCount2(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var clickHandlers = document.querySelectorAll('[onclick]').length;
+  var keyHandlers = document.querySelectorAll('[onkeydown], [onkeyup], [onkeypress]').length;
+  var formHandlers = document.querySelectorAll('form[onsubmit], form [type="submit"]').length;
+  return JSON.stringify({ clickHandlers: clickHandlers, keyHandlers: keyHandlers, formHandlers: formHandlers });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Detect elements with data-observe or data-live-update attributes (MutationObserver heuristic).
+ * Returns { elements: [{tag, id}], count }. Max 10.
+ */
+export async function getMutationObservers(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('[data-observe], [data-live-update], [data-mutation]');
+  for (var i = 0; i < all.length && results.length < 10; i++) {
+    var el = all[i];
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || ''
+    });
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Detect elements with data-resize or onresize attribute (ResizeObserver heuristic).
+ * Returns { elements: [{tag, id}], count }. Max 10.
+ */
+export async function getResizeObservers(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('[data-resize], [data-resize-observer], [onresize]');
+  for (var i = 0; i < all.length && results.length < 10; i++) {
+    var el = all[i];
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || ''
+    });
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Detect elements with lazy-load or intersection observer patterns via data attrs.
+ * Returns { elements: [{tag, id, class}], count }. Max 20.
+ */
+export async function getIntersectionObservers(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('[data-lazy], [data-observe], [loading="lazy"], [data-intersection]');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      class: el.className || ''
+    });
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}
+
+/**
+ * Detect custom event dispatchers via data-event* attributes.
+ * Returns { elements: [{tag, id, dataEvents}], count }. Max 20.
+ */
+export async function getCustomEvents(cdp: any): Promise<McpContent> {
+  const expression = `(function() {
+  var results = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var attrs = el.attributes;
+    var dataEventAttrs = [];
+    for (var j = 0; j < attrs.length; j++) {
+      if (attrs[j].name.indexOf('data-event') === 0) {
+        dataEventAttrs.push(attrs[j].name + '=' + attrs[j].value);
+      }
+    }
+    if (dataEventAttrs.length > 0) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        dataEvents: dataEventAttrs
+      });
+    }
+  }
+  return JSON.stringify({ elements: results, count: results.length });
+})()`;
+
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+}

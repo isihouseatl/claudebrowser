@@ -104,7 +104,7 @@ import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocati
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
 import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState } from './cdp/history';
-import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent, injectEventMonitor, getEventLog, clearEventLog, getClickListeners, getKeyboardListeners, getScrollListeners, getSubmitListeners, getResizeListeners } from './cdp/event2';
+import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent, injectEventMonitor, getEventLog, clearEventLog, getClickListeners, getKeyboardListeners, getScrollListeners, getSubmitListeners, getResizeListeners, getClickableElements, getKeyboardHandlers, getFormSubmitHandlers, getEventListenerCount2, getMutationObservers, getResizeObservers, getIntersectionObservers, getCustomEvents } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages, getAllImages2, getImagesWithoutAlt2, getLazyImages2, getSvgElements2, getImageDimensions2, getBrokenImages2, getBackgroundImages2, getResponsiveImages } from './cdp/image2';
@@ -139,12 +139,12 @@ import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, get
 import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getGridCount, getGridGaps, getAbsoluteElements, getLayoutShift2 } from './cdp/grid2';
 import { getTouchSupport3, getViewportMeta, getOrientationInfo, getVirtualKeyboardElements, getTouchActionElements, getScrollSnapElements, getAppleMobileMetaTags, getPWAManifest } from './cdp/touch2';
 import { getJsHeapSize2, getPerformanceMarks3, getPerformanceMeasures, getScriptCount, getConsoleErrors2, getResourceTiming, getNavigationEntries, getStylesheetCount2 } from './cdp/perf3';
-import { getFontFaces2, getUsedFontFamilies, getWebFontLinks, getFontSizeDistribution, getTextRenderingMode, getLineHeightDistribution, getFontWeightDistribution, getDocumentFontAPI } from './cdp/font2';
+import { getFontFaces2, getUsedFontFamilies, getWebFontLinks, getFontSizeDistribution, getTextRenderingMode, getLineHeightDistribution, getFontWeightDistribution, getDocumentFontAPI, getLoadedFonts3, getFontFaceRules, getSystemFonts, getFontSizes, getFontWeights, getLineHeights, getTextElements, getFontLoadStatus } from './cdp/font2';
 import { getCurrentUrl2, getQueryParams3, getHashContent, getHistoryLength2 as getHistoryLengthFull, getInternalLinks2 as getInternalLinksFull, getExternalLinks2 as getExternalLinksFull, getAnchors, getRedirectMeta } from './cdp/url2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
-import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
+import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2, getLocalStorageItems2, getSessionStorageItems2, getLocalStorageCount, getCookieCount3, getStorageQuota2, clearLocalStorage3, getLocalStorageKey, getSessionStorageKey } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessages, getWarningMessages, getLoadingIndicators, getProgressBars, getNotificationPermission2 } from './cdp/notify2';
 import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
@@ -1696,6 +1696,33 @@ const TOOLS = [
   { name: 'browser_schema_org2', description: 'JSON-LD scripts with @type: type, name_preview (max 10 schemas)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_microdata', description: 'Elements with itemscope/itemtype: itemType, id (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_geolocation_permission2', description: 'Geolocation permission state: { state, supported }', inputSchema: { type: 'object', properties: {} } },
+  // ── Font2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_loaded_fonts3', description: 'Fonts loaded via document.fonts API: [{family, status, style, weight}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_face_rules', description: '@font-face CSS rules: [{family, src_preview, weight, style}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_system_fonts', description: 'Computed font-family for body/p/h1/h2/span: [{element_tag, fontFamily}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_sizes', description: 'Unique computed font-size values: [{size, count}] sorted desc (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_weights', description: 'Unique computed font-weight values: [{weight, count}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_line_heights', description: 'Unique computed line-height values: [{lineHeight, count}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_elements', description: 'Visible text-containing elements: tag, id, text_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_load_status', description: 'document.fonts status: {status, size, ready}', inputSchema: { type: 'object', properties: {} } },
+  // ── Storage2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_localstorage_items2', description: 'localStorage key/value pairs: [{key, value_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sessionstorage_items2', description: 'sessionStorage key/value pairs: [{key, value_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_localstorage_count', description: 'Storage key counts: {localStorage, sessionStorage}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count3', description: 'document.cookie parsed count: {count, names[]} (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_quota2', description: 'navigator.storage.estimate(): {quota, usage, usagePercent}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_localstorage3', description: 'localStorage.clear() with previousCount: {cleared, previousCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_localstorage_key', description: 'Get specific localStorage key: { key, value, exists }', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  { name: 'browser_sessionstorage_key', description: 'Get specific sessionStorage key: { key, value, exists }', inputSchema: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
+  // ── Event2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_clickable_elements', description: 'Elements with onclick or role=button/link/menuitem: tag, id, text_preview (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyboard_handlers', description: 'Elements with onkeydown/onkeyup/onkeypress: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_form_submit_handlers', description: 'Forms with onsubmit or submit button heuristics: id, action, method (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_event_listener_count2', description: 'Count interactive elements: {clickHandlers, keyHandlers, formHandlers}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mutation_observers', description: 'Elements with [data-observe]/[data-live-update]/[data-mutation]: tag, id (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_observers', description: 'Elements with [data-resize]/[onresize] patterns: tag, id (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_intersection_observers', description: 'Elements with [data-lazy]/[loading=lazy]/[data-intersection]: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_events', description: 'Elements with data-event* attributes: tag, id, dataEvents (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3318,6 +3345,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_schema_org2':            return await getSchemaOrg2(cdp);
         case 'browser_microdata':              return await getMicrodata(cdp);
         case 'browser_geolocation_permission2': return await getGeolocationPermission2(cdp);
+                // font2 new
+        case 'browser_loaded_fonts3':           return await getLoadedFonts3(cdp);
+        case 'browser_font_face_rules':         return await getFontFaceRules(cdp);
+        case 'browser_system_fonts':            return await getSystemFonts(cdp);
+        case 'browser_font_sizes':              return await getFontSizes(cdp);
+        case 'browser_font_weights':            return await getFontWeights(cdp);
+        case 'browser_line_heights':            return await getLineHeights(cdp);
+        case 'browser_text_elements':           return await getTextElements(cdp);
+        case 'browser_font_load_status':        return await getFontLoadStatus(cdp);
+        // storage2 new
+        case 'browser_localstorage_items2':     return await getLocalStorageItems2(cdp);
+        case 'browser_sessionstorage_items2':   return await getSessionStorageItems2(cdp);
+        case 'browser_localstorage_count':      return await getLocalStorageCount(cdp);
+        case 'browser_cookie_count3':           return await getCookieCount3(cdp);
+        case 'browser_storage_quota2':          return await getStorageQuota2(cdp);
+        case 'browser_clear_localstorage3':     return await clearLocalStorage3(cdp);
+        case 'browser_localstorage_key':        return await getLocalStorageKey(cdp, a.key as string);
+        case 'browser_sessionstorage_key':      return await getSessionStorageKey(cdp, a.key as string);
+        // event2 new
+        case 'browser_clickable_elements':      return await getClickableElements(cdp);
+        case 'browser_keyboard_handlers':       return await getKeyboardHandlers(cdp);
+        case 'browser_form_submit_handlers':    return await getFormSubmitHandlers(cdp);
+        case 'browser_event_listener_count2':   return await getEventListenerCount2(cdp);
+        case 'browser_mutation_observers':      return await getMutationObservers(cdp);
+        case 'browser_resize_observers':        return await getResizeObservers(cdp);
+        case 'browser_intersection_observers':  return await getIntersectionObservers(cdp);
+        case 'browser_custom_events':           return await getCustomEvents(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

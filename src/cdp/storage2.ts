@@ -748,3 +748,209 @@ export async function clearLocalStorage2(client: CdpClient): Promise<McpContent>
   }
   return okJson(result.value as Record<string, unknown>);
 }
+
+// ---------------------------------------------------------------------------
+// Storage3 batch — 8 new named exports using (cdp: any) pattern
+// ---------------------------------------------------------------------------
+
+type Storage3Content = { content: [{ type: 'text'; text: string }] };
+
+function s3ok(data: unknown): Storage3Content {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+}
+
+function s3err(msg: string): Storage3Content {
+  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }, null, 2) }] };
+}
+
+// 1. getLocalStorageItems2 — all localStorage key/value pairs: [{key, value_preview}] (max 20)
+// Renamed from getLocalStorageItems (conflict in server.ts and this file).
+export async function getLocalStorageItems2(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var items = [];
+        var max = Math.min(localStorage.length, 20);
+        for (var i = 0; i < max; i++) {
+          var k = localStorage.key(i);
+          var v = localStorage.getItem(k);
+          items.push({ key: k, value_preview: (v || '').slice(0, 80) });
+        }
+        return items;
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? []);
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 2. getSessionStorageItems2 — all sessionStorage key/value pairs: [{key, value_preview}] (max 20)
+// Renamed from getSessionStorageItems (conflict in server.ts and this file).
+export async function getSessionStorageItems2(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var items = [];
+        var max = Math.min(sessionStorage.length, 20);
+        for (var i = 0; i < max; i++) {
+          var k = sessionStorage.key(i);
+          var v = sessionStorage.getItem(k);
+          items.push({ key: k, value_preview: (v || '').slice(0, 80) });
+        }
+        return items;
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? []);
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 3. getLocalStorageCount — counts: {localStorage, sessionStorage}
+export async function getLocalStorageCount(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        return { localStorage: localStorage.length, sessionStorage: sessionStorage.length };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { localStorage: 0, sessionStorage: 0 });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 4. getCookieCount3 — document.cookie parsed count: {count, names[]} (max 20 names)
+// Renamed from getCookieCount (conflict: exists in this file returning number) and
+// getCookieCount2 (conflict: also exists in this file and server.ts).
+export async function getCookieCount3(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var raw = document.cookie;
+        var parts = raw ? raw.split(';').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; }) : [];
+        var names = parts.map(function(p) {
+          var eq = p.indexOf('=');
+          return eq >= 0 ? p.substring(0, eq).trim() : p.trim();
+        });
+        return { count: names.length, names: names.slice(0, 20) };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { count: 0, names: [] });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 5. getStorageQuota2 — navigator.storage.estimate(): {quota, usage, usagePercent}
+// Renamed from getStorageQuota (conflict in this file and server.ts).
+export async function getStorageQuota2(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(async function() {
+        if (!navigator.storage || typeof navigator.storage.estimate !== 'function') {
+          return { supported: false, quota: 0, usage: 0, usagePercent: 0 };
+        }
+        var est = await navigator.storage.estimate();
+        var quota = est.quota || 0;
+        var usage = est.usage || 0;
+        var usagePercent = quota > 0 ? Math.round((usage / quota) * 1000) / 10 : 0;
+        return { quota: quota, usage: usage, usagePercent: usagePercent };
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { quota: 0, usage: 0, usagePercent: 0 });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 6. clearLocalStorage3 — localStorage.clear(): {cleared: true, previousCount}
+// Renamed from clearLocalStorage (conflict in server.ts imported from storage.ts) and
+// clearLocalStorage2 (conflict: also exists in this file and server.ts).
+export async function clearLocalStorage3(cdp: any): Promise<Storage3Content> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var prev = localStorage.length;
+        localStorage.clear();
+        return { cleared: true, previousCount: prev };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { cleared: true, previousCount: 0 });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 7. getLocalStorageKey — get a specific localStorage key value: {key, value, exists}
+export async function getLocalStorageKey(cdp: any, key: string): Promise<Storage3Content> {
+  const escaped = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var v = localStorage.getItem('${escaped}');
+        return { key: '${escaped}', value: v, exists: v !== null };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { key, value: null, exists: false });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}
+
+// 8. getSessionStorageKey — get a specific sessionStorage key value: {key, value, exists}
+export async function getSessionStorageKey(cdp: any, key: string): Promise<Storage3Content> {
+  const escaped = key.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var v = sessionStorage.getItem('${escaped}');
+        return { key: '${escaped}', value: v, exists: v !== null };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return s3err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+    }
+    return s3ok(result.value ?? { key, value: null, exists: false });
+  } catch (e: any) {
+    return s3err(e?.message ?? String(e));
+  }
+}

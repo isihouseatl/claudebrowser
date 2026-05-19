@@ -276,3 +276,247 @@ export async function getDocumentFontAPI(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ---- New functions (cdp: any pattern) ----
+// Note: getLoadedFonts renamed to getLoadedFonts2 — getLoadedFonts is already
+// exported from fonts.ts and registered in server.ts as browser_get_loaded_fonts.
+
+/**
+ * Detect fonts loaded on page via document.fonts API.
+ * Returns [{family, status, style, weight}] (max 20).
+ */
+export async function getLoadedFonts3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var fonts = [];
+    var iter = document.fonts.values();
+    var entry = iter.next();
+    while (!entry.done && fonts.length < 20) {
+      var f = entry.value;
+      fonts.push({ family: f.family, status: f.status, style: f.style, weight: f.weight });
+      entry = iter.next();
+    }
+    return fonts;
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Parse @font-face rules from stylesheets.
+ * Returns [{family, src_preview, weight, style}] (max 20).
+ */
+export async function getFontFaceRules(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var faces = [];
+    for (var i = 0; i < document.styleSheets.length && faces.length < 20; i++) {
+      var rules;
+      try { rules = document.styleSheets[i].cssRules || document.styleSheets[i].rules; } catch(e) { continue; }
+      if (!rules) continue;
+      for (var j = 0; j < rules.length && faces.length < 20; j++) {
+        if (rules[j].type === 5) {
+          var s = rules[j].style;
+          faces.push({
+            family: (s.getPropertyValue('font-family') || '').replace(/['"]/g, '').trim(),
+            src_preview: (s.getPropertyValue('src') || '').slice(0, 80),
+            weight: s.getPropertyValue('font-weight') || 'normal',
+            style: s.getPropertyValue('font-style') || 'normal'
+          });
+        }
+      }
+    }
+    return faces;
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get fonts referenced in computed font-family for first 5 element types.
+ * Returns [{element_tag, fontFamily}] (max 20).
+ */
+export async function getSystemFonts(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var tags = ['body', 'p', 'h1', 'h2', 'span'];
+    var results = [];
+    for (var i = 0; i < tags.length && results.length < 20; i++) {
+      var el = document.querySelector(tags[i]);
+      if (!el) continue;
+      results.push({ element_tag: tags[i], fontFamily: getComputedStyle(el).fontFamily });
+    }
+    return results;
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get unique computed font-size values in use.
+ * Returns [{size, count}] sorted desc (max 20).
+ */
+export async function getFontSizes(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var map = {};
+    var els = document.querySelectorAll('*');
+    for (var i = 0; i < els.length; i++) {
+      var sz = getComputedStyle(els[i]).fontSize;
+      if (sz) map[sz] = (map[sz] || 0) + 1;
+    }
+    var arr = Object.keys(map).map(function(k) { return { size: k, count: map[k] }; });
+    arr.sort(function(a, b) { return b.count - a.count; });
+    return arr.slice(0, 20);
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get unique computed font-weight values in use.
+ * Returns [{weight, count}] (max 10).
+ */
+export async function getFontWeights(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var map = {};
+    var els = document.querySelectorAll('*');
+    for (var i = 0; i < els.length; i++) {
+      var w = getComputedStyle(els[i]).fontWeight;
+      if (w) map[w] = (map[w] || 0) + 1;
+    }
+    var arr = Object.keys(map).map(function(k) { return { weight: k, count: map[k] }; });
+    arr.sort(function(a, b) { return b.count - a.count; });
+    return arr.slice(0, 10);
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get unique computed line-height values in use.
+ * Returns [{lineHeight, count}] (max 10).
+ */
+export async function getLineHeights(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var map = {};
+    var els = document.querySelectorAll('*');
+    for (var i = 0; i < els.length; i++) {
+      var lh = getComputedStyle(els[i]).lineHeight;
+      if (lh) map[lh] = (map[lh] || 0) + 1;
+    }
+    var arr = Object.keys(map).map(function(k) { return { lineHeight: k, count: map[k] }; });
+    arr.sort(function(a, b) { return b.count - a.count; });
+    return arr.slice(0, 10);
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get visible text-containing elements with tag, id, and text preview.
+ * Returns [{tag, id, text_preview}] (max 20).
+ */
+export async function getTextElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    var results = [];
+    var els = document.querySelectorAll('p,h1,h2,h3,h4,h5,h6,span,a,li,td,th,label,button');
+    for (var i = 0; i < els.length && results.length < 20; i++) {
+      var el = els[i];
+      var text = (el.textContent || '').trim();
+      if (!text) continue;
+      var rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      var cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      results.push({ tag: el.tagName.toLowerCase(), id: el.id || null, text_preview: text.slice(0, 60) });
+    }
+    return results;
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Get document.fonts status and ready promise state.
+ * Returns {status, size, ready}.
+ */
+export async function getFontLoadStatus(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  try {
+    return {
+      status: document.fonts.status,
+      size: document.fonts.size,
+      ready: typeof document.fonts.ready === 'object' ? 'promise' : String(document.fonts.ready)
+    };
+  } catch(e) {
+    return { error: String(e) };
+  }
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text || 'Runtime exception' }, null, 2) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
