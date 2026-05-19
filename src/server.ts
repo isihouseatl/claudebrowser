@@ -215,6 +215,9 @@ import { getShadowRoots3, getShadowHosts3, getWebComponents3, getCustomElements3
 import { getVirtualScrollContainers, getVirtualListItems, getVirtualGridItems, getVirtualState, getRecyclerViewElements, getVirtualItemCount, getVirtualApiUsage, getWindowedListElements } from './cdp/virtual2';
 import { getIntersectionObservers3, getLazyLoadImages, getLazyLoadElements, getIntersectionState, getStickyHeaders2, getInViewElements, getObservedElements, getIntersectionApiUsage } from './cdp/intersection2';
 import { getMutationObservers3, getDynamicContent, getLoadingSpinners, getSkeletonScreens, getMutationState, getLiveRegions2, getPollingElements, getMutationApiUsage } from './cdp/mutation3';
+import { getPaymentForms, getCreditCardInputs, getPaymentButtons, getPaymentState, getStripeElements, getPaymentIframes, getCheckoutForms, getPaymentApiUsage } from './cdp/payment2';
+import { getLoginForms2, getPasswordInputs3, getOAuthButtons2, getSsoElements, getAuthState, getMfaInputs, getRememberMeCheckboxes2, getAuthApiUsage } from './cdp/auth3';
+import { getChartElements3, getCanvasElements5, getSvgCharts3, getChartLegends3, getChartAxes, getChartTooltips3, getChartState, getChartApiUsage } from './cdp/chart3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2453,6 +2456,33 @@ const TOOLS = [
   { name: 'browser_live_regions2', description: 'aria-live regions: [{tag, id, class_preview, ariaLive, ariaAtomic, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_polling_elements', description: 'Elements with data-poll/data-refresh: [{tag, id, interval_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_mutation_api_usage', description: 'Detected dynamic patterns: {hasMutationObserver, hasAriaLive, hasPolling, hasWebSocket, hasSse}', inputSchema: { type: 'object', properties: {} } },
+  // ── Payment2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_payment_forms', description: 'Payment forms: [{id, action_preview, class_preview, fieldCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_credit_card_inputs', description: 'Credit card/CVV/expiry inputs: [{id, name, type, placeholder_preview, autocomplete}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_payment_buttons', description: 'Pay/checkout/buy-now buttons: [{tag, id, text_preview, class_preview, disabled}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_payment_state', description: 'Payment UI summary: {hasPaymentForm, hasCreditCardInput, hasPaymentButton, hasStripe, hasPaypal}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stripe_elements', description: 'Stripe-hosted iframes/elements: [{id, src_preview, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_payment_iframes', description: 'Payment provider iframes: [{id, src_preview, origin}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_checkout_forms', description: 'Checkout/order forms: [{id, class_preview, inputCount, hasAddressFields}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_payment_api_usage', description: 'Detected payment libraries: {hasStripe, hasPaypal, hasSquare, hasAdyen, hasBraintree}', inputSchema: { type: 'object', properties: {} } },
+  // ── Auth3 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_login_forms2', description: 'Login/sign-in forms: [{id, class_preview, action_preview, hasUsernameField, hasPasswordField}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_password_inputs3', description: 'Password input fields: [{id, name, placeholder_preview, autocomplete, hasToggle}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_oauth_buttons2', description: 'OAuth/social login buttons: [{tag, id, text_preview, provider}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sso_elements', description: 'SSO/enterprise login elements: [{tag, id, text_preview, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_auth_state', description: 'Auth UI summary: {hasLoginForm, hasPasswordField, hasOAuth, hasSso, hasMfa, isLoggedIn}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mfa_inputs', description: 'MFA/OTP/2FA input fields: [{id, type, placeholder_preview, length}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_remember_me_checkboxes2', description: 'Remember-me checkboxes: [{id, checked, label_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_auth_api_usage', description: 'Detected auth patterns: {hasJwt, hasOAuth, hasSaml, hasWebAuthn, hasPasskey}', inputSchema: { type: 'object', properties: {} } },
+  // ── Chart3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_chart_elements3', description: 'Canvas/SVG chart elements: [{tag, id, class_preview, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_elements5', description: 'All canvas elements: [{id, class_preview, width, height, hasContext}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_svg_charts3', description: 'SVG chart elements: [{id, class_preview, width, height, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_legends3', description: 'Chart legend elements: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_axes', description: 'Chart axis label elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_tooltips3', description: 'Chart tooltip elements: [{tag, id, class_preview, visible, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_state', description: 'Chart summary: {hasCharts, canvasCount, svgCount, chartLibrary}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_api_usage', description: 'Detected chart libraries: {hasChartJs, hasD3, hasHighcharts, hasApexCharts, hasPlotly, hasRecharts}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4777,6 +4807,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_live_regions2':            return await getLiveRegions2(cdp);
         case 'browser_polling_elements':         return await getPollingElements(cdp);
         case 'browser_mutation_api_usage':       return await getMutationApiUsage(cdp);
+                // payment2 new
+        case 'browser_payment_forms':            return await getPaymentForms(cdp);
+        case 'browser_credit_card_inputs':       return await getCreditCardInputs(cdp);
+        case 'browser_payment_buttons':          return await getPaymentButtons(cdp);
+        case 'browser_payment_state':            return await getPaymentState(cdp);
+        case 'browser_stripe_elements':          return await getStripeElements(cdp);
+        case 'browser_payment_iframes':          return await getPaymentIframes(cdp);
+        case 'browser_checkout_forms':           return await getCheckoutForms(cdp);
+        case 'browser_payment_api_usage':        return await getPaymentApiUsage(cdp);
+        // auth3 new
+        case 'browser_login_forms2':             return await getLoginForms2(cdp);
+        case 'browser_password_inputs3':         return await getPasswordInputs3(cdp);
+        case 'browser_oauth_buttons2':           return await getOAuthButtons2(cdp);
+        case 'browser_sso_elements':             return await getSsoElements(cdp);
+        case 'browser_auth_state':               return await getAuthState(cdp);
+        case 'browser_mfa_inputs':               return await getMfaInputs(cdp);
+        case 'browser_remember_me_checkboxes2':  return await getRememberMeCheckboxes2(cdp);
+        case 'browser_auth_api_usage':           return await getAuthApiUsage(cdp);
+        // chart3 new
+        case 'browser_chart_elements3':          return await getChartElements3(cdp);
+        case 'browser_canvas_elements5':         return await getCanvasElements5(cdp);
+        case 'browser_svg_charts3':              return await getSvgCharts3(cdp);
+        case 'browser_chart_legends3':           return await getChartLegends3(cdp);
+        case 'browser_chart_axes':               return await getChartAxes(cdp);
+        case 'browser_chart_tooltips3':          return await getChartTooltips3(cdp);
+        case 'browser_chart_state':              return await getChartState(cdp);
+        case 'browser_chart_api_usage':          return await getChartApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
