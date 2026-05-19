@@ -108,7 +108,7 @@ import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEv
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages, getAllImages2, getImagesWithoutAlt2, getLazyImages2, getSvgElements2, getImageDimensions2, getBrokenImages2, getBackgroundImages2, getResponsiveImages } from './cdp/image2';
-import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs, getAllInputs3, getTextInputs, getPasswordInputs2, getCheckboxes, getRadioButtons, getSelectElements, getTextareas2, getFileInputs2 } from './cdp/input2';
+import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs, getAllInputs3, getTextInputs, getPasswordInputs2, getCheckboxes, getRadioButtons, getSelectElements, getTextareas2, getFileInputs2, getTextInputs2, getSelectElements2, getTextareaElements, getCheckboxes2, getRadioGroups, getFormValidation2, getSubmitButtons, getFileInputs3 } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
 import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2, getNavigationTimingPerf2, getResourceTiming2, getLargestContentfulPaint2, getFirstInputDelay2, getCumulativeLayoutShift2, getLongTasksPerf2, getMemoryInfo2, getPaintTiming2 } from './cdp/perf2';
@@ -148,7 +148,7 @@ import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wi
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessages, getWarningMessages, getLoadingIndicators, getProgressBars, getNotificationPermission2 } from './cdp/notify2';
 import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
-import { getInlineStyles2, getCssVariables3 as getCssVariables4, getMediaQueries2, getCssAnimations2, getCssTransitions2, getComputedStyles2, getCssClasses, getStyleRules } from './cdp/css3';
+import { getInlineStyles2, getCssVariables3 as getCssVariables4, getMediaQueries2, getCssAnimations2, getCssTransitions2, getComputedStyles2, getCssClasses, getStyleRules, getCssVariables5, getMediaQueries3, getKeyframeAnimations, getCssTransitions3, getCssAnimations3, getInlineStyles3, getCssImports, getPseudoElements } from './cdp/css3';
 import { getAriaRoles2, getAriaLabels2, getAriaDescriptions2, getAriaLive, getAriaInvalid, getAriaRequired, getLandmarks3, getAriaExpanded2 } from './cdp/aria2';
 import { getTableHeaders4, getTableFooters, getTableCaption, getNestedTables, getDataGrid4, getTableLinks, getTableButtons, getTableCheckboxes } from './cdp/table4';
 import { getNavElements, getBreadcrumbs, getPaginationLinks, getMenuItems2, getDropdownMenus, getSidebarElements, getFooterLinks, getHeaderLinks } from './cdp/nav2';
@@ -160,6 +160,7 @@ import { getMapElements, getAddressElements, getPhoneNumbers, getEmailLinks, get
 import { getContentSecurityPolicy2, getMixedContentLinks, getCrossOriginLinks, getSubresourceIntegrity2, getIframePermissions, getExternalScripts2, getPasswordFields, getFormActions } from './cdp/security2';
 import { getGridContainers2, getFlexContainers3, getStickyElements2, getFixedElements, getAbsoluteElements2, getOverflowElements, getZIndexStack2, getViewportInfo } from './cdp/layout2';
 import { getDeepestElement2, getDuplicateIds, getEmptyElements, getHiddenElements2, getDetachedElements, getDataAttributes2, getAriaHidden2, getTabOrder3 } from './cdp/dom3';
+import { getScriptTags, getStylesheetLinks, getImageSources, getPreloadLinks, getResourceHints, getMetaTags3, getDocumentCharset, getPageTitle3 } from './cdp/network2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1780,6 +1781,33 @@ const TOOLS = [
   { name: 'browser_data_attributes2', description: 'Elements with data-* attributes: [{tag, id, dataAttrs [{name, value_preview}]}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_aria_hidden2', description: 'Elements with aria-hidden="true": [{tag, id, class, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_tab_order3', description: 'Focusable elements in tab order: [{tag, id, tabIndex, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── CSS3 new ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_css_variables5', description: 'CSS custom properties on :root from stylesheets: [{name, value_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_queries3', description: '@media rules from stylesheets: [{media, ruleCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyframe_animations', description: '@keyframes rules: [{name, stepCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_transitions3', description: 'Elements with CSS transitions: [{tag, id, class, transition_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_animations3', description: 'Elements with CSS animations: [{tag, id, class, animationName}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_inline_styles3', description: 'Elements with style attribute: [{tag, id, style_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_imports', description: '@import rules from stylesheets: [{href, media}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pseudo_elements', description: 'Elements with ::before or ::after content: [{tag, id, before_content, after_content}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Input2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_text_inputs2', description: 'Text/email/search/tel/url inputs: [{id, name, type, placeholder_preview, value_preview, required}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_elements2', description: 'All <select> elements: [{id, name, optionCount, selectedValue, multiple}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_textarea_elements', description: 'All <textarea> elements: [{id, name, placeholder_preview, value_preview, rows, cols}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_checkboxes2', description: 'All checkbox inputs: [{id, name, value, checked, required}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_radio_groups', description: 'Radio inputs grouped by name: [{name, optionCount, selectedValue}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_form_validation2', description: 'Forms with HTML5 validation: [{id, action, fieldCount, requiredCount, patternCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_submit_buttons', description: 'All submit buttons: [{tag, id, text_preview, form_id, disabled}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_file_inputs3', description: 'All file inputs: [{id, name, accept, multiple, required}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Network2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_script_tags', description: 'All <script> tags: [{src_preview, type, async, defer, nomodule}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stylesheet_links', description: 'All <link rel="stylesheet">: [{href_preview, media, crossorigin}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_image_sources', description: 'All <img> elements: [{src_preview, alt_preview, width, height, loading}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_preload_links', description: 'Link tags with rel=preload/prefetch/preconnect/dns-prefetch: [{rel, href_preview, as, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_hints', description: 'Link tags with rel=preconnect/dns-prefetch: [{rel, href_preview, crossorigin}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_meta_tags3', description: 'All <meta> tags: [{name, property, httpEquiv, content_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_document_charset', description: 'Document encoding: {charset, contentType, doctype, compatMode}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_title3', description: 'Title and headings: {title, h1_count, h1_first_preview, h2_count}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3483,6 +3511,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_data_attributes2':        return await getDataAttributes2(cdp);
         case 'browser_aria_hidden2':            return await getAriaHidden2(cdp);
         case 'browser_tab_order3':              return await getTabOrder3(cdp);
+                // css3 new
+        case 'browser_css_variables5':          return await getCssVariables5(cdp);
+        case 'browser_media_queries3':          return await getMediaQueries3(cdp);
+        case 'browser_keyframe_animations':     return await getKeyframeAnimations(cdp);
+        case 'browser_css_transitions3':        return await getCssTransitions3(cdp);
+        case 'browser_css_animations3':         return await getCssAnimations3(cdp);
+        case 'browser_inline_styles3':          return await getInlineStyles3(cdp);
+        case 'browser_css_imports':             return await getCssImports(cdp);
+        case 'browser_pseudo_elements':         return await getPseudoElements(cdp);
+        // input2 new
+        case 'browser_text_inputs2':            return await getTextInputs2(cdp);
+        case 'browser_select_elements2':        return await getSelectElements2(cdp);
+        case 'browser_textarea_elements':       return await getTextareaElements(cdp);
+        case 'browser_checkboxes2':             return await getCheckboxes2(cdp);
+        case 'browser_radio_groups':            return await getRadioGroups(cdp);
+        case 'browser_form_validation2':        return await getFormValidation2(cdp);
+        case 'browser_submit_buttons':          return await getSubmitButtons(cdp);
+        case 'browser_file_inputs3':            return await getFileInputs3(cdp);
+        // network2
+        case 'browser_script_tags':             return await getScriptTags(cdp);
+        case 'browser_stylesheet_links':        return await getStylesheetLinks(cdp);
+        case 'browser_image_sources':           return await getImageSources(cdp);
+        case 'browser_preload_links':           return await getPreloadLinks(cdp);
+        case 'browser_resource_hints':          return await getResourceHints(cdp);
+        case 'browser_meta_tags3':              return await getMetaTags3(cdp);
+        case 'browser_document_charset':        return await getDocumentCharset(cdp);
+        case 'browser_page_title3':             return await getPageTitle3(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

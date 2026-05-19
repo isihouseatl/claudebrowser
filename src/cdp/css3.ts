@@ -293,3 +293,265 @@ export async function getStyleRules(client: CdpClient) {
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ─── New CSS Inspection Functions ────────────────────────────────────────────
+
+/**
+ * CSS custom properties (--*) declared on :root from stylesheets.
+ * Returns [{name, value_preview}] (max 20).
+ * Renamed getCssVariables5 — getCssVariables/2/3/4 already taken.
+ */
+export async function getCssVariables5(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var vars = [];
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    var rules;
+    try { rules = sheets[i].cssRules; } catch(e) { continue; }
+    if (!rules) continue;
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      if (rule.selectorText === ':root') {
+        for (var k = 0; k < rule.style.length; k++) {
+          var prop = rule.style[k];
+          if (prop.indexOf('--') === 0) {
+            vars.push({ name: prop, value_preview: rule.style.getPropertyValue(prop).trim().slice(0, 80) });
+            if (vars.length >= 20) break;
+          }
+        }
+      }
+      if (vars.length >= 20) break;
+    }
+    if (vars.length >= 20) break;
+  }
+  return JSON.stringify(vars);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * @media rules from all stylesheets: [{media, ruleCount}] (max 20).
+ * Renamed getMediaQueries3 — getMediaQueries and getMediaQueries2 already taken.
+ */
+export async function getMediaQueries3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var out = [];
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    var rules;
+    try { rules = sheets[i].cssRules; } catch(e) { continue; }
+    if (!rules) continue;
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      if (rule.type === 4) {
+        var media = rule.conditionText || (rule.media && rule.media.mediaText) || '';
+        out.push({ media: media, ruleCount: rule.cssRules ? rule.cssRules.length : 0 });
+        if (out.length >= 20) break;
+      }
+    }
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * @keyframes rules from all stylesheets: [{name, stepCount}] (max 20).
+ */
+export async function getKeyframeAnimations(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var out = [];
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    var rules;
+    try { rules = sheets[i].cssRules; } catch(e) { continue; }
+    if (!rules) continue;
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      if (rule.type === 7) {
+        out.push({ name: rule.name, stepCount: rule.cssRules ? rule.cssRules.length : 0 });
+        if (out.length >= 20) break;
+      }
+    }
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * Elements with CSS transitions: [{tag, id, class, transition_preview}] (max 20).
+ * Renamed getCssTransitions3 — getCssTransitions and getCssTransitions2 already taken.
+ */
+export async function getCssTransitions3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var out = [];
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var trans = getComputedStyle(el).transition;
+    if (!trans || trans === 'all 0s ease 0s' || trans === 'none 0s ease 0s') continue;
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      class: el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : '',
+      transition_preview: trans.slice(0, 80)
+    });
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * Elements with CSS animations: [{tag, id, class, animationName}] (max 20).
+ * Renamed getCssAnimations3 — getCssAnimations and getCssAnimations2 already taken.
+ */
+export async function getCssAnimations3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var out = [];
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var animName = getComputedStyle(el).animationName;
+    if (!animName || animName === 'none') continue;
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      class: el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : '',
+      animationName: animName.slice(0, 80)
+    });
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * Elements with style attribute: [{tag, id, style_preview}] (max 20).
+ * Renamed getInlineStyles3 — getInlineStyles and getInlineStyles2 already taken.
+ */
+export async function getInlineStyles3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var all = document.querySelectorAll('[style]');
+  var out = [];
+  for (var i = 0; i < Math.min(all.length, 20); i++) {
+    var el = all[i];
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      style_preview: (el.getAttribute('style') || '').slice(0, 80)
+    });
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * @import rules from all stylesheets: [{href, media}] (max 20).
+ */
+export async function getCssImports(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var out = [];
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    var rules;
+    try { rules = sheets[i].cssRules; } catch(e) { continue; }
+    if (!rules) continue;
+    for (var j = 0; j < rules.length; j++) {
+      var rule = rules[j];
+      if (rule.type === 3) {
+        out.push({
+          href: rule.href || '',
+          media: rule.media && rule.media.mediaText ? rule.media.mediaText : ''
+        });
+        if (out.length >= 20) break;
+      }
+    }
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}
+
+/**
+ * Elements with ::before or ::after pseudo-elements that have non-empty content.
+ * Returns [{tag, id, before_content, after_content}] (max 20).
+ */
+export async function getPseudoElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var out = [];
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var before = getComputedStyle(el, '::before').content;
+    var after = getComputedStyle(el, '::after').content;
+    var hasBefore = before && before !== 'none' && before !== '';
+    var hasAfter = after && after !== 'none' && after !== '';
+    if (!hasBefore && !hasAfter) continue;
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      before_content: hasBefore ? before.slice(0, 80) : '',
+      after_content: hasAfter ? after.slice(0, 80) : ''
+    });
+    if (out.length >= 20) break;
+  }
+  return JSON.stringify(out);
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  const result2 = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result2, null, 2) }] };
+}

@@ -511,3 +511,269 @@ export async function getNavigationTimingBasic(
   }
   return ok(result.value);
 }
+
+// ---------------------------------------------------------------------------
+// 17. getScriptTags
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all <script> tags: src_preview (or 'inline'), type, async, defer,
+ * nomodule. Capped at 20 entries.
+ */
+export async function getScriptTags(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var scripts = Array.prototype.slice.call(document.querySelectorAll('script'), 0, 20);
+    return scripts.map(function(s) {
+      var src = s.src || '';
+      var preview = src ? (src.length > 80 ? src.slice(0, 80) : src) : 'inline';
+      return {
+        src_preview: preview,
+        type: s.type || null,
+        async: s.async,
+        defer: s.defer,
+        nomodule: s.noModule
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 18. getStylesheetLinks
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all <link rel="stylesheet"> tags: href_preview, media, crossorigin.
+ * Capped at 20 entries.
+ */
+export async function getStylesheetLinks(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var links = Array.prototype.slice.call(document.querySelectorAll('link[rel="stylesheet"]'), 0, 20);
+    return links.map(function(l) {
+      var href = l.href || '';
+      return {
+        href_preview: href.length > 80 ? href.slice(0, 80) : href,
+        media: l.media || null,
+        crossorigin: l.crossOrigin || null
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 19. getImageSources
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all <img> elements: src_preview, alt_preview, width, height, loading.
+ * Capped at 20 entries.
+ */
+export async function getImageSources(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var imgs = Array.prototype.slice.call(document.querySelectorAll('img'), 0, 20);
+    return imgs.map(function(img) {
+      var src = img.src || img.getAttribute('src') || '';
+      var alt = img.alt || '';
+      return {
+        src_preview: src.length > 80 ? src.slice(0, 80) : src,
+        alt_preview: alt.length > 80 ? alt.slice(0, 80) : alt,
+        width: img.width || null,
+        height: img.height || null,
+        loading: img.loading || null
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 20. getPreloadLinks
+// ---------------------------------------------------------------------------
+
+/**
+ * Return <link> tags with rel=preload|prefetch|preconnect|dns-prefetch:
+ * [{rel, href_preview, as, type}]. Capped at 20 entries.
+ */
+export async function getPreloadLinks(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var rels = ['preload', 'prefetch', 'preconnect', 'dns-prefetch'];
+    var selector = rels.map(function(r) { return 'link[rel="' + r + '"]'; }).join(',');
+    var links = Array.prototype.slice.call(document.querySelectorAll(selector), 0, 20);
+    return links.map(function(l) {
+      var href = l.href || l.getAttribute('href') || '';
+      return {
+        rel: l.rel || null,
+        href_preview: href.length > 80 ? href.slice(0, 80) : href,
+        as: l.as || null,
+        type: l.type || null
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 21. getResourceHints
+// ---------------------------------------------------------------------------
+
+/**
+ * Return <link> tags with rel=preconnect or dns-prefetch:
+ * [{rel, href_preview, crossorigin}]. Capped at 10 entries.
+ */
+export async function getResourceHints(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var selector = 'link[rel="preconnect"],link[rel="dns-prefetch"]';
+    var links = Array.prototype.slice.call(document.querySelectorAll(selector), 0, 10);
+    return links.map(function(l) {
+      var href = l.href || l.getAttribute('href') || '';
+      return {
+        rel: l.rel || null,
+        href_preview: href.length > 80 ? href.slice(0, 80) : href,
+        crossorigin: l.crossOrigin || null
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 22. getMetaTags3
+// (getMetaTags taken by page.ts; getMetaTags2 taken by print2.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all <meta> tags: [{name, property, httpEquiv, content_preview}].
+ * Capped at 30 entries.
+ */
+export async function getMetaTags3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var metas = Array.prototype.slice.call(document.querySelectorAll('meta'), 0, 30);
+    return metas.map(function(m) {
+      var content = m.content || '';
+      return {
+        name: m.name || null,
+        property: m.getAttribute('property') || null,
+        httpEquiv: m.httpEquiv || null,
+        content_preview: content.length > 80 ? content.slice(0, 80) : content
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 23. getDocumentCharset
+// ---------------------------------------------------------------------------
+
+/**
+ * Return document encoding info:
+ * {charset, contentType, doctype, compatMode}
+ */
+export async function getDocumentCharset(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    return {
+      charset: document.characterSet,
+      contentType: document.contentType,
+      doctype: document.doctype ? document.doctype.name : null,
+      compatMode: document.compatMode
+    };
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 24. getPageTitle3
+// (getPageTitle taken by history.ts; getPageTitle2 taken by print2.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return title and heading info:
+ * {title, h1_count, h1_first_preview, h2_count}
+ */
+export async function getPageTitle3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var h1s = document.querySelectorAll('h1');
+    var h2s = document.querySelectorAll('h2');
+    var firstH1 = h1s.length > 0 ? (h1s[0].textContent || '').trim() : null;
+    return {
+      title: document.title,
+      h1_count: h1s.length,
+      h1_first_preview: firstH1 && firstH1.length > 80 ? firstH1.slice(0, 80) : firstH1,
+      h2_count: h2s.length
+    };
+  })()`;
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.text ?? JSON.stringify(exceptionDetails) }) }] };
+  }
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
