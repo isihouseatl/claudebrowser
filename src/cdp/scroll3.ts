@@ -236,3 +236,337 @@ export async function scrollToPercent(
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Scroll behavior and position detection (8 functions — cdp: any pattern)
+// Names with numeric suffixes reflect conflicts found in server.ts imports.
+// getScrollPosition5 (1-4 taken), getScrollableElements3 (1-2 taken),
+// getScrollDepth3 (1-2 taken). All others are suffix-free.
+// ---------------------------------------------------------------------------
+
+/**
+ * Current scroll position of the window and up to 20 scrollable containers.
+ * (suffix 5: getScrollPosition through getScrollPosition4 already imported)
+ */
+export async function getScrollPosition5(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var win = {
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    scrollWidth: document.documentElement.scrollWidth,
+    scrollHeight: document.documentElement.scrollHeight,
+    clientWidth: document.documentElement.clientWidth,
+    clientHeight: document.documentElement.clientHeight
+  };
+  var containers = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && containers.length < 20; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    var ox = st.overflowX, oy = st.overflowY;
+    if ((ox === 'scroll' || ox === 'auto' || oy === 'scroll' || oy === 'auto') &&
+        (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      containers.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: (el.className && typeof el.className === 'string') ? el.className.trim().split(/\s+/).slice(0,3).join(' ') : null,
+        scrollLeft: el.scrollLeft,
+        scrollTop: el.scrollTop,
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight
+      });
+    }
+  }
+  return { window: win, containers: containers };
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Elements that are scrollable (overflow scroll/auto) — up to 20 results.
+ * (suffix 3: getScrollableElements and getScrollableElements2 already imported)
+ */
+export async function getScrollableElements3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var results = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    var ox = st.overflowX, oy = st.overflowY;
+    if (ox === 'scroll' || ox === 'auto' || oy === 'scroll' || oy === 'auto') {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: (el.className && typeof el.className === 'string') ? el.className.trim().split(/\s+/).slice(0,3).join(' ') : null,
+        overflowX: ox,
+        overflowY: oy,
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight,
+        hasScroll: el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Elements with scroll-behavior CSS or inline scroll event listeners detected
+ * via attribute inspection. Returns up to 20 results.
+ */
+export async function getScrollBehavior(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var results = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    var behavior = st.scrollBehavior;
+    var hasInlineHandler = typeof el.onscroll === 'function';
+    var hasAttr = el.hasAttribute('onscroll');
+    if (behavior === 'smooth' || hasInlineHandler || hasAttr) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: (el.className && typeof el.className === 'string') ? el.className.trim().split(/\s+/).slice(0,3).join(' ') : null,
+        scrollBehavior: behavior,
+        hasInlineScrollHandler: hasInlineHandler,
+        hasOnScrollAttribute: hasAttr
+      });
+    }
+  }
+  var htmlBehavior = window.getComputedStyle(document.documentElement).scrollBehavior;
+  return { elements: results, htmlScrollBehavior: htmlBehavior };
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Containers with scroll-snap-type set — up to 20 results.
+ */
+export async function getScrollSnapContainers(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var results = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    var snapType = st.scrollSnapType;
+    if (snapType && snapType !== 'none') {
+      var children = Array.from(el.children).slice(0, 5).map(function(c) {
+        var cs = window.getComputedStyle(c);
+        return {
+          tag: c.tagName.toLowerCase(),
+          snapAlign: cs.scrollSnapAlign,
+          snapStop: cs.scrollSnapStop
+        };
+      });
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: (el.className && typeof el.className === 'string') ? el.className.trim().split(/\s+/).slice(0,3).join(' ') : null,
+        scrollSnapType: snapType,
+        scrollPaddingTop: st.scrollPaddingTop,
+        scrollPaddingBottom: st.scrollPaddingBottom,
+        childCount: el.children.length,
+        sampleChildren: children
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Custom scrollbar elements or elements with scrollbar-width CSS set.
+ * Also detects common custom scrollbar class patterns. Up to 20 results.
+ */
+export async function getScrollbarElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var results = [];
+  var scrollbarPatterns = /scrollbar|scroll-bar|custom-scroll|ps-scrollbar|simplebar|perfect-scroll|os-scrollbar/i;
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var cn = (el.className && typeof el.className === 'string') ? el.className : '';
+    var id = el.id || '';
+    var st = window.getComputedStyle(el);
+    var sbWidth = st.scrollbarWidth;
+    var hasCustomClass = scrollbarPatterns.test(cn) || scrollbarPatterns.test(id);
+    var hasScrollbarWidth = sbWidth && sbWidth !== 'auto';
+    if (hasCustomClass || hasScrollbarWidth) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: id || null,
+        className: cn.trim().split(/\s+/).slice(0,5).join(' ') || null,
+        scrollbarWidth: sbWidth || null,
+        scrollbarColor: st.scrollbarColor || null,
+        isCustomClass: hasCustomClass
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Elements likely used as infinite scroll sentinels — small elements near the
+ * bottom of scrollable containers, or elements with sentinel/observer-related
+ * class/id names. Up to 20 results.
+ */
+export async function getInfiniteScrollTriggers(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var results = [];
+  var sentinelPattern = /sentinel|infinite|load-more|waypoint|observer|trigger|bottom-marker|scroll-trigger|end-of/i;
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var cn = (el.className && typeof el.className === 'string') ? el.className : '';
+    var id = el.id || '';
+    var dataAttrs = Array.from(el.attributes)
+      .filter(function(a) { return a.name.startsWith('data-'); })
+      .map(function(a) { return a.name; });
+    var nameMatch = sentinelPattern.test(cn) || sentinelPattern.test(id) ||
+      dataAttrs.some(function(a) { return sentinelPattern.test(a); });
+    var rect = el.getBoundingClientRect();
+    var isSmallAndLow = rect.height <= 4 && rect.width > 0 &&
+      (rect.top + window.scrollY) > (document.documentElement.scrollHeight * 0.7);
+    if (nameMatch || isSmallAndLow) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: id || null,
+        className: cn.trim().split(/\s+/).slice(0,5).join(' ') || null,
+        dataAttributes: dataAttrs.slice(0,5),
+        rect: { top: Math.round(rect.top), height: Math.round(rect.height), width: Math.round(rect.width) },
+        matchReason: nameMatch ? 'name-pattern' : 'small-low-element'
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Estimated scroll depth percentage for the window and up to 10 scrollable containers.
+ * (suffix 3: getScrollDepth and getScrollDepth2 already imported)
+ */
+export async function getScrollDepth3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var winRange = document.documentElement.scrollHeight - window.innerHeight;
+  var winDepth = winRange <= 0 ? 100 : Math.min(100, Math.round((window.scrollY / winRange) * 100));
+  var containers = [];
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length && containers.length < 10; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    var oy = st.overflowY;
+    if ((oy === 'scroll' || oy === 'auto') && el.scrollHeight > el.clientHeight) {
+      var range = el.scrollHeight - el.clientHeight;
+      var pct = range <= 0 ? 100 : Math.min(100, Math.round((el.scrollTop / range) * 100));
+      containers.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: (el.className && typeof el.className === 'string') ? el.className.trim().split(/\s+/).slice(0,3).join(' ') : null,
+        scrollDepthPercent: pct,
+        scrollTop: el.scrollTop,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight
+      });
+    }
+  }
+  return {
+    windowScrollDepthPercent: winDepth,
+    windowScrollY: window.scrollY,
+    windowScrollHeight: document.documentElement.scrollHeight,
+    windowInnerHeight: window.innerHeight,
+    containers: containers
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+/**
+ * Detected scroll patterns on the page: hasScrollSnap, hasInfiniteScroll,
+ * hasSmoothScroll, hasVirtualScroll.
+ */
+export async function getScrollApiUsage(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var hasScrollSnap = false;
+  var hasSmoothScroll = false;
+  var hasVirtualScroll = false;
+  var infinitePatterns = /sentinel|infinite|load-more|waypoint|observer|scroll-trigger/i;
+  var virtualPatterns = /virtual-list|virtual-scroll|cdk-virtual|react-window|react-virtual|RecyclerView/i;
+  var hasInfiniteScroll = false;
+  var all = document.querySelectorAll('*');
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var st = window.getComputedStyle(el);
+    if (!hasScrollSnap && st.scrollSnapType && st.scrollSnapType !== 'none') hasScrollSnap = true;
+    if (!hasSmoothScroll && st.scrollBehavior === 'smooth') hasSmoothScroll = true;
+    var cn = (el.className && typeof el.className === 'string') ? el.className : '';
+    var id = el.id || '';
+    if (!hasInfiniteScroll && (infinitePatterns.test(cn) || infinitePatterns.test(id))) hasInfiniteScroll = true;
+    if (!hasVirtualScroll && (virtualPatterns.test(cn) || virtualPatterns.test(id))) hasVirtualScroll = true;
+    if (hasScrollSnap && hasSmoothScroll && hasInfiniteScroll && hasVirtualScroll) break;
+  }
+  var htmlST = window.getComputedStyle(document.documentElement);
+  if (!hasSmoothScroll && htmlST.scrollBehavior === 'smooth') hasSmoothScroll = true;
+  var scrollYAvailable = typeof window.scrollY !== 'undefined';
+  var scrollToAvailable = typeof window.scrollTo === 'function';
+  var scrollByAvailable = typeof window.scrollBy === 'function';
+  var smoothScrollToAvailable = false;
+  try { window.scrollTo({ top: window.scrollY, behavior: 'smooth' }); smoothScrollToAvailable = true; } catch(e) {}
+  return {
+    hasScrollSnap: hasScrollSnap,
+    hasInfiniteScroll: hasInfiniteScroll,
+    hasSmoothScroll: hasSmoothScroll,
+    hasVirtualScroll: hasVirtualScroll,
+    scrollYAvailable: scrollYAvailable,
+    scrollToAvailable: scrollToAvailable,
+    scrollByAvailable: scrollByAvailable,
+    smoothScrollToAvailable: smoothScrollToAvailable
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}

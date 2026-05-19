@@ -224,6 +224,9 @@ import { getCommentElements, getCommentForms, getCommentCount, getNestedComments
 import { getShareButtons2, getSocialShareLinks, getShareState, getCopyLinkButtons, getShareDialog, getShareApiUsage, getEmbedShareElements, getShareCount } from './cdp/share2';
 import { getBadgeElements2, getCounterBadges, getStatusBadges, getTagElements, getBadgeState, getPillElements, getLabelElements, getBadgeApiUsage } from './cdp/badge2';
 import { getCarouselElements, getCarouselSlides, getCarouselControls, getCarouselDots, getCarouselState, getSliderElements, getSwipeElements, getCarouselApiUsage } from './cdp/carousel3';
+import { getScrollPosition5, getScrollableElements3, getScrollBehavior, getScrollSnapContainers, getScrollbarElements, getInfiniteScrollTriggers, getScrollDepth3, getScrollApiUsage } from './cdp/scroll3';
+import { getHoverElements, getHoverState, getTooltipTriggers, getHoverEffects, getMouseoverListeners, getHoverCards2, getDropdownTriggers, getHoverApiUsage } from './cdp/hover2';
+import { getFocusableElements4, getFocusState, getFocusRing, getTabOrder4, getAutoFocusElements, getFocusTrap2, getFocusListeners, getFocusApiUsage } from './cdp/focus2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2543,6 +2546,33 @@ const TOOLS = [
   { name: 'browser_slider_elements', description: 'Range slider/swiper elements: [{tag, id, class_preview, type, min, max, value}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_swipe_elements', description: 'Elements with swipe/touch gesture handlers: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_carousel_api_usage', description: 'Detected carousel libraries: {hasSwiperJs, hasSplide, hasSlick, hasOwlCarousel, hasGlide}', inputSchema: { type: 'object', properties: {} } },
+  // ── Scroll3 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_position5', description: 'Current scroll position of window and containers: {windowScrollX, windowScrollY, containers: [{tag, id, scrollTop, scrollLeft, scrollHeight, scrollWidth}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scrollable_elements3', description: 'Scrollable elements (overflow scroll/auto): [{tag, id, class_preview, scrollHeight, clientHeight, overflowY, overflowX}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_behavior', description: 'Elements with smooth scroll or scroll event listeners: [{tag, id, class_preview, scrollBehavior, hasScrollListener}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_snap_containers', description: 'Containers with scroll-snap-type: [{tag, id, class_preview, snapType, snapAlign}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scrollbar_elements', description: 'Custom scrollbar elements or scrollbar-width CSS: [{tag, id, class_preview, scrollbarWidth, hasCustomScrollbar}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_infinite_scroll_triggers', description: 'Infinite scroll sentinel elements: [{tag, id, class_preview, isVisible, position}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_depth3', description: 'Scroll depth % for window and containers: {windowDepth, containers: [{id, class_preview, depth}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_api_usage', description: 'Detected scroll patterns: {hasScrollSnap, hasInfiniteScroll, hasSmoothScroll, hasVirtualScroll}', inputSchema: { type: 'object', properties: {} } },
+  // ── Hover2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_hover_elements', description: 'Elements with hover CSS or mouseover listeners: [{tag, id, class_preview, hasHoverCss, hasMouseoverListener}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_state', description: 'Hover summary: {hasHoverEffects, hasTooltips, hasDropdowns, hasHoverCards}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tooltip_triggers', description: 'Elements that trigger tooltips on hover: [{tag, id, text_preview, titleAttr, dataTooltip, ariaDescribedby}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_effects', description: 'Elements with CSS transitions triggered by hover: [{tag, id, class_preview, transition_preview}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mouseover_listeners', description: 'Elements with mouseover/mouseenter listeners: [{tag, id, class_preview, text_preview}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_cards2', description: 'Card-like elements with hover expand/preview: [{tag, id, class_preview, text_preview}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dropdown_triggers', description: 'Elements that open dropdowns on hover: [{tag, id, class_preview, text_preview, ariaHaspopup}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_api_usage', description: 'Detected hover patterns: {hasTooltipLib, hasCssHover, hasJsHover, hasHoverIntent}', inputSchema: { type: 'object', properties: {} } },
+  // ── Focus2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_focusable_elements4', description: 'All focusable elements: [{tag, id, type, text_preview, tabindex, visible, disabled}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_state', description: 'Current focus summary: {activeTag, activeId, activeText, focusableCount, hasFocusTrap, hasFocusVisible, bodyFocused}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_ring', description: 'Focus ring styles on focusable elements: [{tag, id, hasOutline, hasBoxShadow, hasOutlineNone}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_order4', description: 'Elements in tab order with tabindex: [{orderIndex, tag, id, tabindex, visible, inViewport}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_auto_focus_elements', description: 'Elements with autofocus attribute: [{tag, id, type, text_preview, isCurrentlyFocused}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_trap2', description: 'Focus-trapping containers: [{tag, id, class_preview, isOpen, focusableCount, ariaModal}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_listeners', description: 'Elements with focus/blur listeners or tabindex: [{tag, id, class_preview, hasOnfocus, hasOnblur, tabindex}] (max 25)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_api_usage', description: 'Detected focus patterns: {hasFocusTrap, hasFocusVisible, hasAutoFocus, hasRovingTabindex, hasFocusManager}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4948,6 +4978,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_slider_elements':          return await getSliderElements(cdp);
         case 'browser_swipe_elements':           return await getSwipeElements(cdp);
         case 'browser_carousel_api_usage':       return await getCarouselApiUsage(cdp);
+                // scroll3 new
+        case 'browser_scroll_position5':         return await getScrollPosition5(cdp);
+        case 'browser_scrollable_elements3':     return await getScrollableElements3(cdp);
+        case 'browser_scroll_behavior':          return await getScrollBehavior(cdp);
+        case 'browser_scroll_snap_containers':   return await getScrollSnapContainers(cdp);
+        case 'browser_scrollbar_elements':       return await getScrollbarElements(cdp);
+        case 'browser_infinite_scroll_triggers': return await getInfiniteScrollTriggers(cdp);
+        case 'browser_scroll_depth3':            return await getScrollDepth3(cdp);
+        case 'browser_scroll_api_usage':         return await getScrollApiUsage(cdp);
+        // hover2 new
+        case 'browser_hover_elements':           return await getHoverElements(cdp);
+        case 'browser_hover_state':              return await getHoverState(cdp);
+        case 'browser_tooltip_triggers':         return await getTooltipTriggers(cdp);
+        case 'browser_hover_effects':            return await getHoverEffects(cdp);
+        case 'browser_mouseover_listeners':      return await getMouseoverListeners(cdp);
+        case 'browser_hover_cards2':             return await getHoverCards2(cdp);
+        case 'browser_dropdown_triggers':        return await getDropdownTriggers(cdp);
+        case 'browser_hover_api_usage':          return await getHoverApiUsage(cdp);
+        // focus2 new
+        case 'browser_focusable_elements4':      return await getFocusableElements4(cdp);
+        case 'browser_focus_state':              return await getFocusState(cdp);
+        case 'browser_focus_ring':               return await getFocusRing(cdp);
+        case 'browser_tab_order4':               return await getTabOrder4(cdp);
+        case 'browser_auto_focus_elements':      return await getAutoFocusElements(cdp);
+        case 'browser_focus_trap2':              return await getFocusTrap2(cdp);
+        case 'browser_focus_listeners':          return await getFocusListeners(cdp);
+        case 'browser_focus_api_usage':          return await getFocusApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
