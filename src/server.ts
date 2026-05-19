@@ -194,6 +194,9 @@ import { getSearchInputs3, getSearchForms3, getSearchResults2, getFilterElements
 import { getPaginationLinks2, getPageNumbers, getNextPageButton, getPrevPageButton, getInfiniteScrollContainer, getLoadMoreButtons2, getCurrentPage2, getTotalPages } from './cdp/pagination2';
 import { getDarkMode, getCssCustomProperties, getColorScheme4, getThemeVariables, getDarkModePreference, getCssVariables6, getThemeElements, getRootStyles } from './cdp/theme3';
 import { getErrorMessages2, getFormValidationErrors2, getAlertElements2, getErrorBanners, getInvalidInputs, getValidationMessages, getToastMessages2, getErrorState } from './cdp/error2';
+import { getViewportSize3, getScrollPosition4, getVisibleArea, getStickyElements3, getFixedElements2, getOffscreenElements3, getViewportOverflow, getScrollableElements2 } from './cdp/viewport3';
+import { getPageLanguage3, getHtmlLang, getHreflangLinks3, getLangAttributes3, getLocaleInfo3, getRtlElements3, getI18nElements, getTranslationKeys } from './cdp/i18n3';
+import { getBreadcrumbs3, getBreadcrumbItems, getSidebarNavigation, getTreeNavigation, getExpandedNavItems, getActiveNavItem, getNavDepth, getNavBreadcrumb } from './cdp/breadcrumb3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2243,6 +2246,33 @@ const TOOLS = [
   { name: 'browser_validation_messages', description: 'Visible validation/error text near inputs: [{text_preview, relatedInputId}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_toast_messages2', description: 'Toast/snackbar notification elements: [{tag, id, class_preview, text_preview, visible}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_error_state', description: 'Page-level error summary: {hasErrors, errorCount, warningCount, hasAlerts, hasInvalidInputs}', inputSchema: { type: 'object', properties: {} } },
+  // ── Viewport3 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_viewport_size3', description: 'Viewport dimensions: {width, height, devicePixelRatio, scrollX, scrollY, pageWidth, pageHeight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_position4', description: 'Current scroll position: {scrollX, scrollY, scrollTop, scrollLeft, maxScrollX, maxScrollY}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_visible_area', description: 'Visible content bounds: {top, left, bottom, right, width, height}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sticky_elements3', description: 'Elements with position:sticky: [{tag, id, class_preview, top, bottom}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fixed_elements2', description: 'Elements with position:fixed: [{tag, id, class_preview, top, bottom, width}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_offscreen_elements3', description: 'Elements outside viewport counts: {count, aboveCount, belowCount, leftCount, rightCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_overflow', description: 'Page overflow detection: {hasHorizontalOverflow, hasVerticalOverflow, bodyScrollWidth, bodyScrollHeight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scrollable_elements2', description: 'Scrollable containers: [{tag, id, class_preview, scrollWidth, scrollHeight, overflow}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── I18n3 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_page_language3', description: 'Page language from html[lang]: {lang, htmlLang, metaLanguage}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_html_lang', description: 'Elements with lang attribute: [{tag, id, lang, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hreflang_links3', description: 'hreflang link elements: [{href_preview, hreflang, rel}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lang_attributes3', description: 'Elements with explicit lang attrs: [{tag, id, lang, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_locale_info3', description: 'Browser locale settings: {language, languages, timezone}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rtl_elements3', description: 'Right-to-left elements: [{tag, id, class_preview, dir}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_i18n_elements', description: 'Elements with i18n/translation data attributes: [{tag, id, dataKey, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_translation_keys', description: 'Data-i18n / data-translate attributes: [{tag, id, key_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Breadcrumb3 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_breadcrumbs3', description: 'Breadcrumb nav elements: [{tag, id, class_preview, items:[{text,href_preview}]}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_breadcrumb_items', description: 'Individual breadcrumb items: [{text_preview, href_preview, isActive, position}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sidebar_navigation', description: 'Sidebar nav container: {exists, tag, id, class_preview, itemCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tree_navigation', description: 'Tree/accordion nav items: [{tag, id, class_preview, text_preview, isExpanded, level}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_expanded_nav_items', description: 'Currently expanded nav sections: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_active_nav_item', description: 'Currently active nav item: {tag, id, class_preview, text_preview, href_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_depth', description: 'Maximum nesting depth of nav elements: {maxDepth, navContainerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_breadcrumb', description: 'Structured breadcrumb data: {items:[{text, href_preview}], separator_preview, totalItems}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4378,6 +4408,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_validation_messages':      return await getValidationMessages(cdp);
         case 'browser_toast_messages2':          return await getToastMessages2(cdp);
         case 'browser_error_state':              return await getErrorState(cdp);
+                // viewport3 new
+        case 'browser_viewport_size3':           return await getViewportSize3(cdp);
+        case 'browser_scroll_position4':         return await getScrollPosition4(cdp);
+        case 'browser_visible_area':             return await getVisibleArea(cdp);
+        case 'browser_sticky_elements3':         return await getStickyElements3(cdp);
+        case 'browser_fixed_elements2':          return await getFixedElements2(cdp);
+        case 'browser_offscreen_elements3':      return await getOffscreenElements3(cdp);
+        case 'browser_viewport_overflow':        return await getViewportOverflow(cdp);
+        case 'browser_scrollable_elements2':     return await getScrollableElements2(cdp);
+        // i18n3 new
+        case 'browser_page_language3':           return await getPageLanguage3(cdp);
+        case 'browser_html_lang':                return await getHtmlLang(cdp);
+        case 'browser_hreflang_links3':          return await getHreflangLinks3(cdp);
+        case 'browser_lang_attributes3':         return await getLangAttributes3(cdp);
+        case 'browser_locale_info3':             return await getLocaleInfo3(cdp);
+        case 'browser_rtl_elements3':            return await getRtlElements3(cdp);
+        case 'browser_i18n_elements':            return await getI18nElements(cdp);
+        case 'browser_translation_keys':         return await getTranslationKeys(cdp);
+        // breadcrumb3 new
+        case 'browser_breadcrumbs3':             return await getBreadcrumbs3(cdp);
+        case 'browser_breadcrumb_items':         return await getBreadcrumbItems(cdp);
+        case 'browser_sidebar_navigation':       return await getSidebarNavigation(cdp);
+        case 'browser_tree_navigation':          return await getTreeNavigation(cdp);
+        case 'browser_expanded_nav_items':       return await getExpandedNavItems(cdp);
+        case 'browser_active_nav_item':          return await getActiveNavItem(cdp);
+        case 'browser_nav_depth':                return await getNavDepth(cdp);
+        case 'browser_nav_breadcrumb':           return await getNavBreadcrumb(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
