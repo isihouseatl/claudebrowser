@@ -421,3 +421,252 @@ export async function getScrollableElements(
   }
   return result.value as Array<{ selector: string; scrollWidth: number; scrollHeight: number }>;
 }
+
+// ---------------------------------------------------------------------------
+// Viewport2 extended inspection functions (scroll, visibility, layout)
+// Naming notes:
+//   getScrollPositionFull — getScrollPosition already exported above (basic x/y only)
+// ---------------------------------------------------------------------------
+
+/**
+ * getScrollPositionFull — Get current scroll position and max scroll extents.
+ * Returns { scrollX, scrollY, maxScrollX, maxScrollY, scrollPercentX, scrollPercentY }.
+ * (Renamed from getScrollPosition to avoid collision with the basic export above.)
+ */
+export async function getScrollPositionFull(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var maxX = Math.max(document.documentElement.scrollWidth - window.innerWidth, 0);
+  var maxY = Math.max(document.documentElement.scrollHeight - window.innerHeight, 0);
+  return { scrollX: window.scrollX, scrollY: window.scrollY, maxScrollX: maxX, maxScrollY: maxY, scrollPercentX: maxX ? Math.round(window.scrollX/maxX*100) : 0, scrollPercentY: maxY ? Math.round(window.scrollY/maxY*100) : 0 };
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getViewportDimensions — Get viewport size vs document size and device pixel ratio.
+ * Returns { viewportWidth, viewportHeight, documentWidth, documentHeight, devicePixelRatio }.
+ */
+export async function getViewportDimensions(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  return { viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, documentWidth: document.documentElement.scrollWidth, documentHeight: document.documentElement.scrollHeight, devicePixelRatio: window.devicePixelRatio };
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getElementsInViewport — Find elements currently visible in viewport (max 30).
+ * Returns { elements: [{ tag, id, class }], count }.
+ */
+export async function getElementsInViewport(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var result = [];
+  var vw = window.innerWidth, vh = window.innerHeight;
+  for (var i = 0; i < all.length && result.length < 30; i++) {
+    var r = all[i].getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0 && r.left < vw && r.right > 0) {
+      result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, class: (all[i].className||'').slice(0,30) });
+    }
+  }
+  return { elements: result, count: result.length };
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getAboveTheFold — Find elements fully above the fold (max 20).
+ * Returns array of { tag, id, text }.
+ */
+export async function getAboveTheFold(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('h1,h2,h3,p,button,a,img');
+  var vh = window.innerHeight;
+  var result = [];
+  for (var i = 0; i < all.length && result.length < 20; i++) {
+    var r = all[i].getBoundingClientRect();
+    if (r.bottom < vh && r.height > 0) result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, text: all[i].textContent.trim().slice(0,60) });
+  }
+  return result;
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getOffscreenElements — Find elements positioned outside viewport bounds (max 20).
+ * Returns array of { tag, id, top, left }.
+ */
+export async function getOffscreenElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var result = [];
+  var vw = window.innerWidth, vh = window.innerHeight;
+  for (var i = 0; i < all.length && result.length < 20; i++) {
+    var r = all[i].getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh)) {
+      result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, top: Math.round(r.top), left: Math.round(r.left) });
+    }
+  }
+  return result;
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getStickyElements — Find elements with position:sticky or position:fixed (max 20).
+ * Returns array of { tag, id, class, position }.
+ */
+export async function getStickyElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var result = [];
+  for (var i = 0; i < all.length && result.length < 20; i++) {
+    var p = getComputedStyle(all[i]).position;
+    if (p === 'sticky' || p === 'fixed') result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, class: (all[i].className||'').slice(0,30), position: p });
+  }
+  return result;
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getOverflowContainers — Find elements with overflow:scroll or overflow:auto
+ * that have scrollable content (max 20).
+ * Returns array of { tag, id, scrollHeight, clientHeight }.
+ */
+export async function getOverflowContainers(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var result = [];
+  for (var i = 0; i < all.length && result.length < 20; i++) {
+    var s = getComputedStyle(all[i]);
+    var ov = s.overflow + s.overflowY;
+    if ((ov.includes('scroll') || ov.includes('auto')) && all[i].scrollHeight > all[i].clientHeight + 5) {
+      result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, scrollHeight: all[i].scrollHeight, clientHeight: all[i].clientHeight });
+    }
+  }
+  return result;
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getZIndexStack — Find elements with explicit z-index set, sorted descending (max 20).
+ * Returns array of { tag, id, zIndex }.
+ */
+export async function getZIndexStack(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `(function() {
+  var all = document.querySelectorAll('*');
+  var result = [];
+  for (var i = 0; i < all.length; i++) {
+    var z = parseInt(getComputedStyle(all[i]).zIndex);
+    if (!isNaN(z) && z !== 0) result.push({ tag: all[i].tagName.toLowerCase(), id: all[i].id, zIndex: z });
+  }
+  result.sort(function(a,b) { return b.zIndex - a.zIndex; });
+  return result.slice(0,20);
+})()`,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}

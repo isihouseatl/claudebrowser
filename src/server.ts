@@ -134,6 +134,9 @@ import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, get
 import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecentlyAddedElements, getHiddenElements, getDOMNodeCount, getDeepestElement, getOrphanedNodes } from './cdp/mutation2';
 import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
 import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
+import { getScrollPositionFull, getViewportDimensions, getElementsInViewport, getAboveTheFold, getOffscreenElements, getStickyElements, getOverflowContainers, getZIndexStack } from './cdp/viewport2';
+import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, getLinkRelTags, getHreflangTags2, getPageLanguage2, getStructuredDataCount } from './cdp/print2';
+import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getGridCount, getGridGaps, getAbsoluteElements, getLayoutShift2 } from './cdp/grid2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1463,6 +1466,33 @@ const TOOLS = [
   { name: 'browser_focused_element2', description: 'Get currently focused element: { tag, id, type, role, value_preview, focused }', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_tab_order2', description: 'Get elements in tab order (tabIndex >= 0) sorted by tabIndex: tag, id, tabIndex (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clipboard_support', description: 'Check Clipboard API support: { supported, readSupported, writeSupported }', inputSchema: { type: 'object', properties: {} } },
+  // ── Viewport2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_position_full', description: 'Get scroll position and max scroll: { scrollX, scrollY, maxScrollX, maxScrollY, scrollPercentX, scrollPercentY }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_dimensions', description: 'Get viewport vs document size: { viewportWidth, viewportHeight, documentWidth, documentHeight, devicePixelRatio }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_elements_in_viewport', description: 'Find elements currently visible in viewport: { elements: [{tag, id, class}], count } (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_above_the_fold', description: 'Find h1-h3/p/button/a/img elements fully above the fold: tag, id, text_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_offscreen_elements', description: 'Find elements positioned outside viewport bounds: tag, id, top, left (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sticky_elements', description: 'Find elements with position:sticky or fixed: tag, id, class, position (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_overflow_containers', description: 'Find scroll/auto overflow containers with scrollable content: tag, id, scrollHeight, clientHeight (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_z_index_stack', description: 'Find elements with explicit z-index, sorted descending: tag, id, zIndex (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Print2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_meta_tags2', description: 'Get all <meta name> content pairs: { name, content }[] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_title2', description: 'Get document.title: { title, length }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canonical_url', description: 'Get <link rel="canonical"> href: { canonical } or { canonical: null }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_robots_directives', description: 'Get meta robots content: { content, noindex, nofollow }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_link_rel_tags', description: 'Get all <link rel> tags (excluding stylesheet/icon): rel, href (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hreflang_tags', description: 'Get <link hreflang> tags for i18n: hreflang, href (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_language', description: 'Get page language from html[lang], meta[content-language]: { htmlLang, documentLang, metaLang }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_structured_data_count', description: 'Count structured data: { jsonLd, microdata, rdfa, total }', inputSchema: { type: 'object', properties: {} } },
+  // ── Grid2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_grid_containers', description: 'Find display:grid elements: tag, id, class, gridTemplateColumns, gridTemplateRows, childCount (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flex_containers2', description: 'Find display:flex elements with full layout info: flexDirection, flexWrap, justifyContent, alignItems (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_grid_areas', description: 'Find elements with grid-area set: tag, id, gridArea, gridColumn, gridRow (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flex_items', description: 'Find flex children with non-default flex properties: tag, id, flexGrow, flexShrink, flexBasis, order (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_grid_count', description: 'Count layout containers: { gridContainers, flexContainers, inlineGrid, inlineFlex }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_grid_gaps', description: 'Find grid/flex containers with gap set: tag, id, gap, columnGap, rowGap (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_absolute_elements', description: 'Find all position:absolute elements with bounding rect: tag, id, top, left, width, height (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_layout_shift2', description: 'Get CLS score via PerformanceObserver (inject + observe): { cls, shiftCount, observed }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2870,6 +2900,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_focused_element2':         return await getFocusedElement2(cdp);
         case 'browser_tab_order2':               return await getTabOrder2(cdp);
         case 'browser_clipboard_support':        return await getClipboardSupport(cdp);
+                // viewport2
+        case 'browser_scroll_position_full':     return await getScrollPositionFull(cdp);
+        case 'browser_viewport_dimensions':      return await getViewportDimensions(cdp);
+        case 'browser_elements_in_viewport':     return await getElementsInViewport(cdp);
+        case 'browser_above_the_fold':           return await getAboveTheFold(cdp);
+        case 'browser_offscreen_elements':       return await getOffscreenElements(cdp);
+        case 'browser_sticky_elements':          return await getStickyElements(cdp);
+        case 'browser_overflow_containers':      return await getOverflowContainers(cdp);
+        case 'browser_z_index_stack':            return await getZIndexStack(cdp);
+        // print2
+        case 'browser_meta_tags2':               return await getMetaTags2(cdp);
+        case 'browser_page_title2':              return await getPageTitle2(cdp);
+        case 'browser_canonical_url':            return await getCanonicalUrl3(cdp);
+        case 'browser_robots_directives':        return await getRobotsDirectives(cdp);
+        case 'browser_link_rel_tags':            return await getLinkRelTags(cdp);
+        case 'browser_hreflang_tags':            return await getHreflangTags2(cdp);
+        case 'browser_page_language':            return await getPageLanguage2(cdp);
+        case 'browser_structured_data_count':    return await getStructuredDataCount(cdp);
+        // grid2
+        case 'browser_grid_containers':          return await getGridContainers(cdp);
+        case 'browser_flex_containers2':         return await getFlexContainers2(cdp);
+        case 'browser_grid_areas':               return await getGridAreas(cdp);
+        case 'browser_flex_items':               return await getFlexItems(cdp);
+        case 'browser_grid_count':               return await getGridCount(cdp);
+        case 'browser_grid_gaps':                return await getGridGaps(cdp);
+        case 'browser_absolute_elements':        return await getAbsoluteElements(cdp);
+        case 'browser_layout_shift2':            return await getLayoutShift2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
