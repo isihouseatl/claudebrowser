@@ -505,6 +505,11 @@ export async function getNavigatorInfo(client: CdpClient) {
 //   getServiceWorkerScope3 — getServiceWorkerScope already in this file (new 8)
 //   getWorkerCount3        — getWorkerCount exists in workers.ts and worker.ts
 // ===========================================================================
+// WORKER2 BATCH 4 — 8 new functions (Web Workers + Service Workers)
+// Naming conflict resolutions:
+//   getServiceWorkers3  — getServiceWorkers exists in network4.ts; getServiceWorkers2 is above
+//   getSharedWorkers2   — getSharedWorkers already exported in this file (batch 3)
+// ===========================================================================
 
 // ---------------------------------------------------------------------------
 // 1. getServiceWorkerState
@@ -604,6 +609,259 @@ export async function getWorkerCount3(cdp: any): Promise<{ content: [{ type: 'te
   const { result } = await (cdp as any).raw.Runtime.evaluate({
     expression: `(function(){return{serviceWorkerSupported:typeof navigator.serviceWorker!=='undefined',sharedWorkerSupported:typeof SharedWorker!=='undefined',workerSupported:typeof Worker!=='undefined',dedicatedWorkerSupported:typeof Worker!=='undefined'}})()`,
     returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ===========================================================================
+// WORKER2 BATCH 4 — Web Workers and Service Workers (8 functions)
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// 1. getServiceWorkers3
+// Service worker registrations and state from navigator.serviceWorker.
+// Renamed: getServiceWorkers exists in network4.ts; getServiceWorkers2 is above.
+// Result: { supported, registrations: [{ scope, state, scriptURL, updateViaCache }] }
+// ---------------------------------------------------------------------------
+export async function getServiceWorkers3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => {
+  if (!('serviceWorker' in navigator)) {
+    return { supported: false, registrations: [] };
+  }
+  try {
+    var regs = await navigator.serviceWorker.getRegistrations();
+    return {
+      supported: true,
+      registrations: regs.slice(0, 20).map(function(r) {
+        var sw = r.active || r.waiting || r.installing || null;
+        return {
+          scope: r.scope,
+          state: sw ? sw.state : 'none',
+          scriptURL: sw ? sw.scriptURL : null,
+          updateViaCache: r.updateViaCache || null
+        };
+      })
+    };
+  } catch (e) {
+    return { supported: true, registrations: [], error: e.message };
+  }
+})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 2. getWebWorkers
+// Detect web worker usage patterns in page scripts (src scanning + API presence).
+// Result: { workerApiPresent, workerScripts: [{ src }], workerScriptCount }
+// ---------------------------------------------------------------------------
+export async function getWebWorkers(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var workerScripts = Array.from(document.querySelectorAll('script[src]'))
+    .filter(function(s) {
+      var src = s.src || '';
+      return src.indexOf('worker') !== -1 || src.indexOf('.worker.') !== -1 || src.indexOf('sw.js') !== -1;
+    })
+    .slice(0, 20)
+    .map(function(s) { return { src: s.src.slice(-80) }; });
+  return {
+    workerApiPresent: typeof Worker !== 'undefined',
+    workerScripts: workerScripts,
+    workerScriptCount: workerScripts.length
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 3. getWorkerState
+// Summary of worker presence on the current page.
+// Result: { hasServiceWorker, hasWebWorker, hasSharedWorker, swState, swScope }
+// ---------------------------------------------------------------------------
+export async function getWorkerState(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => {
+  var swState = null;
+  var swScope = null;
+  var hasServiceWorker = false;
+  if ('serviceWorker' in navigator) {
+    try {
+      var regs = await navigator.serviceWorker.getRegistrations();
+      hasServiceWorker = regs.length > 0;
+      if (regs.length > 0) {
+        var first = regs[0];
+        var sw = first.active || first.waiting || first.installing || null;
+        swState = sw ? sw.state : 'none';
+        swScope = first.scope;
+      }
+    } catch (e) {}
+  }
+  return {
+    hasServiceWorker: hasServiceWorker,
+    hasWebWorker: typeof Worker !== 'undefined',
+    hasSharedWorker: typeof SharedWorker !== 'undefined',
+    swState: swState,
+    swScope: swScope
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 4. getSharedWorkers2
+// Detect shared worker usage on the page.
+// Renamed: getSharedWorkers already exported in this file (batch 3).
+// Result: { supported, workerScripts: [{ src }], patchedCount, patchedCountReady }
+// ---------------------------------------------------------------------------
+export async function getSharedWorkers2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var sharedWorkerScripts = Array.from(document.querySelectorAll('script[src]'))
+    .filter(function(s) {
+      var src = s.src || '';
+      return src.indexOf('shared') !== -1 && src.indexOf('worker') !== -1;
+    })
+    .slice(0, 20)
+    .map(function(s) { return { src: s.src.slice(-80) }; });
+  var patchedCount = (window.__sharedWorkerCount !== undefined) ? window.__sharedWorkerCount : null;
+  return {
+    supported: typeof SharedWorker !== 'undefined',
+    workerScripts: sharedWorkerScripts,
+    patchedCount: patchedCount,
+    patchedCountReady: patchedCount !== null
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 5. getWorkerMessages
+// Elements and channels using BroadcastChannel or postMessage on the page.
+// Result: { broadcastChannelSupported, postMessageSupported, patchedChannels: string[],
+//           iframesWithSrcdoc: number, iframesTotal: number }
+// ---------------------------------------------------------------------------
+export async function getWorkerMessages(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  var patchedChannels = (window.__broadcastChannels && Array.isArray(window.__broadcastChannels))
+    ? window.__broadcastChannels.slice(0, 20)
+    : [];
+  var iframes = Array.from(document.querySelectorAll('iframe'));
+  return {
+    broadcastChannelSupported: typeof BroadcastChannel !== 'undefined',
+    postMessageSupported: typeof window.postMessage === 'function',
+    patchedChannels: patchedChannels,
+    iframesTotal: iframes.length,
+    iframesWithSrcdoc: iframes.filter(function(f) { return !!f.srcdoc; }).length
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 6. getWorkerRegistrations
+// All service worker registrations with scope, status, and updateViaCache.
+// Result: { supported, registrations: [{ scope, status, updateViaCache, scriptURL }] }
+// ---------------------------------------------------------------------------
+export async function getWorkerRegistrations(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => {
+  if (!('serviceWorker' in navigator)) {
+    return { supported: false, registrations: [] };
+  }
+  try {
+    var regs = await navigator.serviceWorker.getRegistrations();
+    return {
+      supported: true,
+      registrations: regs.slice(0, 20).map(function(r) {
+        var sw = r.active || r.waiting || r.installing || null;
+        return {
+          scope: r.scope,
+          status: r.active ? 'active' : r.waiting ? 'waiting' : r.installing ? 'installing' : 'none',
+          updateViaCache: r.updateViaCache || null,
+          scriptURL: sw ? sw.scriptURL : null
+        };
+      })
+    };
+  } catch (e) {
+    return { supported: true, registrations: [], error: e.message };
+  }
+})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 7. getWorkerScope
+// Current service worker scope and controlled documents info.
+// Result: { supported, isControlled, scope, scriptURL, state, readyScope }
+// ---------------------------------------------------------------------------
+export async function getWorkerScope(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => {
+  if (!('serviceWorker' in navigator)) {
+    return { supported: false, isControlled: false, scope: null, scriptURL: null, state: null, readyScope: null };
+  }
+  var ctrl = navigator.serviceWorker.controller;
+  var readyScope = null;
+  try {
+    var reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(function(_, reject) { setTimeout(function() { reject(new Error('timeout')); }, 2000); })
+    ]);
+    readyScope = reg.scope;
+  } catch (e) {}
+  return {
+    supported: true,
+    isControlled: ctrl !== null,
+    scope: ctrl ? ctrl.scriptURL : null,
+    scriptURL: ctrl ? ctrl.scriptURL : null,
+    state: ctrl ? ctrl.state : null,
+    readyScope: readyScope
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 8. getWorkerApiUsage
+// Detected worker patterns on the page.
+// Result: { hasServiceWorker, hasWebWorker, hasSharedWorker, hasBroadcastChannel, hasWorklet }
+// ---------------------------------------------------------------------------
+export async function getWorkerApiUsage(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+  return {
+    hasServiceWorker: 'serviceWorker' in navigator,
+    hasWebWorker: typeof Worker !== 'undefined',
+    hasSharedWorker: typeof SharedWorker !== 'undefined',
+    hasBroadcastChannel: typeof BroadcastChannel !== 'undefined',
+    hasWorklet: typeof CSS !== 'undefined' && typeof CSS.paintWorklet !== 'undefined'
+  };
+})()`,
+    returnByValue: true,
+    awaitPromise: false,
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
 }

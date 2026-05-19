@@ -167,7 +167,7 @@ import { getSearchInputs2, getSearchForms2, getHighlightedText, getTextBySelecto
 import { getDarkModeSupport, getColorScheme3, getBackgroundColors, getTextColors, getBorderColors, getContrastRatios, getThemeClasses, getColorDataAttrs } from './cdp/theme2';
 import { getStarRatings, getReviewBlocks, getProductPrices, getLikeButtons, getShareButtons, getCommentSections, getUserAvatars, getBadgeElements } from './cdp/rating2';
 import { getLazyImages3, getInfiniteScrollContainers, getLoadMoreButtons, getSkeletonElements, getSpinners, getProgressBars2, getDeferredImages, getVirtualLists } from './cdp/lazy2';
-import { getNotificationPermission3, getToastElements, getBannerElements2, getAlertBanners, getCookieBanners, getAriaLiveRegions, getStatusMessages, getDismissButtons } from './cdp/notification2';
+import { getNotificationPermission5, getNotificationBanners, getAlertElements3, getToastMessages3, getNotificationState, getSnackbarElements, getBadgeNotifications, getNotificationApiUsage } from './cdp/notification2';
 import { getVideoElements3, getAudioElements2, getEmbedElements, getObjectElements, getYouTubeEmbeds, getVideoSources, getMediaTracks, getPictureElements2 } from './cdp/embed2';
 import { getDocumentLanguage, getLangAttributes, getDirAttributes, getHreflangLinks, getTranslationMeta, getDateTimeElements, getCurrencySymbols, getRtlElements } from './cdp/i18n2';
 import { getWebAppManifest, getThemeColorMeta, getAppleTouchIcons, getPwaInstallPrompt, getAppIcons, getPwaDisplayMode, getOfflineReadiness, getWebShareSupport } from './cdp/pwa2';
@@ -227,6 +227,8 @@ import { getCarouselElements, getCarouselSlides, getCarouselControls, getCarouse
 import { getScrollPosition5, getScrollableElements3, getScrollBehavior, getScrollSnapContainers, getScrollbarElements, getInfiniteScrollTriggers, getScrollDepth3, getScrollApiUsage } from './cdp/scroll3';
 import { getHoverElements, getHoverState, getTooltipTriggers, getHoverEffects, getMouseoverListeners, getHoverCards2, getDropdownTriggers, getHoverApiUsage } from './cdp/hover2';
 import { getFocusableElements4, getFocusState, getFocusRing, getTabOrder4, getAutoFocusElements, getFocusTrap2, getFocusListeners, getFocusApiUsage } from './cdp/focus2';
+import { getAnimations3, getCssAnimations5, getCssTransitions5, getAnimatedElements2, getAnimationState, getKeyframeAnimations2, getWebAnimations, getAnimationApiUsage } from './cdp/animation3';
+import { getServiceWorkers3, getWebWorkers, getWorkerState, getSharedWorkers2, getWorkerMessages, getWorkerRegistrations, getWorkerScope, getWorkerApiUsage } from './cdp/worker2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -1953,14 +1955,14 @@ const TOOLS = [
   { name: 'browser_deferred_images', description: 'Images with empty src but data-src set: [{dataSrc_preview, alt_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_virtual_lists', description: 'Virtual/windowed list elements: [{tag, id, class_preview, style_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Notification2 ────────────────────────────────────────────────────────────────
-  { name: 'browser_notification_permission3', description: 'Browser notification permission: {permission, supported}', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_toast_elements', description: 'Toast/snackbar elements: [{tag, id, class_preview, text_preview, ariaLive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_banner_elements2', description: 'Banner/announcement elements: [{tag, id, class_preview, role, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_alert_banners', description: 'Alert/warning banners: [{tag, id, class_preview, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_cookie_banners', description: 'Cookie consent banners: [{tag, id, class_preview, text_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_aria_live_regions', description: 'Elements with aria-live: [{tag, id, ariaLive, ariaAtomic, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_status_messages', description: 'Elements with role=status|log: [{tag, id, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
-  { name: 'browser_dismiss_buttons', description: 'Close/dismiss buttons: [{tag, id, class_preview, ariaLabel_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_permission5', description: 'Browser Notifications API permission: {permission, supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_banners', description: 'In-page notification banner elements: [{tag, id, class_preview, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alert_elements3', description: 'Elements with role=alert or aria-live=assertive: [{tag, id, class_preview, text_preview, ariaLive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_toast_messages3', description: 'Toast/snackbar notification containers: [{tag, id, class_preview, text_preview, visible}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_state', description: 'Notification summary: {permission, hasToasts, hasBanners, hasAlerts, hasNotificationDot}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_snackbar_elements', description: 'Snackbar pattern elements (.snackbar, .notification, data-toast): [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_badge_notifications', description: 'Notification count badges/dots on icons: [{tag, id, class_preview, count_preview, isVisible}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_api_usage', description: 'Detected notification patterns: {hasWebNotification, hasToastLib, hasPushApi, hasInPageAlerts}', inputSchema: { type: 'object', properties: {} } },
   // ── Embed2 ────────────────────────────────────────────────────────────────────────
   { name: 'browser_video_elements3', description: 'All <video> elements: [{id, src_preview, autoplay, controls, muted, loop, width, height, duration, paused}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_audio_elements2', description: 'All <audio> elements: [{id, src_preview, autoplay, controls, muted, loop, paused, currentTime}] (max 20)', inputSchema: { type: 'object', properties: {} } },
@@ -2573,6 +2575,24 @@ const TOOLS = [
   { name: 'browser_focus_trap2', description: 'Focus-trapping containers: [{tag, id, class_preview, isOpen, focusableCount, ariaModal}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_focus_listeners', description: 'Elements with focus/blur listeners or tabindex: [{tag, id, class_preview, hasOnfocus, hasOnblur, tabindex}] (max 25)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_focus_api_usage', description: 'Detected focus patterns: {hasFocusTrap, hasFocusVisible, hasAutoFocus, hasRovingTabindex, hasFocusManager}', inputSchema: { type: 'object', properties: {} } },
+  // ── Animation3 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_animations3', description: 'Running Web Animations: [{id, playState, duration, delay, iterationCount, target_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_animations5', description: 'Elements with CSS animation-name: [{tag, id, class_preview, animationName, duration, playState}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_transitions5', description: 'Elements with CSS transitions: [{tag, id, class_preview, transition_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animated_elements2', description: 'Elements currently being animated: [{tag, id, class_preview, animationCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animation_state', description: 'Animation summary: {hasAnimations, animationCount, transitionCount, hasWebAnimations}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyframe_animations2', description: 'CSS @keyframes rules: [{name, ruleCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_animations', description: 'Elements using Web Animations API (.animate()): [{tag, id, class_preview, animationCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animation_api_usage', description: 'Detected animation libraries: {hasGsap, hasAnimeJs, hasMotion, hasFramerMotion, hasLottie}', inputSchema: { type: 'object', properties: {} } },
+  // ── Worker2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_service_workers3', description: 'Service worker registrations: {supported, registrations: [{scope, state, scriptURL, updateViaCache}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_workers', description: 'Web worker usage detection: {workerApiPresent, workerScripts, workerScriptCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_state', description: 'Worker summary: {hasServiceWorker, hasWebWorker, hasSharedWorker, swState, swScope}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shared_workers2', description: 'Shared worker usage: {supported, workerScripts, patchedCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_messages', description: 'BroadcastChannel/postMessage usage: {broadcastChannelSupported, postMessageSupported, patchedChannels, iframesTotal}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_registrations', description: 'Full service worker registration list: {supported, registrations: [{scope, status, updateViaCache, scriptURL}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_scope', description: 'Service worker controller scope: {supported, isControlled, scope, scriptURL, state, readyScope}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_api_usage', description: 'Detected worker patterns: {hasServiceWorker, hasWebWorker, hasSharedWorker, hasBroadcastChannel, hasWorklet}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4384,15 +4404,15 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_progress_bars2':              return await getProgressBars2(cdp);
         case 'browser_deferred_images':             return await getDeferredImages(cdp);
         case 'browser_virtual_lists':               return await getVirtualLists(cdp);
-                // notification2
-        case 'browser_notification_permission3': return await getNotificationPermission3(cdp);
-        case 'browser_toast_elements':           return await getToastElements(cdp);
-        case 'browser_banner_elements2':         return await getBannerElements2(cdp);
-        case 'browser_alert_banners':            return await getAlertBanners(cdp);
-        case 'browser_cookie_banners':           return await getCookieBanners(cdp);
-        case 'browser_aria_live_regions':        return await getAriaLiveRegions(cdp);
-        case 'browser_status_messages':          return await getStatusMessages(cdp);
-        case 'browser_dismiss_buttons':          return await getDismissButtons(cdp);
+                // notification2 (updated)
+        case 'browser_notification_permission5': return await getNotificationPermission5(cdp);
+        case 'browser_notification_banners':     return await getNotificationBanners(cdp);
+        case 'browser_alert_elements3':          return await getAlertElements3(cdp);
+        case 'browser_toast_messages3':          return await getToastMessages3(cdp);
+        case 'browser_notification_state':       return await getNotificationState(cdp);
+        case 'browser_snackbar_elements':        return await getSnackbarElements(cdp);
+        case 'browser_badge_notifications':      return await getBadgeNotifications(cdp);
+        case 'browser_notification_api_usage':   return await getNotificationApiUsage(cdp);
         // embed2
         case 'browser_video_elements3':          return await getVideoElements3(cdp);
         case 'browser_audio_elements2':          return await getAudioElements2(cdp);
@@ -5005,6 +5025,24 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_focus_trap2':              return await getFocusTrap2(cdp);
         case 'browser_focus_listeners':          return await getFocusListeners(cdp);
         case 'browser_focus_api_usage':          return await getFocusApiUsage(cdp);
+                // animation3 new
+        case 'browser_animations3':              return await getAnimations3(cdp);
+        case 'browser_css_animations5':          return await getCssAnimations5(cdp);
+        case 'browser_css_transitions5':         return await getCssTransitions5(cdp);
+        case 'browser_animated_elements2':       return await getAnimatedElements2(cdp);
+        case 'browser_animation_state':          return await getAnimationState(cdp);
+        case 'browser_keyframe_animations2':     return await getKeyframeAnimations2(cdp);
+        case 'browser_web_animations':           return await getWebAnimations(cdp);
+        case 'browser_animation_api_usage':      return await getAnimationApiUsage(cdp);
+        // worker2 new
+        case 'browser_service_workers3':         return await getServiceWorkers3(cdp);
+        case 'browser_web_workers':              return await getWebWorkers(cdp);
+        case 'browser_worker_state':             return await getWorkerState(cdp);
+        case 'browser_shared_workers2':          return await getSharedWorkers2(cdp);
+        case 'browser_worker_messages':          return await getWorkerMessages(cdp);
+        case 'browser_worker_registrations':     return await getWorkerRegistrations(cdp);
+        case 'browser_worker_scope':             return await getWorkerScope(cdp);
+        case 'browser_worker_api_usage':         return await getWorkerApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
