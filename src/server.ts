@@ -42,7 +42,7 @@ import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
 import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInIframe, waitForIframe, getIframes, getIframeCount, isIframeSandboxed, getIframeSrc, setIframeSrc, scrollIframeIntoView, getIframePosition, isIframeVisible } from './cdp/iframe';
 import { fillForm, detectFormFields, submitForm as autofillSubmitForm, clearForm, getFormState } from './cdp/autofill';
 import { waitForAny, waitForAll, waitForCondition, waitForStable, waitForValueChange, waitForCountChange, retryUntilSuccess } from './cdp/waiters';
-import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition } from './cdp/pointer';
+import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition, getPointerEvents, simulatePointerDown, simulatePointerUp, simulatePointerMove, simulatePointerCancel, simulatePointerEnter, getPointerCapture, getTouchActionStyle } from './cdp/pointer';
 import { startRecording, stopRecording, getRecordedActions, clearRecording, isRecording } from './cdp/recorder';
 import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, findNearLabel, getElementSelector } from './cdp/finder';
 import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
@@ -99,6 +99,8 @@ import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, w
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount } from './cdp/canvas2';
+import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2 } from './cdp/timing2';
+import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -934,6 +936,33 @@ const TOOLS = [
   { name: 'browser_canvas_pixel_color2', description: 'Get RGBA color of a pixel at (x,y) on canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
   { name: 'browser_is_webgl_canvas', description: 'Check if canvas uses WebGL context', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_canvas_count', description: 'Count all canvas elements on the page', inputSchema: { type: 'object', properties: {} } },
+  // ── Pointer Events ─────────────────────────────────────────────────────────────
+  { name: 'browser_pointer_events', description: 'List elements with pointer event handlers or pointer-events CSS', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pointer_down', description: 'Dispatch pointerdown PointerEvent on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pointer_up', description: 'Dispatch pointerup PointerEvent on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pointer_move', description: 'Dispatch pointermove PointerEvent on element with clientX/clientY', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
+  { name: 'browser_pointer_cancel', description: 'Dispatch pointercancel PointerEvent on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pointer_enter', description: 'Dispatch pointerenter PointerEvent on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pointer_capture', description: 'Check if element supports setPointerCapture and releasePointerCapture', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_touch_action', description: 'Get computed touch-action CSS property for element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Timing2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_dom_loaded_time', description: 'Get time from navigation start to DOMContentLoaded in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_load_event_time', description: 'Get time from navigation start to load event end in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ttfb', description: 'Get Time to First Byte (responseStart - navigationStart) in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_timing_summary', description: 'Get summary of page timing: ttfb, domInteractive, domContentLoaded, loadEvent (ms)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_first_paint', description: 'Get First Paint time from PerformanceObserver paint entries', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fcp', description: 'Get First Contentful Paint time from PerformanceObserver paint entries', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_count', description: 'Count total resources loaded by the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slow_resources2', description: 'List resources that took longer than threshold_ms (default 500ms) to load', inputSchema: { type: 'object', properties: { threshold_ms: { type: 'number' } } } },
+  // ── Geolocation ─────────────────────────────────────────────────────────────────
+  { name: 'browser_set_geolocation2', description: 'Override geolocation via CDP Emulation domain', inputSchema: { type: 'object', properties: { latitude: { type: 'number' }, longitude: { type: 'number' }, accuracy: { type: 'number' } }, required: ['latitude', 'longitude'] } },
+  { name: 'browser_clear_geolocation2', description: 'Clear CDP geolocation override', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geolocation_permission', description: 'Check geolocation permission state (granted/denied/prompt)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geolocation_supported', description: 'Check if navigator.geolocation API is available', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_device_orientation', description: 'Dispatch DeviceOrientationEvent with alpha/beta/gamma angles', inputSchema: { type: 'object', properties: { alpha: { type: 'number' }, beta: { type: 'number' }, gamma: { type: 'number' } }, required: ['alpha', 'beta', 'gamma'] } },
+  { name: 'browser_timezone_info', description: 'Get browser timezone from Intl.DateTimeFormat', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_timezone', description: 'Override browser timezone via CDP Emulation', inputSchema: { type: 'object', properties: { timezone_id: { type: 'string' } }, required: ['timezone_id'] } },
+  { name: 'browser_locale_info', description: 'Get navigator.language and navigator.languages', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1851,6 +1880,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_canvas_pixel_color2':      return await getCanvasPixelColor2(cdp, a.selector as string, a.x as number, a.y as number);
         case 'browser_is_webgl_canvas':          return await isWebGLCanvas(cdp, a.selector as string);
         case 'browser_canvas_count':             return await getCanvasCount(cdp);
+                // pointer events
+        case 'browser_pointer_events':           return await getPointerEvents(cdp);
+        case 'browser_pointer_down':             return await simulatePointerDown(cdp, a.selector as string);
+        case 'browser_pointer_up':               return await simulatePointerUp(cdp, a.selector as string);
+        case 'browser_pointer_move':             return await simulatePointerMove(cdp, a.selector as string, a.x as number, a.y as number);
+        case 'browser_pointer_cancel':           return await simulatePointerCancel(cdp, a.selector as string);
+        case 'browser_pointer_enter':            return await simulatePointerEnter(cdp, a.selector as string);
+        case 'browser_pointer_capture':          return await getPointerCapture(cdp, a.selector as string);
+        case 'browser_touch_action':             return await getTouchActionStyle(cdp, a.selector as string);
+        // timing2
+        case 'browser_dom_loaded_time':          return await getDomContentLoadedTime(cdp);
+        case 'browser_load_event_time':          return await getLoadEventTime(cdp);
+        case 'browser_ttfb':                     return await getTimeToFirstByte(cdp);
+        case 'browser_page_timing_summary':      return await getPageTimingSummary(cdp);
+        case 'browser_first_paint':              return await getFirstPaint(cdp);
+        case 'browser_fcp':                      return await getFirstContentfulPaint(cdp);
+        case 'browser_resource_count':           return await getResourceCount(cdp);
+        case 'browser_slow_resources2':          return await getSlowResources2(cdp, a.threshold_ms as number | undefined);
+        // geolocation
+        case 'browser_set_geolocation2':         return await setGeolocationNew(cdp, a.latitude as number, a.longitude as number, a.accuracy as number | undefined);
+        case 'browser_clear_geolocation2':       return await clearGeolocationNew(cdp);
+        case 'browser_geolocation_permission':   return await getGeolocationPermission(cdp);
+        case 'browser_geolocation_supported':    return await isGeolocationSupported(cdp);
+        case 'browser_device_orientation':       return await setDeviceOrientation(cdp, a.alpha as number, a.beta as number, a.gamma as number);
+        case 'browser_timezone_info':            return await getTimezoneInfo(cdp);
+        case 'browser_set_timezone':             return await setTimezoneOverride(cdp, a.timezone_id as string);
+        case 'browser_locale_info':              return await getLocaleInfo(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
