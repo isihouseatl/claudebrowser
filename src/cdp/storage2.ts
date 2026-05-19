@@ -954,3 +954,92 @@ export async function getSessionStorageKey(cdp: any, key: string): Promise<Stora
     return s3err(e?.message ?? String(e));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Storage4 batch — 8 new named exports following the CDP call pattern
+// All names suffixed to avoid conflicts with existing exports in this file and server.ts.
+// cdp typed as any to match the chrome-remote-interface runtime shape used throughout.
+// ---------------------------------------------------------------------------
+
+// 1. getLocalStorageKeys4 — all localStorage keys: [key1, key2, ...] (max 50)
+// Renamed: getLocalStorageKeys already exported in this file (line 172).
+export async function getLocalStorageKeys4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Object.keys(localStorage).slice(0, 50); })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 2. getSessionStorageKeys4 — all sessionStorage keys: [key1, key2, ...] (max 50)
+// Renamed: getSessionStorageKeys already exported in this file (line 194).
+export async function getSessionStorageKeys4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Object.keys(sessionStorage).slice(0, 50); })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 3. getCookieCount4 — cookie count: {count, hasCookies}
+// Renamed: getCookieCount already exported in this file (line 103, returns number not MCP content).
+export async function getCookieCount4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var c = document.cookie.split(';').filter(function(s) { return s.trim(); }); return {count: c.length, hasCookies: c.length > 0}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 4. getIndexedDBDatabases4 — IndexedDB database names: {databases: [{name, version}], count}
+// Renamed: getIndexedDBDatabases already exported in this file (line 279).
+export async function getIndexedDBDatabases4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { var dbs = await indexedDB.databases(); return {databases: dbs.slice(0,20).map(function(d) { return {name:d.name,version:d.version}; }), count: dbs.length}; })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 5. getCacheStorageKeys2 — cache storage keys: {caches: [name, ...], count}
+// Renamed: getCacheStorageKeys already imported from worker2.ts in server.ts (line 127).
+export async function getCacheStorageKeys2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { var keys = await caches.keys(); return {caches: keys.slice(0,20), count: keys.length}; })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 6. getStorageQuota4 — storage quota info: {quota, usage, usagePercent}
+// Renamed: getStorageQuota already exported in this file (line 324).
+export async function getStorageQuota4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { try { var est = await navigator.storage.estimate(); return {quota: est.quota, usage: est.usage, usagePercent: est.quota ? Math.round(est.usage/est.quota*100) : 0}; } catch(e) { return {quota: null, usage: null, usagePercent: null, error: e.message}; } })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 7. getLocalStorageSize4 — localStorage total character count: {size, itemCount}
+// Renamed: getLocalStorageSize already exported in this file (line 16, returns {keys, bytes} not MCP content).
+export async function getLocalStorageSize4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var size = 0; for(var k of Object.keys(localStorage)) { size += k.length + (localStorage.getItem(k)||'').length; } return {size: size, itemCount: localStorage.length}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 8. getSessionStorageSize4 — sessionStorage total character count: {size, itemCount}
+// Renamed: getSessionStorageSize already exported in this file (line 62, returns {keys, bytes} not MCP content).
+export async function getSessionStorageSize4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var size = 0; for(var k of Object.keys(sessionStorage)) { size += k.length + (sessionStorage.getItem(k)||'').length; } return {size: size, itemCount: sessionStorage.length}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

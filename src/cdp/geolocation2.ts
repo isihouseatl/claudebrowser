@@ -131,3 +131,84 @@ export async function getLocale(client: CdpClient): Promise<string> {
   }
   return result.value as string;
 }
+
+// ---------------------------------------------------------------------------
+// New sensor / environment query functions (CRI pattern)
+// ---------------------------------------------------------------------------
+
+// Geolocation permission state: {state, supported}
+// (name suffixed _3 — getGeolocationPermission and getGeolocationPermission2 already taken)
+export async function getGeolocationPermission3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { try { const r = await navigator.permissions.query({name:'geolocation'}); return {state: r.state, supported: true}; } catch(e) { return {state: 'unknown', supported: false, error: e.message}; } })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Current timezone: {timezone, offset}
+// (name suffixed Details — getTimezone already exported above in this file)
+export async function getTimezoneDetails(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return {timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, offset: new Date().getTimezoneOffset()}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Browser language preferences: {language, languages}
+export async function getLanguagePreferences(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return {language: navigator.language, languages: Array.from(navigator.languages).slice(0, 10)}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Screen and window dimensions: {screenWidth, screenHeight, innerWidth, innerHeight, availWidth, availHeight}
+export async function getScreenResolution(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return {screenWidth: screen.width, screenHeight: screen.height, innerWidth: window.innerWidth, innerHeight: window.innerHeight, availWidth: screen.availWidth, availHeight: screen.availHeight}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Device pixel ratio: {devicePixelRatio, isRetina}
+// (name suffixed _2 — getDevicePixelRatio already taken by ./cdp/responsive2)
+export async function getDevicePixelRatio2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return {devicePixelRatio: window.devicePixelRatio, isRetina: window.devicePixelRatio >= 2}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Network connection info: {effectiveType, downlink, rtt, saveData, online}
+export async function getNetworkConnection(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection; return {effectiveType: c ? c.effectiveType : null, downlink: c ? c.downlink : null, rtt: c ? c.rtt : null, saveData: c ? c.saveData : null, online: navigator.onLine}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// Battery status if available: {level, charging, chargingTime, dischargingTime}
+export async function getBatteryStatus(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { try { const b = await navigator.getBattery(); return {level: b.level, charging: b.charging, chargingTime: b.chargingTime, dischargingTime: b.dischargingTime}; } catch(e) { return {supported: false, error: e.message}; } })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// CPU and memory info: {hardwareConcurrency, deviceMemory, maxTouchPoints}
+export async function getHardwareConcurrency(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return {hardwareConcurrency: navigator.hardwareConcurrency, deviceMemory: navigator.deviceMemory || null, maxTouchPoints: navigator.maxTouchPoints}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

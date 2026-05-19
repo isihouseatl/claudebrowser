@@ -54,7 +54,7 @@ import { getElementObstruction, getClickableState, getEventListeners, getPageDia
 import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
 import { getCanvasElements, canvasToDataUrl, getCanvasDimensions, getCanvasPixelColor, clearCanvas, drawTextOnCanvas, drawRectOnCanvas, canvasEquals } from './cdp/canvas';
 import { findTextMatches, countTextOccurrences, getSelectedText, selectAllTextInElement, highlightAllText, clearHighlights, replaceTextInElement, scrollToText } from './cdp/search';
-import { setGeolocationCoords, setGeolocationCity, clearGeolocationOverride, getCurrentGeolocation, setTimezone, getTimezone, setLocale, getLocale } from './cdp/geolocation2';
+import { setGeolocationCoords, setGeolocationCity, clearGeolocationOverride, getCurrentGeolocation, setTimezone, getTimezone, setLocale, getLocale, getGeolocationPermission3, getTimezoneDetails, getLanguagePreferences, getScreenResolution, getDevicePixelRatio2, getNetworkConnection, getBatteryStatus, getHardwareConcurrency } from './cdp/geolocation2';
 import { setDevicePreset, setCustomViewport, getViewportSize, resetViewport, checkMediaQuery, getActiveBreakpoints, responsiveScreenshots, findHorizontalOverflow } from './cdp/responsive';
 import { hashString, hashElementContent, generateUuid, randomBytes, randomInt, base64Encode, base64Decode, hmacSha256 } from './cdp/crypto2';
 import { getWebVitals, getNavigationTiming2, getSlowResources, getTimeToInteractive, getRenderBlockingResources, getMemoryUsage, getDomNodeCount, getLoadTimeline } from './cdp/pageload';
@@ -130,7 +130,7 @@ import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotE
 import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
 import { getAnimatingElements, getCssAnimations, getCssTransitions, getAnimationDuration, getAnimationPlayState, pauseAllAnimations2, resumeAllAnimations2, getScrollAnimations } from './cdp/animation2';
 import { getLocalStorageItems, getSessionStorageItems, getLocalStorageSize3, getSessionStorageSize3, getIndexedDBDatabases3, getDocumentCookies, getStorageQuota3, clearLocalStorage2 } from './cdp/storage2';
-import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts, getShadowHostElements2, getWebComponents, getTemplateElements2, getSlotElements2, getCustomElementRegistry, getShadowDomDepth, getPartElements, getExportPartsElements } from './cdp/shadow2';
+import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts, getShadowHostElements2, getWebComponents, getTemplateElements2, getSlotElements2, getCustomElementRegistry, getShadowDomDepth, getPartElements, getExportPartsElements, getShadowRoots, getCustomElements2, getSlotElements3, getOpenShadowRoots3, getClosedShadowHosts, getTemplateElements3, getShadowRootContent, getWebComponents2 } from './cdp/shadow2';
 import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecentlyAddedElements, getHiddenElements, getDOMNodeCount, getDeepestElement, getOrphanedNodes } from './cdp/mutation2';
 import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
 import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
@@ -144,7 +144,7 @@ import { getCurrentUrl2, getQueryParams3, getHashContent, getHistoryLength2 as g
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo, getCurrentUrl3, getUrlHistory, getAnchorsById, getHashLinks, getQueryParams4, getOpenGraphMeta, getTwitterCardMeta, getCanonicalUrl4 } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
-import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2, getLocalStorageItems2, getSessionStorageItems2, getLocalStorageCount, getCookieCount3, getStorageQuota2, clearLocalStorage3, getLocalStorageKey, getSessionStorageKey } from './cdp/storage2';
+import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2, getLocalStorageItems2, getSessionStorageItems2, getLocalStorageCount, getCookieCount3, getStorageQuota2, clearLocalStorage3, getLocalStorageKey, getSessionStorageKey, getLocalStorageKeys4, getSessionStorageKeys4, getCookieCount4, getIndexedDBDatabases4, getCacheStorageKeys2, getStorageQuota4, getLocalStorageSize4, getSessionStorageSize4 } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessages, getWarningMessages, getLoadingIndicators, getProgressBars, getNotificationPermission2 } from './cdp/notify2';
 import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
@@ -1982,6 +1982,33 @@ const TOOLS = [
   { name: 'browser_paper_size_hints', description: '@page CSS rules: [{size, margin, orientation}] (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_print_font_sizes', description: 'Elements with font-size <12px: [{tag, id, fontSize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_orphan_widow_settings', description: 'Elements with non-default orphans/widows: [{tag, id, orphans, widows}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Geolocation2 new ─────────────────────────────────────────────────────────────
+  { name: 'browser_geolocation_permission3', description: 'Geolocation permission state: {state, supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timezone_details', description: 'Current timezone: {timezone, offset}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_language_preferences', description: 'Browser language preferences: {language, languages[]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_screen_resolution', description: 'Screen and window dimensions: {screenWidth, screenHeight, innerWidth, innerHeight, availWidth, availHeight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_device_pixel_ratio2', description: 'Device pixel ratio: {devicePixelRatio, isRetina}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_connection', description: 'Network connection info: {effectiveType, downlink, rtt, saveData, online}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_battery_status', description: 'Battery status: {level, charging, chargingTime, dischargingTime}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hardware_concurrency', description: 'CPU and memory info: {hardwareConcurrency, deviceMemory, maxTouchPoints}', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_shadow_roots', description: 'Elements with shadow roots: [{tag, id, class_preview, mode}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_elements2', description: 'Custom element tags in DOM: [{tag, id, class_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slot_elements3', description: 'Slot elements inside shadow DOMs: [{name, assignedCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_shadow_roots3', description: 'Elements with open shadow root: [{tag, id}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_closed_shadow_hosts', description: 'Elements with part/exportparts (closed shadow indicators): {elementsWithPart, hasShadow}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_template_elements3', description: '<template> elements: [{id, class_preview, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_root_content', description: 'First open shadow root innerHTML preview: {host_tag, host_id, innerHTML_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_components2', description: 'Web component usage summary: {customElementCount, shadowRootCount, templateCount, slotCount}', inputSchema: { type: 'object', properties: {} } },
+  // ── Storage2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_local_storage_keys4', description: 'All localStorage keys: [key, ...] (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage_keys4', description: 'All sessionStorage keys: [key, ...] (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count4', description: 'Cookie count: {count, hasCookies}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexed_db_databases4', description: 'IndexedDB databases: {databases: [{name, version}], count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cache_storage_keys2', description: 'Cache storage keys: {caches: [name, ...], count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_quota4', description: 'Storage quota info: {quota, usage, usagePercent}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_local_storage_size4', description: 'localStorage total char count: {size, itemCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage_size4', description: 'sessionStorage total char count: {size, itemCount}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3874,6 +3901,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_paper_size_hints':         return await getPaperSizeHints(cdp);
         case 'browser_print_font_sizes':         return await getPrintFontSizes(cdp);
         case 'browser_orphan_widow_settings':    return await getOrphanWidowSettings(cdp);
+                // geolocation2 new
+        case 'browser_geolocation_permission3':  return await getGeolocationPermission3(cdp);
+        case 'browser_timezone_details':         return await getTimezoneDetails(cdp);
+        case 'browser_language_preferences':     return await getLanguagePreferences(cdp);
+        case 'browser_screen_resolution':        return await getScreenResolution(cdp);
+        case 'browser_device_pixel_ratio2':      return await getDevicePixelRatio2(cdp);
+        case 'browser_network_connection':       return await getNetworkConnection(cdp);
+        case 'browser_battery_status':           return await getBatteryStatus(cdp);
+        case 'browser_hardware_concurrency':     return await getHardwareConcurrency(cdp);
+        // shadow2 new
+        case 'browser_shadow_roots':             return await getShadowRoots(cdp);
+        case 'browser_custom_elements2':         return await getCustomElements2(cdp);
+        case 'browser_slot_elements3':           return await getSlotElements3(cdp);
+        case 'browser_open_shadow_roots3':       return await getOpenShadowRoots3(cdp);
+        case 'browser_closed_shadow_hosts':      return await getClosedShadowHosts(cdp);
+        case 'browser_template_elements3':       return await getTemplateElements3(cdp);
+        case 'browser_shadow_root_content':      return await getShadowRootContent(cdp);
+        case 'browser_web_components2':          return await getWebComponents2(cdp);
+        // storage2 new
+        case 'browser_local_storage_keys4':      return await getLocalStorageKeys4(cdp);
+        case 'browser_session_storage_keys4':    return await getSessionStorageKeys4(cdp);
+        case 'browser_cookie_count4':            return await getCookieCount4(cdp);
+        case 'browser_indexed_db_databases4':    return await getIndexedDBDatabases4(cdp);
+        case 'browser_cache_storage_keys2':      return await getCacheStorageKeys2(cdp);
+        case 'browser_storage_quota4':           return await getStorageQuota4(cdp);
+        case 'browser_local_storage_size4':      return await getLocalStorageSize4(cdp);
+        case 'browser_session_storage_size4':    return await getSessionStorageSize4(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

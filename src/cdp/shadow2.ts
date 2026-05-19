@@ -497,3 +497,214 @@ export async function getExportPartsElements(
   }
   return ok(result.value ?? []);
 }
+
+// =============================================================================
+// BATCH 2 — Shadow DOM / Web Components inspection (appended)
+// =============================================================================
+
+// ─── getShadowRoots ───────────────────────────────────────────────────────────
+// Elements with shadow roots: [{tag, id, class_preview, mode}]. Max 20.
+export async function getShadowRoots(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var all = document.querySelectorAll('*');
+      var res = [];
+      for (var i = 0; i < all.length; i++) {
+        var el = all[i];
+        var sr = el.shadowRoot;
+        if (sr) {
+          res.push({
+            tag: el.tagName.toLowerCase(),
+            id: el.id || null,
+            class_preview: (el.className || '').toString().slice(0, 40),
+            mode: sr.mode
+          });
+        }
+        if (res.length >= 20) break;
+      }
+      return res;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? []);
+}
+
+// ─── getCustomElements2 ───────────────────────────────────────────────────────
+// Custom element tags in DOM (tag names containing '-'): [{tag, id, class_preview}]. Max 30.
+// Renamed from getCustomElements — conflicts with slot2.ts export in server.ts.
+export async function getCustomElements2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var els = document.querySelectorAll('*');
+      var res = [];
+      var seen = new Set();
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var t = el.tagName.toLowerCase();
+        if (t.includes('-') && !seen.has(t)) {
+          seen.add(t);
+          res.push({ tag: t, id: el.id || null, class_preview: (el.className || '').toString().slice(0, 40) });
+        }
+        if (res.length >= 30) break;
+      }
+      return res;
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? []);
+}
+
+// ─── getSlotElements3 ─────────────────────────────────────────────────────────
+// Slot elements inside shadow DOMs: [{name, assignedCount}]. Max 20.
+// Renamed from getSlotElements — conflicts with slot2.ts; getSlotElements2 already taken.
+export async function getSlotElements3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var hosts = [];
+      document.querySelectorAll('*').forEach(function(el) {
+        if (el.shadowRoot) {
+          el.shadowRoot.querySelectorAll('slot').forEach(function(s) {
+            hosts.push({ name: s.name || '(default)', assignedCount: s.assignedNodes().length });
+          });
+        }
+      });
+      return hosts.slice(0, 20);
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? []);
+}
+
+// ─── getOpenShadowRoots3 ──────────────────────────────────────────────────────
+// Elements with open shadow root: [{tag, id}]. Max 20.
+// Renamed from getOpenShadowRoots — already exists and is imported in server.ts.
+export async function getOpenShadowRoots3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var res = [];
+      document.querySelectorAll('*').forEach(function(el) {
+        if (el.shadowRoot && el.shadowRoot.mode === 'open') {
+          res.push({ tag: el.tagName.toLowerCase(), id: el.id || null });
+        }
+      });
+      return res.slice(0, 20);
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? []);
+}
+
+// ─── getClosedShadowHosts ─────────────────────────────────────────────────────
+// Detect elements that likely have closed shadow roots via part/exportparts attributes.
+// Returns {elementsWithPart, hasShadow}.
+export async function getClosedShadowHosts(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var withParts = document.querySelectorAll('[part],[exportparts]');
+      return { elementsWithPart: withParts.length, hasShadow: withParts.length > 0 };
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? { elementsWithPart: 0, hasShadow: false });
+}
+
+// ─── getTemplateElements3 ─────────────────────────────────────────────────────
+// All <template> elements: [{id, class_preview, childCount}]. Max 20.
+// Renamed from getTemplateElements — conflicts with slot2.ts; getTemplateElements2 already taken.
+export async function getTemplateElements3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      return Array.from(document.querySelectorAll('template')).slice(0, 20).map(function(t) {
+        return {
+          id: t.id || null,
+          class_preview: (t.className || '').slice(0, 40),
+          childCount: t.content.childElementCount
+        };
+      });
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? []);
+}
+
+// ─── getShadowRootContent ─────────────────────────────────────────────────────
+// First open shadow root innerHTML preview: {host_tag, host_id, innerHTML_preview}.
+export async function getShadowRootContent(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      for (var i = 0, all = document.querySelectorAll('*'); i < all.length; i++) {
+        var el = all[i];
+        if (el.shadowRoot) {
+          return {
+            host_tag: el.tagName.toLowerCase(),
+            host_id: el.id || null,
+            innerHTML_preview: el.shadowRoot.innerHTML.slice(0, 300)
+          };
+        }
+      }
+      return { host_tag: null, host_id: null, innerHTML_preview: null };
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? { host_tag: null, host_id: null, innerHTML_preview: null });
+}
+
+// ─── getWebComponents2 ────────────────────────────────────────────────────────
+// Summary of web component usage: {customElementCount, shadowRootCount, templateCount, slotCount}.
+// Renamed from getWebComponents — already exists and is imported in server.ts.
+export async function getWebComponents2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var customEl = 0, shadowRoot = 0, template = 0, slot = 0;
+      document.querySelectorAll('*').forEach(function(el) {
+        if (el.tagName.includes('-')) customEl++;
+        if (el.shadowRoot) shadowRoot++;
+        if (el.tagName === 'TEMPLATE') template++;
+        if (el.tagName === 'SLOT') slot++;
+      });
+      return { customElementCount: customEl, shadowRootCount: shadowRoot, templateCount: template, slotCount: slot };
+    })()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value ?? { customElementCount: 0, shadowRootCount: 0, templateCount: 0, slotCount: 0 });
+}
