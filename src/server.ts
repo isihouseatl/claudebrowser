@@ -77,7 +77,7 @@ import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwit
 import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests } from './cdp/network2';
 import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAllStorage, getCookieCount, getCookieDomains, getStorageEstimate, clearOriginStorage } from './cdp/storage2';
 import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
-import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay } from './cdp/modal';
+import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay, detectModals, getOverlayElements, hasBackdrop, closeModalByEscape, clickModalCloseButton, getPopoverElements, countZIndexLayers } from './cdp/modal';
 import { getUrlParts, getQueryParams, setQueryParam, removeQueryParam, getHashFragment, setHashFragment, navigateToHash, getNavigationHistory } from './cdp/url2';
 import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow } from './cdp/table3';
 import { setGeolocationAccuracy, simulateMovement, setHighAccuracyMode, setLowAccuracyMode, setBatteryLevel, clearBatteryOverride, setScreenOrientation, clearScreenOrientation } from './cdp/geolocation3';
@@ -110,6 +110,8 @@ import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, g
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions } from './cdp/image2';
 import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
+import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
+import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2 } from './cdp/perf2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1077,6 +1079,32 @@ const TOOLS = [
   { name: 'browser_hreflang_tags', description: 'Get all hreflang alternate link tags', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_json_ld', description: 'Get all <script type="application/ld+json"> schemas (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_headings', description: 'Get all h1-h6 headings in document order: level and text', inputSchema: { type: 'object', properties: {} } },
+  // ── Font ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_computed_font', description: 'Get computed font properties for a specific element (family, size, weight, style, lineHeight)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_loaded_fonts2', description: 'List all fonts loaded by the page via document.fonts (name, style, weight, status)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_faces', description: 'Get all @font-face rules declared in stylesheets (family, src, weight, style)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_element_font_size', description: 'Get computed font-size in px for a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_element_font_family', description: 'Get computed font-family stack for a specific element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_text_styles', description: 'Get all text-related computed styles for an element (font, color, spacing, decoration)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_distinct_fonts', description: 'Count how many distinct font families are used on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_font_loaded', description: 'Check if a specific font family is loaded and ready via document.fonts.check()', inputSchema: { type: 'object', properties: { font_family: { type: 'string' } }, required: ['font_family'] } },
+  // ── Modal2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_detect_modals', description: 'Detect fixed/absolute positioned elements with high z-index (potential modals, max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_overlay_elements', description: 'List all position:fixed elements with non-zero dimensions (max 15)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_has_backdrop', description: 'Check if a visible backdrop/mask element is present on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_close_modal_escape', description: 'Dispatch Escape keydown+keyup on document to dismiss modals', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click_close_button', description: 'Find and click a modal close button (aria-label, .close class, or [data-dismiss])', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popover_elements', description: 'List all elements with [popover] attribute (HTML popover API)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_zindex_layers', description: 'Count distinct z-index values on visible positioned elements', inputSchema: { type: 'object', properties: {} } },
+  // ── Perf2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_cdp_metrics', description: 'Get Chrome Performance domain metrics (TaskDuration, ScriptDuration, LayoutCount, etc.)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_js_heap_size', description: 'Get JS heap size: used, total, limit (Chrome only via performance.memory)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dom_node_count2', description: 'Count all DOM nodes in the document (document.querySelectorAll(*))', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_event_listener_total', description: 'Approximate count of event listeners attached via on* handler properties (scans 500 elements)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mark_performance2', description: 'Create a named performance.mark() timestamp', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'browser_measure_performance2', description: 'Create a performance.measure() between two marks, returns duration in ms', inputSchema: { type: 'object', properties: { name: { type: 'string' }, start_mark: { type: 'string' }, end_mark: { type: 'string' } }, required: ['name', 'start_mark', 'end_mark'] } },
+  { name: 'browser_clear_perf_marks', description: 'Clear all performance marks via performance.clearMarks()', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_get_perf_marks2', description: 'Get all performance marks: name and startTime', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1780,7 +1808,7 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_set_element_text':       { await setElementText(cdp, a.selector as string, a.text as string); return ok('Text set'); }
         case 'browser_get_element_count':      return ok({ count: await getElementCount(cdp, a.selector as string) });
         // modal
-        case 'browser_is_modal_open':          return ok({ open: await isModalOpen(cdp) });
+        case 'browser_is_modal_open':          return await isModalOpen(cdp);
         case 'browser_get_modal_content':      return ok({ content: await getModalContent(cdp) });
         case 'browser_close_modal':            return ok({ closed: await closeModal(cdp) });
         case 'browser_wait_for_modal':         return ok({ found: await waitForModal(cdp, a.timeout_ms as number | undefined) });
@@ -2126,6 +2154,32 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_hreflang_tags':            return await getHreflangTags(cdp);
         case 'browser_json_ld':                  return await getJsonLdSchemas(cdp);
         case 'browser_headings':                 return await getHeadingStructure2(cdp);
+                // font
+        case 'browser_computed_font':            return await getComputedFont(cdp, a.selector as string);
+        case 'browser_loaded_fonts2':            return await getLoadedFonts2(cdp);
+        case 'browser_font_faces':               return await getFontFaces(cdp);
+        case 'browser_element_font_size':        return await getElementFontSize(cdp, a.selector as string);
+        case 'browser_element_font_family':      return await getElementFontFamily(cdp, a.selector as string);
+        case 'browser_text_styles':              return await getTextStyles(cdp, a.selector as string);
+        case 'browser_distinct_fonts':           return await countDistinctFonts(cdp);
+        case 'browser_is_font_loaded':           return await isFontLoaded(cdp, a.font_family as string);
+        // modal2
+        case 'browser_detect_modals':            return await detectModals(cdp);
+        case 'browser_overlay_elements':         return await getOverlayElements(cdp);
+        case 'browser_has_backdrop':             return await hasBackdrop(cdp);
+        case 'browser_close_modal_escape':       return await closeModalByEscape(cdp);
+        case 'browser_click_close_button':       return await clickModalCloseButton(cdp);
+        case 'browser_popover_elements':         return await getPopoverElements(cdp);
+        case 'browser_zindex_layers':            return await countZIndexLayers(cdp);
+        // perf2
+        case 'browser_cdp_metrics':              return await getCdpMetrics(cdp);
+        case 'browser_js_heap_size':             return await getJsHeapSize(cdp);
+        case 'browser_dom_node_count2':          return await getDomNodeCount2(cdp);
+        case 'browser_event_listener_total':     return await getEventListenerTotal(cdp);
+        case 'browser_mark_performance2':        return await markPerformance2(cdp, a.name as string);
+        case 'browser_measure_performance2':     return await measurePerformance2(cdp, a.name as string, a.start_mark as string, a.end_mark as string);
+        case 'browser_clear_perf_marks':         return await clearPerformanceMarks(cdp);
+        case 'browser_get_perf_marks2':          return await getPerformanceMarks2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
