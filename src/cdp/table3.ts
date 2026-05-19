@@ -677,3 +677,91 @@ export async function getDataAttributes3(
     return _err3(e instanceof Error ? e.message : String(e));
   }
 }
+
+/**
+ * getTablePagination — Table pagination controls: [{tag, id, class_preview, currentPage, totalPages}] (max 10).
+ */
+export async function getTablePagination(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="pagination"],[class*="pager"],[aria-label*="pagination" i],[role="navigation"][aria-label*="page" i]';return Array.from(document.querySelectorAll(sel)).slice(0,10).map(el=>{const active=el.querySelector('[aria-current="page"],[class*="active"],[class*="current"]');return{tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),currentPage:active?(active.textContent||'').trim():null,totalPages:el.querySelectorAll('a,button,[role="button"]').length}}) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableSearch — Search inputs near tables: [{id, placeholder_preview, class_preview}] (max 10).
+ */
+export async function getTableSearch(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const inputs=Array.from(document.querySelectorAll('input[type="search"],input[placeholder*="search" i],input[placeholder*="filter" i],[class*="table-search"],[class*="grid-search"]'));return inputs.slice(0,10).map(el=>({id:el.id||null,placeholder_preview:(el.placeholder||'').slice(0,60),class_preview:(el.className||'').slice(0,40)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableExport — Export/download buttons near tables: [{tag, id, class_preview, text_preview}] (max 10).
+ */
+export async function getTableExport(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const kw=['export','download csv','download excel','download pdf','export csv','export excel'];return Array.from(document.querySelectorAll('button,a,[role="button"]')).filter(el=>{const t=(el.textContent||'').toLowerCase().trim();return kw.some(k=>t.includes(k))}).slice(0,10).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),text_preview:(el.textContent||'').trim().slice(0,60)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableColumnWidths — Column widths of first table: [{header, width}] (max 20).
+ */
+export async function getTableColumnWidths(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const t=document.querySelector('table');if(!t)return[];const ths=Array.from(t.querySelectorAll('th'));return ths.slice(0,20).map(th=>({header:(th.textContent||'').trim().slice(0,40),width:getComputedStyle(th).width})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableRowSelection — Tables with row selection: [{id, class_preview, selectedCount, totalRows}] (max 10).
+ */
+export async function getTableRowSelection(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('table')).slice(0,10).map(t=>({id:t.id||null,class_preview:(t.className||'').slice(0,40),selectedCount:t.querySelectorAll('tr.selected,tr[aria-selected="true"],input[type="checkbox"]:checked').length,totalRows:t.querySelectorAll('tbody tr').length})).filter(r=>r.selectedCount>0||r.totalRows>0) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableExpandable — Tables with expandable rows: [{id, class_preview, expandableCount}] (max 10).
+ */
+export async function getTableExpandable(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('table')).slice(0,10).map(t=>({id:t.id||null,class_preview:(t.className||'').slice(0,40),expandableCount:t.querySelectorAll('[aria-expanded],[class*="expand"],[class*="toggle-row"],[data-expand]').length})).filter(r=>r.expandableCount>0) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableFilters — Filter dropdowns/selects near tables: [{tag, id, class_preview, optionCount}] (max 20).
+ */
+export async function getTableFilters(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="table-filter"],[class*="grid-filter"],[class*="column-filter"],[data-filter]';const byClass=Array.from(document.querySelectorAll(sel));const byType=Array.from(document.querySelectorAll('select')).filter(s=>{const p=s.closest('table,div,section');return p&&(p.querySelector('table')||p.tagName==='TABLE')});return [...byClass,...byType].slice(0,20).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),optionCount:el.querySelectorAll('option').length})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTableActions — Action buttons within table rows: [{text_preview, count}] (max 20).
+ */
+export async function getTableActions(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const actionBtns=Array.from(document.querySelectorAll('table tbody button,table tbody a[role="button"],table tbody [class*="action"]'));const groups={};actionBtns.forEach(el=>{const t=(el.textContent||'').trim().slice(0,30);groups[t]=(groups[t]||0)+1});return Object.entries(groups).slice(0,20).map(([text,count])=>({text_preview:text,count})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

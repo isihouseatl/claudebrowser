@@ -79,7 +79,7 @@ import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAll
 import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
 import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay, detectModals, getOverlayElements, hasBackdrop, closeModalByEscape, clickModalCloseButton, getPopoverElements, countZIndexLayers } from './cdp/modal';
 import { getUrlParts, getQueryParams, setQueryParam, removeQueryParam, getHashFragment, setHashFragment, navigateToHash, getNavigationHistory } from './cdp/url2';
-import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow, getTableSummary3, getTableFirstRow, getTableRowCount3, getSortableColumns, getTableCellByPosition, getColumnValues, getPaginationElements, getDataAttributes3 } from './cdp/table3';
+import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow, getTableSummary3, getTableFirstRow, getTableRowCount3, getSortableColumns, getTableCellByPosition, getColumnValues, getPaginationElements, getDataAttributes3, getTablePagination, getTableSearch, getTableExport, getTableColumnWidths, getTableRowSelection, getTableExpandable, getTableFilters, getTableActions } from './cdp/table3';
 import { setGeolocationAccuracy, simulateMovement, setHighAccuracyMode, setLowAccuracyMode, setBatteryLevel, clearBatteryOverride, setScreenOrientation, clearScreenOrientation } from './cdp/geolocation3';
 import { takeFullPageScreenshot, takeViewportScreenshot, takeRegionScreenshot, takeJpegScreenshot, compareScreenshots, getFullPageDimensions2, takeScreenshotAfterDelay, screenshotSelector } from './cdp/capture2';
 import { getScrollDepth, isScrolledToBottom, isScrolledToTop, getScrollableParent, scrollByAmount, scrollElementBy, getScrollbarWidth, scrollToPercent } from './cdp/scroll3';
@@ -179,6 +179,8 @@ import { getConsentBanners, getPrivacyLinks, getGdprElements, getCookiePreferenc
 import { getMapElements2, getGoogleMapsIframes, getLeafletMaps, getMapboxMaps, getMapMarkers, getMapControls, getCoordinateData, getGeoJsonData } from './cdp/map2';
 import { getChartElements, getChartJs, getD3Elements2, getApexCharts, getHighcharts, getChartLegends, getChartTooltips, getDataVisualization } from './cdp/chart2';
 import { getLoginForms, getSocialLoginButtons, getOAuthButtons, getPasswordFields2, getTwoFactorInputs, getRememberMeCheckboxes, getForgotPasswordLinks, getSignupLinks } from './cdp/auth2';
+import { getSocialShareButtons, getOpenGraphTags3, getTwitterCardTags3, getFacebookMetaTags, getSocialEmbeds, getSocialLinks2, getSocialProofElements, getFollowButtons } from './cdp/social2';
+import { getTooltipElements, getTitleAttributes, getAriaDescribedBy, getPopoverTriggers, getHelpTexts, getInfoIcons, getTooltipContent, getHoverCards } from './cdp/tooltip2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -2096,6 +2098,33 @@ const TOOLS = [
   { name: 'browser_remember_me_checkboxes', description: 'Remember me checkbox elements: [{id, name, checked, label_text}] (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_forgot_password_links', description: 'Forgot password links: [{text_preview, href_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_signup_links', description: 'Sign up / register links: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Table3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_table_pagination', description: 'Table pagination controls: [{tag, id, class_preview, currentPage, totalPages}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_search', description: 'Search inputs near tables: [{id, placeholder_preview, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_export', description: 'Export/download buttons: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_column_widths', description: 'Column widths of first table: [{header, width}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_row_selection', description: 'Tables with row selection: [{id, class_preview, selectedCount, totalRows}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_expandable', description: 'Tables with expandable rows: [{id, class_preview, expandableCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_filters', description: 'Filter dropdowns near tables: [{tag, id, class_preview, optionCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_actions', description: 'Action buttons in table rows grouped: [{text_preview, count}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Social2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_social_share_buttons', description: 'Share buttons for social platforms: [{tag, id, class_preview, text_preview, platform}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_graph_tags3', description: 'Open Graph meta tags: [{property, content_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_twitter_card_tags3', description: 'Twitter Card meta tags: [{name, content_preview}] (max 15)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_facebook_meta_tags', description: 'Facebook/FB meta tags: [{property, content_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_embeds', description: 'Social platform iframes/embeds: [{platform, tag, src_preview, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_links2', description: 'Links to social platform profiles: [{platform, href_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_proof_elements', description: 'Social proof elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_follow_buttons', description: 'Follow/subscribe buttons: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Tooltip2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_tooltip_elements', description: 'Elements with tooltip patterns: [{tag, id, class_preview, tooltipText}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_title_attributes', description: 'Elements with title attribute: [{tag, id, title_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_described_by', description: 'Elements with aria-describedby: [{tag, id, describedBy, descriptionText}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popover_triggers', description: 'Popover trigger elements: [{tag, id, class_preview, popoverContent_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_help_texts', description: 'Help text elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_info_icons', description: 'Info/help icon elements: [{tag, id, class_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tooltip_content', description: 'Rendered tooltip content divs: [{tag, id, class_preview, text_preview, visible}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_cards', description: 'Hover card elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4096,6 +4125,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_remember_me_checkboxes':   return await getRememberMeCheckboxes(cdp);
         case 'browser_forgot_password_links':    return await getForgotPasswordLinks(cdp);
         case 'browser_signup_links':             return await getSignupLinks(cdp);
+                // table3 new
+        case 'browser_table_pagination':         return await getTablePagination(cdp);
+        case 'browser_table_search':             return await getTableSearch(cdp);
+        case 'browser_table_export':             return await getTableExport(cdp);
+        case 'browser_table_column_widths':      return await getTableColumnWidths(cdp);
+        case 'browser_table_row_selection':      return await getTableRowSelection(cdp);
+        case 'browser_table_expandable':         return await getTableExpandable(cdp);
+        case 'browser_table_filters':            return await getTableFilters(cdp);
+        case 'browser_table_actions':            return await getTableActions(cdp);
+        // social2 new
+        case 'browser_social_share_buttons':     return await getSocialShareButtons(cdp);
+        case 'browser_open_graph_tags3':         return await getOpenGraphTags3(cdp);
+        case 'browser_twitter_card_tags3':       return await getTwitterCardTags3(cdp);
+        case 'browser_facebook_meta_tags':       return await getFacebookMetaTags(cdp);
+        case 'browser_social_embeds':            return await getSocialEmbeds(cdp);
+        case 'browser_social_links2':            return await getSocialLinks2(cdp);
+        case 'browser_social_proof_elements':    return await getSocialProofElements(cdp);
+        case 'browser_follow_buttons':           return await getFollowButtons(cdp);
+        // tooltip2 new
+        case 'browser_tooltip_elements':         return await getTooltipElements(cdp);
+        case 'browser_title_attributes':         return await getTitleAttributes(cdp);
+        case 'browser_aria_described_by':        return await getAriaDescribedBy(cdp);
+        case 'browser_popover_triggers':         return await getPopoverTriggers(cdp);
+        case 'browser_help_texts':               return await getHelpTexts(cdp);
+        case 'browser_info_icons':               return await getInfoIcons(cdp);
+        case 'browser_tooltip_content':          return await getTooltipContent(cdp);
+        case 'browser_hover_cards':              return await getHoverCards(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
