@@ -162,6 +162,9 @@ import { getGridContainers2, getFlexContainers3, getStickyElements2, getFixedEle
 import { getDeepestElement2, getDuplicateIds, getEmptyElements, getHiddenElements2, getDetachedElements, getDataAttributes2, getAriaHidden2, getTabOrder3 } from './cdp/dom3';
 import { getScriptTags, getStylesheetLinks, getImageSources, getPreloadLinks, getResourceHints, getMetaTags3, getDocumentCharset, getPageTitle3 } from './cdp/network2';
 import { getTableCount5, getTableHeaders5, getTableRowCount5, getTableCaption2, getDataTables, getTableSortable, getTableFooters2, getNestedTables2 } from './cdp/table5';
+import { getBreadcrumbs2, getNavMenus, getMenuItems3, getMenuBars, getTreeItems, getTabList, getSiteLinks, getSkipLinks2 } from './cdp/breadcrumb2';
+import { getSearchInputs2, getSearchForms2, getHighlightedText, getTextBySelector2, getWordCount, getLinkTexts, getButtonTexts, getLabelTexts } from './cdp/search3';
+import { getDarkModeSupport, getColorScheme3, getBackgroundColors, getTextColors, getBorderColors, getContrastRatios, getThemeClasses, getColorDataAttrs } from './cdp/theme2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1836,6 +1839,33 @@ const TOOLS = [
   { name: 'browser_table_sortable', description: 'Tables with sortable headers (aria-sort): [{table_index, sortedColumn, sortDirection}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_table_footers2', description: '<tfoot> rows per table: [{table_index, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_nested_tables2', description: 'Tables nested inside other tables: [{depth, id, rowCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Breadcrumb2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_breadcrumbs2', description: 'Nav breadcrumb containers: [{id, items[text_preview], itemCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_menus', description: 'All <nav> elements: [{id, ariaLabel_preview, linkCount, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_menu_items3', description: 'Elements with role=menuitem/menuitemcheckbox/menuitemradio: [{tag, id, role, text_preview, ariaDisabled}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_menu_bars', description: 'Elements with role=menubar: [{tag, id, class, itemCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tree_items', description: 'Elements with role=treeitem: [{tag, id, text_preview, ariaExpanded, ariaLevel}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_list', description: 'Elements with role=tablist: [{id, tabCount, selectedTab_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_site_links', description: 'Links inside <header> or <nav>: [{href_preview, text_preview, inHeader, inNav}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_skip_links2', description: 'Skip navigation links (href or text contains "skip"): [{href, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Search3 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_search_inputs2', description: 'Inputs with type=search or role=searchbox: [{id, name, type, placeholder_preview, ariaLabel_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_forms2', description: 'Forms with role=search or search in action: [{id, action_preview, method, inputCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_highlighted_text', description: '<mark> elements: [{tag, id, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_by_selector2', description: 'Headings and text counts: {h1[], h2[], h3[], p_count, li_count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_word_count', description: 'Visible text word/char counts: {wordCount, charCount, paragraphCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_link_texts', description: 'All <a> text content: [{href_preview, text_preview, isExternal}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_button_texts', description: 'All button text content: [{tag, id, type, text_preview, disabled}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_label_texts', description: 'All <label> elements: [{id, forAttr, text_preview, wrapsInput}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Theme2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_dark_mode_support', description: 'prefers-color-scheme support: {prefersDark, prefersLight, supportsColorScheme}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_scheme3', description: 'meta color-scheme, CSS colorScheme, body bg/color: {metaColorScheme, cssColorScheme, bodyBg, bodyColor}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_background_colors', description: 'Unique background colors on elements: [{color, count, element_example}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_colors', description: 'Unique text colors on elements: [{color, count, element_example}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_border_colors', description: 'Unique border colors where borderWidth > 0: [{color, count}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_contrast_ratios', description: 'Text/bg color pairs for key elements: [{tag, id, text_color, bg_color}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_classes', description: 'Elements with dark/light/theme class names: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_data_attrs', description: 'Elements with data-theme or data-color-scheme: [{tag, id, dataTheme, dataColorScheme}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3593,6 +3623,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_table_sortable':          return await getTableSortable(cdp);
         case 'browser_table_footers2':          return await getTableFooters2(cdp);
         case 'browser_nested_tables2':          return await getNestedTables2(cdp);
+                // breadcrumb2
+        case 'browser_breadcrumbs2':            return await getBreadcrumbs2(cdp);
+        case 'browser_nav_menus':               return await getNavMenus(cdp);
+        case 'browser_menu_items3':             return await getMenuItems3(cdp);
+        case 'browser_menu_bars':               return await getMenuBars(cdp);
+        case 'browser_tree_items':              return await getTreeItems(cdp);
+        case 'browser_tab_list':                return await getTabList(cdp);
+        case 'browser_site_links':              return await getSiteLinks(cdp);
+        case 'browser_skip_links2':             return await getSkipLinks2(cdp);
+        // search3
+        case 'browser_search_inputs2':          return await getSearchInputs2(cdp);
+        case 'browser_search_forms2':           return await getSearchForms2(cdp);
+        case 'browser_highlighted_text':        return await getHighlightedText(cdp);
+        case 'browser_text_by_selector2':       return await getTextBySelector2(cdp);
+        case 'browser_word_count':              return await getWordCount(cdp);
+        case 'browser_link_texts':              return await getLinkTexts(cdp);
+        case 'browser_button_texts':            return await getButtonTexts(cdp);
+        case 'browser_label_texts':             return await getLabelTexts(cdp);
+        // theme2
+        case 'browser_dark_mode_support':       return await getDarkModeSupport(cdp);
+        case 'browser_color_scheme3':           return await getColorScheme3(cdp);
+        case 'browser_background_colors':       return await getBackgroundColors(cdp);
+        case 'browser_text_colors':             return await getTextColors(cdp);
+        case 'browser_border_colors':           return await getBorderColors(cdp);
+        case 'browser_contrast_ratios':         return await getContrastRatios(cdp);
+        case 'browser_theme_classes':           return await getThemeClasses(cdp);
+        case 'browser_color_data_attrs':        return await getColorDataAttrs(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
