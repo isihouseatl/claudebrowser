@@ -111,7 +111,7 @@ import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesW
 import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs, getAllInputs3, getTextInputs, getPasswordInputs2, getCheckboxes, getRadioButtons, getSelectElements, getTextareas2, getFileInputs2 } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
-import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2 } from './cdp/perf2';
+import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2, getNavigationTimingPerf2, getResourceTiming2, getLargestContentfulPaint2, getFirstInputDelay2, getCumulativeLayoutShift2, getLongTasksPerf2, getMemoryInfo2, getPaintTiming2 } from './cdp/perf2';
 import { getStylesheets2, getInlineStyles, getComputedStyles, getCssVariables2 as getCssVariables3, getMediaQueries, getAnimations2, getTransitions2, countCssRules } from './cdp/css2';
 import { injectWsMonitor, getWsConnections, getWsMessages, clearWsMonitor, getWsStatus, sendWsMessage, closeWsConnection, getWsReadyState } from './cdp/websocket2';
 import { getIframes2, getIframeCount2, queryInIframe, getIframeTitle, getIframeSrc2, isIframeSandboxed2, getIframeDocument, focusIframe } from './cdp/iframe2';
@@ -157,6 +157,8 @@ import { getSearchForms, getSearchResults, getSearchSuggestions, getAutocomplete
 import { getCards, getArticles, getCarousels, getTabPanels, getAccordions, getStructuredListItems, getSteppers, getTimeline } from './cdp/card2';
 import { getCanvasElements3, getSvgCharts, getChartLabels, getChartLegend, getD3Elements, getCanvasSize2, getWebGLContexts, getSvgPaths } from './cdp/dataviz2';
 import { getMapElements, getAddressElements, getPhoneNumbers, getEmailLinks, getSocialLinks, getSchemaOrg2, getMicrodata, getGeolocationPermission2 } from './cdp/geo3';
+import { getContentSecurityPolicy2, getMixedContentLinks, getCrossOriginLinks, getSubresourceIntegrity2, getIframePermissions, getExternalScripts2, getPasswordFields, getFormActions } from './cdp/security2';
+import { getGridContainers2, getFlexContainers3, getStickyElements2, getFixedElements, getAbsoluteElements2, getOverflowElements, getZIndexStack2, getViewportInfo } from './cdp/layout2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1723,6 +1725,33 @@ const TOOLS = [
   { name: 'browser_resize_observers', description: 'Elements with [data-resize]/[onresize] patterns: tag, id (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_intersection_observers', description: 'Elements with [data-lazy]/[loading=lazy]/[data-intersection]: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_custom_events', description: 'Elements with data-event* attributes: tag, id, dataEvents (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Perf2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_navigation_timing_perf2', description: 'window.performance.timing: {domContentLoaded, loadComplete, ttfb, domInteractive} in ms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_timing2', description: 'performance.getEntriesByType(resource): [{name_preview, initiatorType, duration, transferSize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_largest_contentful_paint2', description: 'LCP entry: {startTime, size, url_preview} or null', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_first_input_delay2', description: 'First input delay entry: {startTime, processingStart, duration} or null', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cumulative_layout_shift2', description: 'Summed layout-shift entries: {cls, entries_count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_long_tasks_perf2', description: 'longtask entries >50ms: [{startTime, duration, attribution}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_memory_info2', description: 'performance.memory in MB: {usedJSHeapSize, totalJSHeapSize, jsHeapSizeLimit} or null', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paint_timing2', description: 'first-paint and first-contentful-paint: {firstPaint, firstContentfulPaint} in ms', inputSchema: { type: 'object', properties: {} } },
+  // ── Security2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_content_security_policy2', description: 'CSP meta tags: [{source, policy_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mixed_content_links', description: 'http:// resources on https:// page: [{tag, src_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cross_origin_links', description: 'Links to different origins: [{href_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_subresource_integrity2', description: 'script/link tags with integrity: [{tag, src_preview, integrity_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_iframe_permissions', description: 'iframes with allow/sandbox: [{src_preview, allow, sandbox}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_external_scripts2', description: 'External <script src>: [{src_preview, async, defer, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_password_fields', description: 'input[type=password]: [{id, name, autocomplete, form_id}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_form_actions', description: 'All <form> action URLs: [{id, action, method, enctype}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Layout2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_grid_containers2', description: 'Elements with display:grid: [{tag, id, class, columns, rows}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flex_containers3', description: 'Elements with display:flex/inline-flex: [{tag, id, class, flexDirection, flexWrap}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sticky_elements2', description: 'Elements with position:sticky: [{tag, id, class, top}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fixed_elements', description: 'Elements with position:fixed: [{tag, id, class, top, left, zIndex}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_absolute_elements2', description: 'Elements with position:absolute: [{tag, id, class, top, left}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_overflow_elements', description: 'Elements with overflow:scroll/auto/hidden: [{tag, id, class, overflow, overflowX, overflowY}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_zindex_stack2', description: 'Elements with z-index > 0: [{tag, id, class, zIndex}] sorted desc (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_info', description: 'Window dimensions: {innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio, scrollX, scrollY}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3372,6 +3401,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_resize_observers':        return await getResizeObservers(cdp);
         case 'browser_intersection_observers':  return await getIntersectionObservers(cdp);
         case 'browser_custom_events':           return await getCustomEvents(cdp);
+                // perf2 new
+        case 'browser_navigation_timing_perf2':  return await getNavigationTimingPerf2(cdp);
+        case 'browser_resource_timing2':         return await getResourceTiming2(cdp);
+        case 'browser_largest_contentful_paint2': return await getLargestContentfulPaint2(cdp);
+        case 'browser_first_input_delay2':       return await getFirstInputDelay2(cdp);
+        case 'browser_cumulative_layout_shift2': return await getCumulativeLayoutShift2(cdp);
+        case 'browser_long_tasks_perf2':         return await getLongTasksPerf2(cdp);
+        case 'browser_memory_info2':             return await getMemoryInfo2(cdp);
+        case 'browser_paint_timing2':            return await getPaintTiming2(cdp);
+        // security2
+        case 'browser_content_security_policy2': return await getContentSecurityPolicy2(cdp);
+        case 'browser_mixed_content_links':      return await getMixedContentLinks(cdp);
+        case 'browser_cross_origin_links':       return await getCrossOriginLinks(cdp);
+        case 'browser_subresource_integrity2':   return await getSubresourceIntegrity2(cdp);
+        case 'browser_iframe_permissions':       return await getIframePermissions(cdp);
+        case 'browser_external_scripts2':        return await getExternalScripts2(cdp);
+        case 'browser_password_fields':          return await getPasswordFields(cdp);
+        case 'browser_form_actions':             return await getFormActions(cdp);
+        // layout2
+        case 'browser_grid_containers2':         return await getGridContainers2(cdp);
+        case 'browser_flex_containers3':         return await getFlexContainers3(cdp);
+        case 'browser_sticky_elements2':         return await getStickyElements2(cdp);
+        case 'browser_fixed_elements':           return await getFixedElements(cdp);
+        case 'browser_absolute_elements2':       return await getAbsoluteElements2(cdp);
+        case 'browser_overflow_elements':        return await getOverflowElements(cdp);
+        case 'browser_zindex_stack2':            return await getZIndexStack2(cdp);
+        case 'browser_viewport_info':            return await getViewportInfo(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
