@@ -206,6 +206,9 @@ import { getCookies3, getSessionStorageItems3, getLocalStorageItems3, getIndexed
 import { getGeolocationPermission4, getGeolocationState, getMapElements3, getCoordinateInputs, getAddressInputs, getLocationSearch, getGeoApiUsage, getTimezoneInfo2 } from './cdp/geolocation2';
 import { getPrintStyles, getPrintMediaQuery, getPrintOnlyElements, getPrintHiddenElements2, getPageBreakElements2, getPrintLinks, getPrintMetadata, getPrintViewport } from './cdp/print3';
 import { getClipboardPermission2, getClipboardState, getCopyButtons2, getCutButtons, getPasteTargets, getClipboardEventListeners, getClipboardApiUsage, getSelectAllElements } from './cdp/clipboard4';
+import { getSpeechRecognitionState, getSpeechSynthesisVoices, getSpeechSynthesisState, getSpeechInputs, getVoiceSearchElements, getSpeechPermission, getTtsButtons, getSpeechApiUsage } from './cdp/speech2';
+import { getDraggableElements4, getDropZones3, getDragHandles2, getSortableElements, getDragState, getDropTargets3, getDragListeners, getDragApiUsage } from './cdp/drag3';
+import { getResizableElements2, getResizeHandles, getSplitPanels, getResizeObservers3, getResizeState, getResizableContainers, getMinMaxConstraints, getResizeApiUsage } from './cdp/resize2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2363,6 +2366,33 @@ const TOOLS = [
   { name: 'browser_clipboard_event_listeners', description: 'Clipboard event handler summary: {hasCopy, hasCut, hasPaste, listenerCount}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clipboard_api_usage', description: 'Detected clipboard patterns: {usesClipboardApi, usesExecCommand, hasClipboardButton}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_select_all_elements', description: 'Elements with select-all behavior: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Speech2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_speech_recognition_state', description: 'Web Speech API availability: {available, hasRecognition, hasSynthesis}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_speech_synthesis_voices', description: 'Available TTS voices: [{name, lang, localService, default}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_speech_synthesis_state', description: 'TTS state: {speaking, pending, paused, voiceCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_speech_inputs', description: 'Inputs with speech/voice type: [{id, type, class_preview, hasVoiceButton}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_voice_search_elements', description: 'Voice search buttons/icons: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_speech_permission', description: 'Microphone permission state: {state, isGranted, isDenied, isPrompt}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tts_buttons', description: 'Text-to-speech trigger buttons: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_speech_api_usage', description: 'Detected speech patterns: {hasWebSpeechApi, hasSpeechRecognition, hasSpeechSynthesis, hasVoiceSearch}', inputSchema: { type: 'object', properties: {} } },
+  // ── Drag3 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_draggable_elements4', description: 'Elements with draggable=true: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_zones3', description: 'Drop zone containers: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_handles2', description: 'Drag handle elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sortable_elements', description: 'Sortable list containers: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_state', description: 'DnD state summary: {hasDraggable, hasDropZone, hasSortable, dragLibrary}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_targets3', description: 'Elements with dragover/drop listeners: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_listeners', description: 'Drag event handler summary: {hasDragstart, hasDragover, hasDrop, hasDragend, listenerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_api_usage', description: 'Detected DnD library: {hasHTML5DnD, hasSortableJs, hasDraggableJs, hasReactDnd, hasInteractJs}', inputSchema: { type: 'object', properties: {} } },
+  // ── Resize2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_resizable_elements2', description: 'Elements with resize CSS: [{tag, id, class_preview, resize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_handles', description: 'Resize handle elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_split_panels', description: 'Split pane/divider containers: [{tag, id, class_preview, orientation}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_observers3', description: 'ResizeObserver usage: {count, hasResizeObserver}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_state', description: 'Overall resize state: {hasResizable, hasSplitPane, hasDivider, resizeLibrary}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resizable_containers', description: 'Overflow containers that can be resized: [{tag, id, class_preview, overflow}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_min_max_constraints', description: 'Elements with min/max dimensions: [{tag, id, minWidth, maxWidth, minHeight, maxHeight}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_api_usage', description: 'Detected resize library: {hasResizeObserver, hasSplitJs, hasInteractJs, hasReResizable}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4606,6 +4636,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_clipboard_event_listeners': return await getClipboardEventListeners(cdp);
         case 'browser_clipboard_api_usage':      return await getClipboardApiUsage(cdp);
         case 'browser_select_all_elements':      return await getSelectAllElements(cdp);
+                // speech2 new
+        case 'browser_speech_recognition_state': return await getSpeechRecognitionState(cdp);
+        case 'browser_speech_synthesis_voices':  return await getSpeechSynthesisVoices(cdp);
+        case 'browser_speech_synthesis_state':   return await getSpeechSynthesisState(cdp);
+        case 'browser_speech_inputs':            return await getSpeechInputs(cdp);
+        case 'browser_voice_search_elements':    return await getVoiceSearchElements(cdp);
+        case 'browser_speech_permission':        return await getSpeechPermission(cdp);
+        case 'browser_tts_buttons':              return await getTtsButtons(cdp);
+        case 'browser_speech_api_usage':         return await getSpeechApiUsage(cdp);
+        // drag3 new
+        case 'browser_draggable_elements4':      return await getDraggableElements4(cdp);
+        case 'browser_drop_zones3':              return await getDropZones3(cdp);
+        case 'browser_drag_handles2':            return await getDragHandles2(cdp);
+        case 'browser_sortable_elements':        return await getSortableElements(cdp);
+        case 'browser_drag_state':               return await getDragState(cdp);
+        case 'browser_drop_targets3':            return await getDropTargets3(cdp);
+        case 'browser_drag_listeners':           return await getDragListeners(cdp);
+        case 'browser_drag_api_usage':           return await getDragApiUsage(cdp);
+        // resize2 new
+        case 'browser_resizable_elements2':      return await getResizableElements2(cdp);
+        case 'browser_resize_handles':           return await getResizeHandles(cdp);
+        case 'browser_split_panels':             return await getSplitPanels(cdp);
+        case 'browser_resize_observers3':        return await getResizeObservers3(cdp);
+        case 'browser_resize_state':             return await getResizeState(cdp);
+        case 'browser_resizable_containers':     return await getResizableContainers(cdp);
+        case 'browser_min_max_constraints':      return await getMinMaxConstraints(cdp);
+        case 'browser_resize_api_usage':         return await getResizeApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
