@@ -97,7 +97,7 @@ import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, g
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
-import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers } from './cdp/dialog2';
+import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers, getDialogElements2, getOpenDialogs3, getModalRoles, getTooltips3, getAlerts, getPopoverElements2, getOverlays2, getAriaExpanded3 } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2, getNavigationTiming4, getPaintTimings, getLargestContentfulPaint, getFirstInputDelay, getCumulativeLayoutShift, getResourceCount2, getTimeToFirstByte2, getLongTasks2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
@@ -116,7 +116,7 @@ import { getStylesheets2, getInlineStyles, getComputedStyles, getCssVariables2 a
 import { injectWsMonitor, getWsConnections, getWsMessages, clearWsMonitor, getWsStatus, sendWsMessage, closeWsConnection, getWsReadyState } from './cdp/websocket2';
 import { getIframes2, getIframeCount2, queryInIframe, getIframeTitle, getIframeSrc2, isIframeSandboxed2, getIframeDocument, focusIframe } from './cdp/iframe2';
 import { getCdpTargets, getCdpVersion, enableCdpDomain, getCdpMetricNames, setDeviceMetrics2, clearDeviceMetrics2, getCdpDomains, captureNetworkLog } from './cdp/devtools';
-import { getScrollDepth2, isAtBottom, isAtTop, scrollToBottom2, scrollToTop2, getScrollableContainers, scrollContainerTo, getElementScrollInfo } from './cdp/scroll2';
+import { getScrollDepth2, isAtBottom, isAtTop, scrollToBottom2, scrollToTop2, getScrollableContainers, scrollContainerTo, getElementScrollInfo, getScrollPosition3, getScrollableContainers2, getElementBoundingBoxes, getAboveTheFold2, getOffscreenElements2, getStickyHeaders, getScrollSnap, getPageDimensions2 } from './cdp/scroll2';
 import { pressEnter, pressTab, pressEscape, pressArrowDown, pressArrowUp, typeText2, getActiveElement, getFocusPath } from './cdp/keyboard2';
 import { getElementDepth, getElementPath, getSiblings, getParentElement, getElementsByText, getElementsWithAttribute, countElementsByTag, getFirstVisible } from './cdp/element2';
 import { getForms, getFormFields2, getSelectOptions2, setSelectOption, getRadioGroup, getFormValidation, submitForm2, resetForm2 } from './cdp/form2';
@@ -161,6 +161,7 @@ import { getContentSecurityPolicy2, getMixedContentLinks, getCrossOriginLinks, g
 import { getGridContainers2, getFlexContainers3, getStickyElements2, getFixedElements, getAbsoluteElements2, getOverflowElements, getZIndexStack2, getViewportInfo } from './cdp/layout2';
 import { getDeepestElement2, getDuplicateIds, getEmptyElements, getHiddenElements2, getDetachedElements, getDataAttributes2, getAriaHidden2, getTabOrder3 } from './cdp/dom3';
 import { getScriptTags, getStylesheetLinks, getImageSources, getPreloadLinks, getResourceHints, getMetaTags3, getDocumentCharset, getPageTitle3 } from './cdp/network2';
+import { getTableCount5, getTableHeaders5, getTableRowCount5, getTableCaption2, getDataTables, getTableSortable, getTableFooters2, getNestedTables2 } from './cdp/table5';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1808,6 +1809,33 @@ const TOOLS = [
   { name: 'browser_meta_tags3', description: 'All <meta> tags: [{name, property, httpEquiv, content_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_document_charset', description: 'Document encoding: {charset, contentType, doctype, compatMode}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_page_title3', description: 'Title and headings: {title, h1_count, h1_first_preview, h2_count}', inputSchema: { type: 'object', properties: {} } },
+  // ── Dialog2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_dialog_elements2', description: 'All <dialog> elements: [{id, class, open, hasForm, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_dialogs3', description: 'Open <dialog[open]> elements: [{id, class, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_modal_roles', description: 'Elements with role="dialog"|"alertdialog": [{tag, id, class, role, ariaLabel_preview, ariaModal}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tooltips3', description: 'Elements with role="tooltip": [{tag, id, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alerts', description: 'Elements with role="alert"|"status": [{tag, id, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popover_elements2', description: 'Elements with popover attribute: [{tag, id, class, popover}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_overlays2', description: 'High z-index fixed/absolute visible elements: [{tag, id, class, zIndex, position}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_expanded3', description: 'Elements with aria-expanded: [{tag, id, role, ariaExpanded, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Scroll2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_position3', description: 'Current scroll position: {scrollX, scrollY, maxScrollX, maxScrollY, scrollPercent}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scrollable_containers2', description: 'Scrollable elements with overflow content: [{tag, id, class, scrollWidth, scrollHeight, clientWidth, clientHeight}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_element_bounding_boxes', description: 'Bounding rects for visible interactive elements: [{tag, id, top, left, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_above_the_fold2', description: 'Headings/sections within initial viewport: [{tag, id, class, top}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_offscreen_elements2', description: 'Elements outside viewport: [{tag, id, class, top, left}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sticky_headers', description: 'Sticky/fixed elements at top: [{tag, id, class, top, height}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_snap', description: 'Elements with scroll-snap-type or scroll-snap-align: [{tag, id, class, snapType, snapAlign}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_dimensions2', description: 'Full document dimensions: {documentWidth, documentHeight, viewportWidth, viewportHeight, devicePixelRatio, scrollbarWidth}', inputSchema: { type: 'object', properties: {} } },
+  // ── Table5 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_table_count5', description: 'Count of <table> elements: {count, withCaption, withThead, withTfoot}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_headers5', description: '<th> elements: [{table_index, text_preview, scope, colspan, rowspan}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_row_count5', description: 'Row counts per table: [{table_index, id, rowCount, colCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_caption2', description: '<caption> elements: [{table_index, id, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_tables', description: 'Tables with role="grid" or summary/aria-label: [{id, role, summary_preview, ariaLabel_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_sortable', description: 'Tables with sortable headers (aria-sort): [{table_index, sortedColumn, sortDirection}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_footers2', description: '<tfoot> rows per table: [{table_index, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nested_tables2', description: 'Tables nested inside other tables: [{depth, id, rowCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3538,6 +3566,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_meta_tags3':              return await getMetaTags3(cdp);
         case 'browser_document_charset':        return await getDocumentCharset(cdp);
         case 'browser_page_title3':             return await getPageTitle3(cdp);
+                // dialog2 new
+        case 'browser_dialog_elements2':        return await getDialogElements2(cdp);
+        case 'browser_open_dialogs3':           return await getOpenDialogs3(cdp);
+        case 'browser_modal_roles':             return await getModalRoles(cdp);
+        case 'browser_tooltips3':               return await getTooltips3(cdp);
+        case 'browser_alerts':                  return await getAlerts(cdp);
+        case 'browser_popover_elements2':       return await getPopoverElements2(cdp);
+        case 'browser_overlays2':               return await getOverlays2(cdp);
+        case 'browser_aria_expanded3':          return await getAriaExpanded3(cdp);
+        // scroll2 new
+        case 'browser_scroll_position3':        return await getScrollPosition3(cdp);
+        case 'browser_scrollable_containers2':  return await getScrollableContainers2(cdp);
+        case 'browser_element_bounding_boxes':  return await getElementBoundingBoxes(cdp);
+        case 'browser_above_the_fold2':         return await getAboveTheFold2(cdp);
+        case 'browser_offscreen_elements2':     return await getOffscreenElements2(cdp);
+        case 'browser_sticky_headers':          return await getStickyHeaders(cdp);
+        case 'browser_scroll_snap':             return await getScrollSnap(cdp);
+        case 'browser_page_dimensions2':        return await getPageDimensions2(cdp);
+        // table5
+        case 'browser_table_count5':            return await getTableCount5(cdp);
+        case 'browser_table_headers5':          return await getTableHeaders5(cdp);
+        case 'browser_table_row_count5':        return await getTableRowCount5(cdp);
+        case 'browser_table_caption2':          return await getTableCaption2(cdp);
+        case 'browser_data_tables':             return await getDataTables(cdp);
+        case 'browser_table_sortable':          return await getTableSortable(cdp);
+        case 'browser_table_footers2':          return await getTableFooters2(cdp);
+        case 'browser_nested_tables2':          return await getNestedTables2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

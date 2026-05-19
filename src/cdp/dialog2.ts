@@ -782,3 +782,285 @@ export async function getDrawers(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ---------------------------------------------------------------------------
+// getDialogElements2
+// ---------------------------------------------------------------------------
+
+/**
+ * All <dialog> elements: [{id, class, open, hasForm, text_preview}] (max 20).
+ * Richer variant of getDialogElements — adds class, hasForm, and text_preview.
+ */
+export async function getDialogElements2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var dialogs = Array.from(document.querySelectorAll('dialog'));
+  var results = dialogs.slice(0, 20).map(function(el) {
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return {
+      id: el.id || null,
+      class: el.className || null,
+      open: el.open,
+      hasForm: !!el.querySelector('form'),
+      text_preview: text.substring(0, 80)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getOpenDialogs3
+// ---------------------------------------------------------------------------
+
+/**
+ * <dialog[open]> elements: [{id, class, text_preview}] (max 10).
+ * Variant using the open HTML attribute selector.
+ */
+export async function getOpenDialogs3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var dialogs = Array.from(document.querySelectorAll('dialog[open]'));
+  var results = dialogs.slice(0, 10).map(function(el) {
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return {
+      id: el.id || null,
+      class: el.className || null,
+      text_preview: text.substring(0, 80)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getModalRoles
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with role="dialog" or role="alertdialog":
+ * [{tag, id, class, role, ariaLabel_preview, ariaModal}] (max 20).
+ */
+export async function getModalRoles(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var label = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || null;
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      role: el.getAttribute('role'),
+      ariaLabel_preview: label ? String(label).substring(0, 80) : null,
+      ariaModal: el.getAttribute('aria-modal')
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTooltips3
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with role="tooltip": [{tag, id, text_preview}] (max 20).
+ * Focused variant -- role="tooltip" only, no data-tooltip.
+ */
+export async function getTooltips3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="tooltip"]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      text_preview: text.substring(0, 80)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getAlerts
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with role="alert" or role="status": [{tag, id, role, text_preview}] (max 20).
+ */
+export async function getAlerts(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="alert"], [role="status"]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      role: el.getAttribute('role'),
+      text_preview: text.substring(0, 80)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getPopoverElements2
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with the popover attribute (HTML Popover API):
+ * [{tag, id, class, popover}] (max 20).
+ */
+export async function getPopoverElements2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[popover]'));
+  var results = els.slice(0, 20).map(function(el) {
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      popover: el.getAttribute('popover')
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getOverlays2
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with high z-index (>100) and fixed/absolute position that are visible:
+ * [{tag, id, class, zIndex, position}] (max 10).
+ */
+export async function getOverlays2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var all = Array.from(document.querySelectorAll('*'));
+  var results = [];
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    var style = window.getComputedStyle(el);
+    var pos = style.position;
+    if (pos !== 'fixed' && pos !== 'absolute') continue;
+    var z = parseInt(style.zIndex, 10);
+    if (isNaN(z) || z <= 100) continue;
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+    var rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      zIndex: z,
+      position: pos
+    });
+    if (results.length >= 10) break;
+  }
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getAriaExpanded3
+// ---------------------------------------------------------------------------
+
+/**
+ * Elements with aria-expanded attribute: [{tag, id, role, ariaExpanded, text_preview}] (max 20).
+ */
+export async function getAriaExpanded3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[aria-expanded]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      role: el.getAttribute('role'),
+      ariaExpanded: el.getAttribute('aria-expanded'),
+      text_preview: text.substring(0, 80)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true });
+    if (exceptionDetails) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error' }) }] };
+    }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(JSON.parse(result.value as string), null, 2) }] };
+  } catch (e) {
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e instanceof Error ? e.message : String(e) }) }] };
+  }
+}

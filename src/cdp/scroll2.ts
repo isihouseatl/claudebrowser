@@ -458,3 +458,254 @@ export async function getElementScrollInfo(
   if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getElementScrollInfo error');
   return ok(result.value);
 }
+
+// ---------------------------------------------------------------------------
+// Scroll/viewport/position inspection functions (8 new exports)
+// ---------------------------------------------------------------------------
+
+/**
+ * Current scroll position: scrollX, scrollY, maxScrollX, maxScrollY, scrollPercent.
+ * Named getScrollPosition3 to avoid conflicts with page.ts and viewport2.ts versions.
+ */
+export async function getScrollPosition3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
+  const maxScrollY = document.documentElement.scrollHeight - window.innerHeight;
+  const scrollPercent = maxScrollY <= 0 ? 0 : Math.round((scrollY / maxScrollY) * 100);
+  return { scrollX, scrollY, maxScrollX, maxScrollY, scrollPercent };
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getScrollPosition3 error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Elements that are scrollable (overflow scroll/auto with overflow content): max 20.
+ * Named getScrollableContainers2 to avoid conflict with existing getScrollableContainers.
+ */
+export async function getScrollableContainers2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const all = Array.from(document.querySelectorAll('*'));
+  const results = [];
+  for (const el of all) {
+    if (results.length >= 20) break;
+    const style = window.getComputedStyle(el);
+    const ox = style.overflowX;
+    const oy = style.overflowY;
+    const scrollable = (ox === 'auto' || ox === 'scroll' || oy === 'auto' || oy === 'scroll');
+    if (scrollable && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        class: (el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : null),
+        scrollWidth: el.scrollWidth,
+        scrollHeight: el.scrollHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight,
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getScrollableContainers2 error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Bounding rects for visible interactive elements: a, button, input, select, textarea. Max 20.
+ */
+export async function getElementBoundingBoxes(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const els = Array.from(document.querySelectorAll('a, button, input, select, textarea'));
+  const results = [];
+  for (const el of els) {
+    if (results.length >= 20) break;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) continue;
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      top: Math.round(rect.top),
+      left: Math.round(rect.left),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    });
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getElementBoundingBoxes error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Elements whose top is within the initial viewport (top < innerHeight).
+ * Checks headings, sections, articles, main. Max 20.
+ * Named getAboveTheFold2 to avoid conflict with viewport2.ts version.
+ */
+export async function getAboveTheFold2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const els = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6, section, article, main'));
+  const results = [];
+  for (const el of els) {
+    if (results.length >= 20) break;
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        class: (el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : null),
+        top: Math.round(rect.top),
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getAboveTheFold2 error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Elements with getBoundingClientRect outside viewport. Max 20.
+ * Named getOffscreenElements2 to avoid conflict with viewport2.ts version.
+ */
+export async function getOffscreenElements2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const els = Array.from(document.querySelectorAll('*'));
+  const results = [];
+  const iw = window.innerWidth;
+  const ih = window.innerHeight;
+  for (const el of els) {
+    if (results.length >= 20) break;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) continue;
+    if (rect.bottom < 0 || rect.top > ih || rect.right < 0 || rect.left > iw) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        class: (el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : null),
+        top: Math.round(rect.top),
+        left: Math.round(rect.left),
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getOffscreenElements2 error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Elements at top of page that appear sticky (position:sticky or position:fixed with small top). Max 10.
+ */
+export async function getStickyHeaders(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const els = Array.from(document.querySelectorAll('*'));
+  const results = [];
+  for (const el of els) {
+    if (results.length >= 10) break;
+    const style = window.getComputedStyle(el);
+    const pos = style.position;
+    if (pos !== 'sticky' && pos !== 'fixed') continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.top > 100) continue;
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: (el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : null),
+      top: Math.round(rect.top),
+      height: Math.round(rect.height),
+    });
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getStickyHeaders error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Elements with scroll-snap-type or scroll-snap-align set. Max 20.
+ */
+export async function getScrollSnap(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  const els = Array.from(document.querySelectorAll('*'));
+  const results = [];
+  for (const el of els) {
+    if (results.length >= 20) break;
+    const style = window.getComputedStyle(el);
+    const snapType = style.scrollSnapType;
+    const snapAlign = style.scrollSnapAlign;
+    if ((!snapType || snapType === 'none') && (!snapAlign || snapAlign === 'none')) continue;
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: (el.className && typeof el.className === 'string' ? el.className.slice(0, 80) : null),
+      snapType: snapType || null,
+      snapAlign: snapAlign || null,
+    });
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getScrollSnap error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * Full document dimensions: documentWidth, documentHeight, viewportWidth, viewportHeight,
+ * devicePixelRatio, scrollbarWidth.
+ * Named getPageDimensions2 to avoid conflict with layout.ts version.
+ */
+export async function getPageDimensions2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(() => {
+  return {
+    documentWidth: document.documentElement.scrollWidth,
+    documentHeight: document.documentElement.scrollHeight,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+    scrollbarWidth: window.innerWidth - document.documentElement.clientWidth,
+  };
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getPageDimensions2 error');
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
