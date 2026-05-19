@@ -504,3 +504,315 @@ export async function getTouchActionStyle(
   }
   return ok(result.value as string);
 }
+
+// ── Pointer/Touch Inspection Tools ───────────────────────────────────────────
+
+/**
+ * Get last known mouse position via a `mousemove` listener injected as
+ * `window.__lastPointerPos`. If not yet injected, inject it first.
+ * Returns { x, y, injected: true } where injected indicates the listener
+ * was just set up (position will be {0,0} until the user moves the mouse).
+ */
+export async function getPointerPosition(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var w = window;
+  var injected = false;
+  if (!w.__lastPointerPos) {
+    w.__lastPointerPos = { x: 0, y: 0 };
+    document.addEventListener('mousemove', function(e) {
+      w.__lastPointerPos = { x: e.clientX, y: e.clientY };
+    });
+    injected = true;
+  }
+  return JSON.stringify({ x: w.__lastPointerPos.x, y: w.__lastPointerPos.y, injected: injected });
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Inject a `mouseover` listener that sets `window.__hoverTarget` to the
+ * current element's tag, id, and class. Returns the current hover target
+ * or { tag: null } if none has been recorded yet.
+ */
+export async function getHoverTarget(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var w = window;
+  if (!w.__hoverListenerAttached) {
+    document.addEventListener('mouseover', function(e) {
+      var el = e.target;
+      if (el && el.tagName) {
+        w.__hoverTarget = {
+          tag: el.tagName.toLowerCase(),
+          id: el.id || null,
+          'class': (el.className && typeof el.className === 'string') ? el.className.trim() : null
+        };
+      }
+    });
+    w.__hoverListenerAttached = true;
+  }
+  if (!w.__hoverTarget) {
+    return JSON.stringify({ tag: null });
+  }
+  return JSON.stringify(w.__hoverTarget);
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Return touch and pointer support flags for the current page context.
+ * Returns { maxTouchPoints, touchEvent, pointerEvent }.
+ */
+export async function getTouchSupport2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  return JSON.stringify({
+    maxTouchPoints: navigator.maxTouchPoints,
+    touchEvent: 'ontouchstart' in window,
+    pointerEvent: 'PointerEvent' in window
+  });
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Check `window.__pointerCaptureEl` (set by a `gotpointercapture` event listener).
+ * Injects the listener if not already present.
+ * Returns { hasCapturedElement, tag, id }.
+ */
+export async function getPointerCapture2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var w = window;
+  if (!w.__pointerCaptureListenerAttached) {
+    document.addEventListener('gotpointercapture', function(e) {
+      var el = e.target;
+      if (el && el.tagName) {
+        w.__pointerCaptureEl = { tag: el.tagName.toLowerCase(), id: el.id || null };
+      }
+    });
+    document.addEventListener('lostpointercapture', function() {
+      w.__pointerCaptureEl = null;
+    });
+    w.__pointerCaptureListenerAttached = true;
+  }
+  if (!w.__pointerCaptureEl) {
+    return JSON.stringify({ hasCapturedElement: false, tag: null, id: null });
+  }
+  return JSON.stringify({
+    hasCapturedElement: true,
+    tag: w.__pointerCaptureEl.tag,
+    id: w.__pointerCaptureEl.id
+  });
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Find all elements with a non-default `cursor` CSS style (not 'auto' or 'default').
+ * Returns up to 20 results as { tag, id, cursor }[].
+ */
+export async function getCursorStyles(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var all = Array.from(document.querySelectorAll('*'));
+  var results = [];
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var cursor = window.getComputedStyle(el).cursor;
+    if (cursor && cursor !== 'auto' && cursor !== 'default') {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        cursor: cursor
+      });
+    }
+  }
+  return JSON.stringify(results);
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Find all elements with `draggable="true"` attribute.
+ * Returns up to 20 results as { tag, id, class, text_snippet }[].
+ */
+export async function getDraggableElements2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var all = Array.from(document.querySelectorAll('[draggable="true"]'));
+  var results = [];
+  for (var i = 0; i < all.length && i < 20; i++) {
+    var el = all[i];
+    var text = (el.textContent || '').trim().slice(0, 60);
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      'class': (el.className && typeof el.className === 'string') ? el.className.trim().split(/\\s+/).slice(0, 3).join(' ') : null,
+      text_snippet: text || null
+    });
+  }
+  return JSON.stringify(results);
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Find elements with `ondrop` or `ondragover` attributes, or a `data-droptarget`
+ * attribute. Returns up to 20 results as { tag, id, class }[].
+ */
+export async function getDropTargets(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var all = Array.from(document.querySelectorAll('[ondrop],[ondragover],[data-droptarget]'));
+  var results = [];
+  for (var i = 0; i < all.length && i < 20; i++) {
+    var el = all[i];
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      'class': (el.className && typeof el.className === 'string') ? el.className.trim().split(/\\s+/).slice(0, 3).join(' ') : null
+    });
+  }
+  return JSON.stringify(results);
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+/**
+ * Find elements with `pointer-events: none` computed CSS style.
+ * Returns up to 20 results as { tag, id, class }[].
+ */
+export async function getPointerEvents2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var all = Array.from(document.querySelectorAll('*'));
+  var results = [];
+  for (var i = 0; i < all.length && results.length < 20; i++) {
+    var el = all[i];
+    var pe = window.getComputedStyle(el).pointerEvents;
+    if (pe === 'none') {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        'class': (el.className && typeof el.className === 'string') ? el.className.trim().split(/\\s+/).slice(0, 3).join(' ') : null
+      });
+    }
+  }
+  return JSON.stringify(results);
+})()`;
+
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Evaluation returned no value');
+  }
+  return ok(JSON.parse(result.value as string));
+}

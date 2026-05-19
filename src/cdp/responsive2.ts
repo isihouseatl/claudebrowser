@@ -47,12 +47,15 @@ export async function getBreakpointInfo(
   return ok(JSON.parse(result.value as string));
 }
 
-// Test common media queries and return which ones currently match.
-// Queries: prefers-dark, prefers-reduced-motion, portrait, landscape, hover, pointer-coarse
+// If query is provided, evaluate that specific media query and return { query, matches }.
+// If omitted, return a fixed set of common media query results.
 export async function getMediaQueryMatches(
-  client: CdpClient
+  client: CdpClient,
+  query?: string
 ): Promise<{ content: [{ type: 'text'; text: string }] }> {
-  const expression = `(function() {
+  const expression = query
+    ? `JSON.stringify({ query: ${JSON.stringify(query)}, matches: window.matchMedia(${JSON.stringify(query)}).matches })`
+    : `(function() {
     var queries = [
       { name: 'prefers-dark', query: '(prefers-color-scheme: dark)' },
       { name: 'prefers-reduced-motion', query: '(prefers-reduced-motion: reduce)' },
@@ -142,14 +145,19 @@ export async function getViewportOrientation(
   return ok(JSON.parse(result.value as string));
 }
 
-// Add a marker style tag with @media print rules to test print layout.
-// Injects a <style id="cdp-print-test"> tag with print-specific overrides.
+// enable=true injects a <style id="cdp-print-test"> with @media print overrides.
+// enable=false removes it. Idempotent in both directions.
 export async function simulatePrintMedia(
-  client: CdpClient
+  client: CdpClient,
+  enable: boolean
 ): Promise<{ content: [{ type: 'text'; text: string }] }> {
   const expression = `(function() {
     var existingId = 'cdp-print-test';
     var existing = document.getElementById(existingId);
+    if (${enable ? 'false' : 'true'}) {
+      if (existing) { existing.parentNode.removeChild(existing); return JSON.stringify({ active: false, message: 'Print test style removed.' }); }
+      return JSON.stringify({ active: false, message: 'Print test style was not active.' });
+    }
     if (existing) existing.parentNode.removeChild(existing);
     var style = document.createElement('style');
     style.id = existingId;
@@ -162,7 +170,7 @@ export async function simulatePrintMedia(
       '}'
     ].join('\\n');
     document.head.appendChild(style);
-    return JSON.stringify({ injected: true, styleId: existingId, message: 'Print test style tag added. @media print rules are now active for print preview.' });
+    return JSON.stringify({ active: true, styleId: existingId });
   })()`;
 
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({

@@ -42,12 +42,12 @@ import { waitForDialog, isDialogOpen, dismissPrintDialog } from './cdp/dialog';
 import { listIframes, evaluateInIframe, getIframeContent, clickInIframe, typeInIframe, waitForIframe, getIframes, getIframeCount, isIframeSandboxed, getIframeSrc, setIframeSrc, scrollIframeIntoView, getIframePosition, isIframeVisible } from './cdp/iframe';
 import { fillForm, detectFormFields, submitForm as autofillSubmitForm, clearForm, getFormState } from './cdp/autofill';
 import { waitForAny, waitForAll, waitForCondition, waitForStable, waitForValueChange, waitForCountChange, retryUntilSuccess } from './cdp/waiters';
-import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition, getPointerEvents, simulatePointerDown, simulatePointerUp, simulatePointerMove, simulatePointerCancel, simulatePointerEnter, getPointerCapture, getTouchActionStyle } from './cdp/pointer';
+import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, contextClickAt, middleClickAt, getMousePosition, getPointerEvents, simulatePointerDown, simulatePointerUp, simulatePointerMove, simulatePointerCancel, simulatePointerEnter, getPointerCapture, getTouchActionStyle, getPointerPosition, getHoverTarget, getTouchSupport2, getPointerCapture2, getCursorStyles, getDraggableElements2, getDropTargets, getPointerEvents2 } from './cdp/pointer';
 import { startRecording, stopRecording, getRecordedActions, clearRecording, isRecording } from './cdp/recorder';
 import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, findNearLabel, getElementSelector } from './cdp/finder';
 import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
 import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange, getNotificationPermission, isNotificationSupported, getPageVisibility, isPageVisible, getDocumentReadyState, getPageCharset, getDocumentMode, getLastModified } from './cdp/notify';
-import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow, clickTableCell, getTableColumn, getTableHeaders, filterTableRows } from './cdp/table2';
+import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow, clickTableCell, getTableColumn, getTableHeaders, filterTableRows, getTables, getTableHeaders2, getTableRow2, getTableData3, getTableCellValue, searchTableColumn, getTableCount2, getDataGridInfo } from './cdp/table2';
 import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
 import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
@@ -98,7 +98,7 @@ import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable a
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton } from './cdp/dialog2';
-import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount } from './cdp/canvas2';
+import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
@@ -959,6 +959,11 @@ const TOOLS = [
   { name: 'browser_canvas_pixel_color2', description: 'Get RGBA color of a pixel at (x,y) on canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
   { name: 'browser_is_webgl_canvas', description: 'Check if canvas uses WebGL context', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_canvas_count', description: 'Count all canvas elements on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_canvas_blank', description: 'Check if canvas is blank (all pixels transparent)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_webgl_info', description: 'Get WebGL renderer, vendor, version info from canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_capture_canvas_data_url', description: 'Capture canvas as PNG data URL (truncated to 200 chars)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_canvas_transform', description: 'Get current 2D context transform matrix (a,b,c,d,e,f) of a canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_video_elements', description: 'List all video elements: id, class, src, currentTime, duration, paused, width, height, readyState', inputSchema: { type: 'object', properties: {} } },
   // ── Pointer Events ─────────────────────────────────────────────────────────────
   { name: 'browser_pointer_events', description: 'List elements with pointer event handlers or pointer-events CSS', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_pointer_down', description: 'Dispatch pointerdown PointerEvent on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
@@ -1270,6 +1275,24 @@ const TOOLS = [
   { name: 'browser_subresource_integrity', description: 'Find <script> and <link> tags with integrity attribute (SRI)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_postmessage_listeners', description: 'Check if window has message event listeners (postMessage) via window.__hasMessageListeners', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_open_redirects', description: 'Find links with redirect patterns in href (e.g. ?url=, ?redirect=, ?next=)', inputSchema: { type: 'object', properties: {} } },
+  // ── Pointer2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_pointer_position', description: 'Get last known mouse position via injected mousemove listener: { x, y, injected }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hover_target', description: 'Get the element currently under the mouse via mouseover listener: { tag, id, class }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_touch_support', description: 'Check touch support: maxTouchPoints, touchEvent, pointerEvent', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pointer_capture', description: 'Check if any element has pointer capture via gotpointercapture listener: { hasCapturedElement, tag, id }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cursor_styles', description: 'Find all elements with non-default cursor style: { tag, id, cursor }[] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_draggable_elements', description: 'Find all elements with draggable="true" attribute: { tag, id, class, text_snippet }[] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_targets', description: 'Find elements with ondrop/ondragover/data-droptarget: { tag, id, class }[] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pointer_events_none', description: 'Find elements with pointer-events: none CSS: { tag, id, class }[] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Table2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_tables', description: 'Find all <table> elements: id, class, rowCount, columnCount, hasHeader, hasFooter, caption (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_headers', description: 'Get all <th> text content from a specific table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_row', description: 'Get cell text values from a specific row (0-indexed)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, rowIndex: { type: 'number' } }, required: ['selector', 'rowIndex'] } },
+  { name: 'browser_table_data', description: 'Get full table as 2D array: { headers, rows } (max 20x20)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_cell', description: 'Get text of a specific cell by row+col indices (0-indexed)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row: { type: 'number' }, col: { type: 'number' } }, required: ['selector', 'row', 'col'] } },
+  { name: 'browser_search_table_column', description: 'Find rows where column colIndex contains query (case-insensitive), max 20 results', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, colIndex: { type: 'number' }, query: { type: 'string' } }, required: ['selector', 'colIndex', 'query'] } },
+  { name: 'browser_table_count', description: 'Count tables: total, withCaption, withHeader, withFooter, sortable (aria-sort present)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_grid_info', description: 'Find elements with role="grid" or "treegrid": tag, id, class, rowCount, colCount (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1326,7 +1349,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.42.0' },
+    { name: 'claudebrowser', version: '1.43.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -2187,6 +2210,11 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_canvas_pixel_color2':      return await getCanvasPixelColor2(cdp, a.selector as string, a.x as number, a.y as number);
         case 'browser_is_webgl_canvas':          return await isWebGLCanvas(cdp, a.selector as string);
         case 'browser_canvas_count':             return await getCanvasCount(cdp);
+        case 'browser_is_canvas_blank':          return await isCanvasBlank(cdp, a.selector as string);
+        case 'browser_webgl_info':               return await getWebGLInfo(cdp, a.selector as string);
+        case 'browser_capture_canvas_data_url':  return await captureCanvasDataUrl(cdp, a.selector as string);
+        case 'browser_canvas_transform':         return await getCanvasTransform(cdp, a.selector as string);
+        case 'browser_video_elements':           return await getVideoElements(cdp);
                 // pointer events
         case 'browser_pointer_events':           return await getPointerEvents(cdp);
         case 'browser_pointer_down':             return await simulatePointerDown(cdp, a.selector as string);
@@ -2473,11 +2501,11 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_unhandled_rejections':     return await getUnhandledRejections(cdp);
                 // responsive2
         case 'browser_breakpoint_info':          return await getBreakpointInfo(cdp);
-        case 'browser_media_query_matches':      return await getMediaQueryMatches(cdp);
+        case 'browser_media_query_matches':      return await getMediaQueryMatches(cdp, a.query as string | undefined);
         case 'browser_is_mobile_viewport':       return await isMobileViewport(cdp);
         case 'browser_device_pixel_ratio':       return await getDevicePixelRatio(cdp);
         case 'browser_viewport_orientation':     return await getViewportOrientation(cdp);
-        case 'browser_simulate_print':           return await simulatePrintMedia(cdp);
+        case 'browser_simulate_print':           return await simulatePrintMedia(cdp, (a.enable as boolean) ?? true);
         case 'browser_container_queries':        return await getContainerQueries(cdp);
         case 'browser_flex_containers':          return await getFlexContainers(cdp);
         // color
@@ -2498,6 +2526,24 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_subresource_integrity':    return await getSubresourceIntegrity(cdp);
         case 'browser_postmessage_listeners':    return await getPostMessageListeners(cdp);
         case 'browser_open_redirects':           return await getOpenRedirects(cdp);
+                // pointer2
+        case 'browser_pointer_position':         return await getPointerPosition(cdp);
+        case 'browser_hover_target':             return await getHoverTarget(cdp);
+        case 'browser_touch_support':            return await getTouchSupport2(cdp);
+        case 'browser_pointer_capture':          return await getPointerCapture2(cdp);
+        case 'browser_cursor_styles':            return await getCursorStyles(cdp);
+        case 'browser_draggable_elements':       return await getDraggableElements2(cdp);
+        case 'browser_drop_targets':             return await getDropTargets(cdp);
+        case 'browser_pointer_events_none':      return await getPointerEvents2(cdp);
+        // table2
+        case 'browser_tables':                   return await getTables(cdp);
+        case 'browser_table_headers':            return await getTableHeaders2(cdp, a.selector as string);
+        case 'browser_table_row':                return await getTableRow2(cdp, a.selector as string, a.rowIndex as number);
+        case 'browser_table_data':               return await getTableData3(cdp, a.selector as string);
+        case 'browser_table_cell':               return await getTableCellValue(cdp, a.selector as string, a.row as number, a.col as number);
+        case 'browser_search_table_column':      return await searchTableColumn(cdp, a.selector as string, a.colIndex as number, a.query as string);
+        case 'browser_table_count':              return await getTableCount2(cdp);
+        case 'browser_data_grid_info':           return await getDataGridInfo(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
