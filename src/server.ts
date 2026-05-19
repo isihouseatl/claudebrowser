@@ -152,6 +152,9 @@ import { getInlineStyles2, getCssVariables3 as getCssVariables4, getMediaQueries
 import { getAriaRoles2, getAriaLabels2, getAriaDescriptions2, getAriaLive, getAriaInvalid, getAriaRequired, getLandmarks3, getAriaExpanded2 } from './cdp/aria2';
 import { getTableHeaders4, getTableFooters, getTableCaption, getNestedTables, getDataGrid4, getTableLinks, getTableButtons, getTableCheckboxes } from './cdp/table4';
 import { getNavElements, getBreadcrumbs, getPaginationLinks, getMenuItems2, getDropdownMenus, getSidebarElements, getFooterLinks, getHeaderLinks } from './cdp/nav2';
+import { getModals, getDialogs, getOverlays, getDrawers2, getPopups, getTooltips2, getPopovers, getAlertDialogs } from './cdp/modal2';
+import { getSearchForms, getSearchResults, getSearchSuggestions, getAutocomplete2, getFilterElements, getSortElements, getSearchBar, getDatalistOptions } from './cdp/search2';
+import { getCards, getArticles, getCarousels, getTabPanels, getAccordions, getStructuredListItems, getSteppers, getTimeline } from './cdp/card2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1637,6 +1640,33 @@ const TOOLS = [
   { name: 'browser_sidebar_elements', description: '<aside> and role="complementary": id, class, linkCount (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_footer_links', description: '<a> inside <footer>: href, text (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_header_links', description: '<a> inside <header>: href, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Modal2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_modals', description: 'Visible role="dialog" or .modal elements: id, class, title, isOpen (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dialogs', description: 'Native <dialog> elements: id, class, open, text_preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_overlays', description: 'Fixed/absolute elements with z-index >100 covering ≥25% viewport: tag, id, zIndex (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drawers2', description: 'Side drawer panels by .drawer/.sidebar/.panel or aria-label: id, class, isOpen (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popups', description: 'role="tooltip" or .popup/.popover visible elements: id, class, text_preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tooltips2', description: 'Elements with title attribute or role="tooltip": tag, id, title_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popovers', description: 'HTML Popover API [popover] or [data-popover] elements: id, class, state, popoverType (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alert_dialogs', description: 'Elements with role="alertdialog": id, class, text_preview (max 5)', inputSchema: { type: 'object', properties: {} } },
+  // ── Search2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_search_forms', description: 'Forms with role="search" or containing search inputs: id, action, inputCount (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_results', description: 'role="listbox" or .search-results/.results containers: id, class, itemCount (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_suggestions', description: 'role="option" inside role="listbox": text, value, isSelected (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_autocomplete2', description: 'Inputs with list attribute (datalist): id, name, listId, optionCount', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_filter_elements', description: '.filter / [data-filter] / role="group" with checkboxes: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sort_elements', description: '[aria-sort] / .sort / [data-sort] interactive elements: tag, id, text, currentSort (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_bar', description: 'Primary search input (type="search" or role="searchbox"): id, name, placeholder, value_preview', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_datalist_options', description: 'All <datalist> elements: id, options [{value, label}] (max 10 lists)', inputSchema: { type: 'object', properties: {} } },
+  // ── Card2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_cards', description: '.card/.tile/.item or article elements: id, class, title, hasImage, hasButton (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_articles', description: 'All <article> elements: id, class, heading_text, text_preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousels', description: 'Carousel/slider containers by class or role="region": id, class, ariaLabel, slideCount (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_panels', description: 'role="tabpanel" elements: id, class, isVisible, associatedTab (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_accordions', description: '.accordion / [data-accordion] / <details> containers: items [{text, isOpen}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_structured_list_items', description: 'All <li> elements: text_preview, hasLink, depth (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_steppers', description: '.stepper/.steps/[data-stepper] wizard UIs: stepCount, currentStep (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timeline', description: '.timeline/[data-timeline] or ol/ul with <time>: items [{text, time}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3205,6 +3235,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_sidebar_elements':       return await getSidebarElements(cdp);
         case 'browser_footer_links':           return await getFooterLinks(cdp);
         case 'browser_header_links':           return await getHeaderLinks(cdp);
+                // modal2
+        case 'browser_modals':                 return await getModals(cdp);
+        case 'browser_dialogs':                return await getDialogs(cdp);
+        case 'browser_overlays':               return await getOverlays(cdp);
+        case 'browser_drawers2':               return await getDrawers2(cdp);
+        case 'browser_popups':                 return await getPopups(cdp);
+        case 'browser_tooltips2':              return await getTooltips2(cdp);
+        case 'browser_popovers':               return await getPopovers(cdp);
+        case 'browser_alert_dialogs':          return await getAlertDialogs(cdp);
+        // search2
+        case 'browser_search_forms':           return await getSearchForms(cdp);
+        case 'browser_search_results':         return await getSearchResults(cdp);
+        case 'browser_search_suggestions':     return await getSearchSuggestions(cdp);
+        case 'browser_autocomplete2':          return await getAutocomplete2(cdp);
+        case 'browser_filter_elements':        return await getFilterElements(cdp);
+        case 'browser_sort_elements':          return await getSortElements(cdp);
+        case 'browser_search_bar':             return await getSearchBar(cdp);
+        case 'browser_datalist_options':       return await getDatalistOptions(cdp);
+        // card2
+        case 'browser_cards':                  return await getCards(cdp);
+        case 'browser_articles':               return await getArticles(cdp);
+        case 'browser_carousels':              return await getCarousels(cdp);
+        case 'browser_tab_panels':             return await getTabPanels(cdp);
+        case 'browser_accordions':             return await getAccordions(cdp);
+        case 'browser_structured_list_items':  return await getStructuredListItems(cdp);
+        case 'browser_steppers':               return await getSteppers(cdp);
+        case 'browser_timeline':               return await getTimeline(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
