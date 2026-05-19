@@ -137,6 +137,9 @@ import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, 
 import { getScrollPositionFull, getViewportDimensions, getElementsInViewport, getAboveTheFold, getOffscreenElements, getStickyElements, getOverflowContainers, getZIndexStack } from './cdp/viewport2';
 import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, getLinkRelTags, getHreflangTags2, getPageLanguage2, getStructuredDataCount } from './cdp/print2';
 import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getGridCount, getGridGaps, getAbsoluteElements, getLayoutShift2 } from './cdp/grid2';
+import { getTouchSupport3, getViewportMeta, getOrientationInfo, getVirtualKeyboardElements, getTouchActionElements, getScrollSnapElements, getAppleMobileMetaTags, getPWAManifest } from './cdp/touch2';
+import { getJsHeapSize2, getPerformanceMarks3, getPerformanceMeasures, getScriptCount, getConsoleErrors2, getResourceTiming, getNavigationEntries, getStylesheetCount2 } from './cdp/perf3';
+import { getFontFaces2, getUsedFontFamilies, getWebFontLinks, getFontSizeDistribution, getTextRenderingMode, getLineHeightDistribution, getFontWeightDistribution, getDocumentFontAPI } from './cdp/font2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1493,6 +1496,33 @@ const TOOLS = [
   { name: 'browser_grid_gaps', description: 'Find grid/flex containers with gap set: tag, id, gap, columnGap, rowGap (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_absolute_elements', description: 'Find all position:absolute elements with bounding rect: tag, id, top, left, width, height (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_layout_shift2', description: 'Get CLS score via PerformanceObserver (inject + observe): { cls, shiftCount, observed }', inputSchema: { type: 'object', properties: {} } },
+  // ── Touch2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_touch_support3', description: 'Check touch support: { maxTouchPoints, touchEventSupport, pointerEventSupport, isMobileUA }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_meta', description: 'Get <meta name="viewport"> content: { content, hasViewport, isMobileOptimized }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_orientation', description: 'Get screen orientation: { type, angle, width, height, isPortrait }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_keyboard_elements', description: 'Find inputs/textareas/contenteditable that trigger virtual keyboards: tag, id, type, inputmode (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_touch_action_elements', description: 'Find elements with non-auto touch-action CSS: tag, id, touchAction (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_snap_elements', description: 'Find elements with scroll-snap-type or scroll-snap-align set: tag, id, snapType/snapAlign (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_apple_meta_tags', description: 'Find Apple mobile meta tags (apple-mobile-web-app-*): name, content (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pwa_manifest', description: 'Get PWA manifest link and theme color: { manifestHref, themeColor, backgroundColor }', inputSchema: { type: 'object', properties: {} } },
+  // ── Perf3 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_js_heap_size2', description: 'Get JS heap memory (Chrome): { usedJSHeapSize, totalJSHeapSize, jsHeapSizeLimit } or { supported: false }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_performance_marks', description: 'Get user-defined performance marks: { marks: [{name, startTime}], count } (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_performance_measures', description: 'Get user-defined performance measures: { measures: [{name, startTime, duration}], count } (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_script_count', description: 'Count <script> tags: { total, inline, external, module, nomodule, async, defer }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_console_errors2', description: 'Get console errors via patched console.error: { errors, count, patched } (circular 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_timing', description: 'Get timing for last 20 resources: name_preview, initiatorType, duration, transferSize', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_navigation_entries', description: 'Get navigation timing: { navigationType, redirectCount, transferSize, encodedBodySize, decodedBodySize }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stylesheet_count2', description: 'Count stylesheets: { total, external, inline, disabled }', inputSchema: { type: 'object', properties: {} } },
+  // ── Font2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_font_faces2', description: 'Get all @font-face rules from stylesheets: family, src_preview, style, weight (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_used_font_families', description: 'Find unique font-family values in use across elements: { families, count } (max 20 unique)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_font_links', description: 'Find <link> tags loading from Google Fonts, Typekit, or font CDNs: href (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_size_distribution', description: 'Sample computed font-size frequencies: { sizes: [{size, count}] } (top 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_rendering_mode', description: 'Find elements with explicit text-rendering: tag, id, textRendering (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_line_height_distribution', description: 'Sample computed line-height frequencies: { lineHeights: [{value, count}] } (top 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_font_weight_distribution', description: 'Sample computed font-weight frequencies: { weights: [{weight, count}] } (top 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_document_font_api', description: 'Check document.fonts FontFaceSet: { supported, size, status, loadingCount }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2927,6 +2957,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_grid_gaps':                return await getGridGaps(cdp);
         case 'browser_absolute_elements':        return await getAbsoluteElements(cdp);
         case 'browser_layout_shift2':            return await getLayoutShift2(cdp);
+                // touch2
+        case 'browser_touch_support3':           return await getTouchSupport3(cdp);
+        case 'browser_viewport_meta':            return await getViewportMeta(cdp);
+        case 'browser_orientation':              return await getOrientationInfo(cdp);
+        case 'browser_virtual_keyboard_elements': return await getVirtualKeyboardElements(cdp);
+        case 'browser_touch_action_elements':    return await getTouchActionElements(cdp);
+        case 'browser_scroll_snap_elements':     return await getScrollSnapElements(cdp);
+        case 'browser_apple_meta_tags':          return await getAppleMobileMetaTags(cdp);
+        case 'browser_pwa_manifest':             return await getPWAManifest(cdp);
+        // perf3
+        case 'browser_js_heap_size2':            return await getJsHeapSize2(cdp);
+        case 'browser_performance_marks':        return await getPerformanceMarks3(cdp);
+        case 'browser_performance_measures':     return await getPerformanceMeasures(cdp);
+        case 'browser_script_count':             return await getScriptCount(cdp);
+        case 'browser_console_errors2':          return await getConsoleErrors2(cdp);
+        case 'browser_resource_timing':          return await getResourceTiming(cdp);
+        case 'browser_navigation_entries':       return await getNavigationEntries(cdp);
+        case 'browser_stylesheet_count2':        return await getStylesheetCount2(cdp);
+        // font2
+        case 'browser_font_faces2':              return await getFontFaces2(cdp);
+        case 'browser_used_font_families':       return await getUsedFontFamilies(cdp);
+        case 'browser_web_font_links':           return await getWebFontLinks(cdp);
+        case 'browser_font_size_distribution':   return await getFontSizeDistribution(cdp);
+        case 'browser_text_rendering_mode':      return await getTextRenderingMode(cdp);
+        case 'browser_line_height_distribution': return await getLineHeightDistribution(cdp);
+        case 'browser_font_weight_distribution': return await getFontWeightDistribution(cdp);
+        case 'browser_document_font_api':        return await getDocumentFontAPI(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
