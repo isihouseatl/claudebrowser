@@ -112,6 +112,9 @@ import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, set
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
 import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2 } from './cdp/perf2';
+import { getStylesheets2, getInlineStyles, getComputedStyles, getCssVariables2 as getCssVariables3, getMediaQueries, getAnimations2, getTransitions2, countCssRules } from './cdp/css2';
+import { injectWsMonitor, getWsConnections, getWsMessages, clearWsMonitor, getWsStatus, sendWsMessage, closeWsConnection, getWsReadyState } from './cdp/websocket2';
+import { getIframes2, getIframeCount2, queryInIframe, getIframeTitle, getIframeSrc2, isIframeSandboxed2, getIframeDocument, focusIframe } from './cdp/iframe2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1123,6 +1126,33 @@ const TOOLS = [
   { name: 'browser_failed_resources', description: 'Get resources with duration=0 and no transferSize (likely failed)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clear_resource_timings', description: 'Call performance.clearResourceTimings() to reset the buffer', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_nav_timing_basic', description: 'Get navigation timing: domContentLoaded and loadEventEnd in ms from PerformanceTiming', inputSchema: { type: 'object', properties: {} } },
+  // ── CSS2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_stylesheets', description: 'List all loaded stylesheets: href, type, disabled, media (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_inline_styles', description: 'Get all inline style properties on an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_computed_styles', description: 'Get ALL computed style properties for element as key-value pairs', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_css_vars', description: 'Get all CSS custom properties (--var) defined on :root element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_queries', description: 'List all @media rules from stylesheets: conditionText, rules count', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animations2', description: 'Get all running/pending CSS animations: name, duration, state, element tag', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_transitions2', description: 'Get elements with non-zero CSS transition-duration', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_rule_count', description: 'Count total CSS rules across all stylesheets by type: style, media, fontFace, keyframes, supports', inputSchema: { type: 'object', properties: {} } },
+  // ── WebSocket2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_inject_ws_monitor', description: 'Inject WebSocket constructor patch to track connections and messages', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ws_connections', description: 'List all WebSocket connections tracked by monitor: url, readyState, messageCount', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ws_messages', description: 'Get messages for a specific WebSocket URL (or all if no url), max 50', inputSchema: { type: 'object', properties: { url: { type: 'string' } } } },
+  { name: 'browser_clear_ws_monitor', description: 'Clear all tracked WebSocket data from window.__wsMonitor', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ws_status', description: 'Check if WebSocket is supported and if monitor is injected', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_send_ws_message', description: 'Send a message through an open WebSocket by URL', inputSchema: { type: 'object', properties: { url: { type: 'string' }, message: { type: 'string' } }, required: ['url', 'message'] } },
+  { name: 'browser_close_ws', description: 'Close a WebSocket connection by URL', inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } },
+  { name: 'browser_ws_ready_state', description: 'Get readyState of a specific WebSocket (0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED)', inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } },
+  // ── IFrame2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_iframes2', description: 'List all iframes: src, name, id, width, height, sandbox attribute (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_iframe_count2', description: 'Count iframes: total, withSrc, sandboxed, crossOrigin', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_query_iframe', description: 'querySelector inside a same-origin iframe by name/id, return found/tag/text', inputSchema: { type: 'object', properties: { iframe_name: { type: 'string' }, selector: { type: 'string' } }, required: ['iframe_name', 'selector'] } },
+  { name: 'browser_iframe_title', description: 'Get document.title of a same-origin iframe by name/id', inputSchema: { type: 'object', properties: { iframe_name: { type: 'string' } }, required: ['iframe_name'] } },
+  { name: 'browser_iframe_src2', description: 'Get src attribute of iframe matching CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_iframe_sandboxed2', description: 'Check if iframe has sandbox attribute and list its permission tokens', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_iframe_document', description: 'Get document info from same-origin iframe: title, url, readyState', inputSchema: { type: 'object', properties: { iframe_name: { type: 'string' } }, required: ['iframe_name'] } },
+  { name: 'browser_focus_iframe', description: 'Call focus() on an iframe element matching CSS selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2216,6 +2246,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_failed_resources':         return await getFailedResources2(cdp);
         case 'browser_clear_resource_timings':   return await clearResourceTimings(cdp);
         case 'browser_nav_timing_basic':         return await getNavigationTimingBasic(cdp);
+                // css2
+        case 'browser_stylesheets':              return await getStylesheets2(cdp);
+        case 'browser_inline_styles':            return await getInlineStyles(cdp, a.selector as string);
+        case 'browser_computed_styles':          return await getComputedStyles(cdp, a.selector as string);
+        case 'browser_css_vars':                 return await getCssVariables3(cdp);
+        case 'browser_media_queries':            return await getMediaQueries(cdp);
+        case 'browser_animations2':             return await getAnimations2(cdp);
+        case 'browser_transitions2':            return await getTransitions2(cdp);
+        case 'browser_css_rule_count':           return await countCssRules(cdp);
+        // websocket2
+        case 'browser_inject_ws_monitor':        return await injectWsMonitor(cdp);
+        case 'browser_ws_connections':           return await getWsConnections(cdp);
+        case 'browser_ws_messages':              return await getWsMessages(cdp, a.url as string | undefined);
+        case 'browser_clear_ws_monitor':         return await clearWsMonitor(cdp);
+        case 'browser_ws_status':                return await getWsStatus(cdp);
+        case 'browser_send_ws_message':          return await sendWsMessage(cdp, a.url as string, a.message as string);
+        case 'browser_close_ws':                 return await closeWsConnection(cdp, a.url as string);
+        case 'browser_ws_ready_state':           return await getWsReadyState(cdp, a.url as string);
+        // iframe2
+        case 'browser_iframes2':                 return await getIframes2(cdp);
+        case 'browser_iframe_count2':            return await getIframeCount2(cdp);
+        case 'browser_query_iframe':             return await queryInIframe(cdp, a.iframe_name as string, a.selector as string);
+        case 'browser_iframe_title':             return await getIframeTitle(cdp, a.iframe_name as string);
+        case 'browser_iframe_src2':              return await getIframeSrc2(cdp, a.selector as string);
+        case 'browser_iframe_sandboxed2':        return await isIframeSandboxed2(cdp, a.selector as string);
+        case 'browser_iframe_document':          return await getIframeDocument(cdp, a.iframe_name as string);
+        case 'browser_focus_iframe':             return await focusIframe(cdp, a.selector as string);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
