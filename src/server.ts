@@ -232,6 +232,9 @@ import { getServiceWorkers3, getWebWorkers, getWorkerState, getSharedWorkers2, g
 import { getWebSocketConnections2, getWebSocketState, getRealtimeElements, getSocketIoElements, getWebSocketMessages2, getWebSocketHandlers, getEventSourceElements, getWebSocketApiUsage } from './cdp/websocket2';
 import { getDateInputs2, getDatePickerElements, getCalendarElements2, getTimeInputs, getDateRangeInputs, getDatePickerState, getDatePickerTriggers, getDatePickerApiUsage } from './cdp/datepicker2';
 import { getRichTextEditors2, getContentEditableElements2, getEditorToolbars2, getWysiwygElements, getRichTextState, getEditorContent2, getMarkdownEditors2, getRichTextApiUsage } from './cdp/richtext2';
+import { getDarkModeState, getColorScheme5, getThemeColors2, getCssVariables7, getColorPalette, getDarkModeToggle, getSystemColorScheme, getColorSchemeApiUsage } from './cdp/colorscheme2';
+import { getBreakpoints, getMediaQueryState, getViewportBreakpoint, getResponsiveImages2, getFlexContainers4, getGridContainers3, getResponsiveState, getResponsiveApiUsage } from './cdp/responsive2';
+import { getPerformanceMetrics, getPageLoadTiming, getResourceTiming3, getLargestContentfulPaint4, getFirstContentfulPaint2, getCumulativeLayoutShift4, getPerformanceState, getPerfApiUsage } from './cdp/perf2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2623,6 +2626,33 @@ const TOOLS = [
   { name: 'browser_editor_content2', description: 'Current text content of editable elements: [{tag, id, text_preview, charCount, wordCount}] (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_markdown_editors2', description: 'Markdown editor widgets: [{tag, id, class_preview, editorType}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_rich_text_api_usage', description: 'Detected editor libraries: {hasQuill, hasTiptap, hasProseMirror, hasTinymce, hasCkeditor, hasDraftjs, hasSlate, hasCodeMirror, hasMonaco}', inputSchema: { type: 'object', properties: {} } },
+  // ── ColorScheme2 new ─────────────────────────────────────────────────────────────
+  { name: 'browser_dark_mode_state', description: 'Current dark mode state: {isDark, prefersColorScheme, hasSystemPref}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_scheme5', description: 'Active color scheme: {isDark, isLight, isHighContrast, prefersColorScheme}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_colors2', description: 'CSS custom properties used as theme colors: [{name, value}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_variables7', description: 'All CSS custom properties on :root: [{name, value}] (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_palette', description: 'Most used colors in computed styles: [{color, count, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dark_mode_toggle', description: 'Dark/light mode toggle buttons: [{tag, id, class_preview, text_preview, isChecked}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_system_color_scheme', description: 'System color scheme preference: {prefersColorScheme, prefersContrast, prefersReducedMotion}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_scheme_api_usage', description: 'Detected theming patterns: {hasCssVariables, hasDarkClass, hasDataTheme, hasColorSchemeMedia, hasOsThemeSync}', inputSchema: { type: 'object', properties: {} } },
+  // ── Responsive2 new ──────────────────────────────────────────────────────────────
+  { name: 'browser_breakpoints', description: 'Active CSS breakpoints from media queries: [{query, matches, minWidth, maxWidth}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_query_state', description: 'Currently matching media queries: [{query, matches}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_breakpoint', description: 'Current viewport and breakpoint: {width, height, breakpoint, orientation}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_responsive_images2', description: 'Images with srcset or picture elements: [{tag, id, src_preview, srcset_preview, sizes}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flex_containers4', description: 'Elements using flexbox layout: [{tag, id, class_preview, flexDirection, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_grid_containers3', description: 'Elements using CSS grid layout: [{tag, id, class_preview, columns, rows}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_responsive_state', description: 'Responsive layout summary: {viewportWidth, viewportHeight, breakpoint, hasFlex, hasGrid, hasResponsiveImages}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_responsive_api_usage', description: 'Detected responsive patterns: {hasTailwind, hasBootstrap, hasMui, hasFlexbox, hasCssGrid, hasContainerQueries}', inputSchema: { type: 'object', properties: {} } },
+  // ── Perf2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_performance_metrics', description: 'Core Web Vitals snapshot: {lcp, fcp, cls, ttfb, domInteractive}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_load_timing', description: 'Navigation timing: {loadTime, domContentLoaded, firstByte}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_timing3', description: 'Top resource load times: [{name_preview, duration, type, decodedBodySize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_largest_contentful_paint4', description: 'LCP metric: {lcpMs, size, url_preview, elementTag, elementId}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_first_contentful_paint2', description: 'FCP metric: {fcpMs, firstPaintMs, available}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cumulative_layout_shift4', description: 'CLS metric: {rawScore, filteredScore, shiftCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_performance_state', description: 'Performance summary: {hasPerformanceApi, lcpMs, fcpMs, ttfbMs, clsScore}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_perf_api_usage', description: 'Detected perf monitoring: {hasWebVitals, hasNewRelic, hasDatadog, hasGoogleAnalytics, hasSentry}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -5100,6 +5130,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_editor_content2':          return await getEditorContent2(cdp);
         case 'browser_markdown_editors2':        return await getMarkdownEditors2(cdp);
         case 'browser_rich_text_api_usage':      return await getRichTextApiUsage(cdp);
+                // colorscheme2 new
+        case 'browser_dark_mode_state':          return await getDarkModeState(cdp);
+        case 'browser_color_scheme5':            return await getColorScheme5(cdp);
+        case 'browser_theme_colors2':            return await getThemeColors2(cdp);
+        case 'browser_css_variables7':           return await getCssVariables7(cdp);
+        case 'browser_color_palette':            return await getColorPalette(cdp);
+        case 'browser_dark_mode_toggle':         return await getDarkModeToggle(cdp);
+        case 'browser_system_color_scheme':      return await getSystemColorScheme(cdp);
+        case 'browser_color_scheme_api_usage':   return await getColorSchemeApiUsage(cdp);
+        // responsive2 new
+        case 'browser_breakpoints':              return await getBreakpoints(cdp);
+        case 'browser_media_query_state':        return await getMediaQueryState(cdp);
+        case 'browser_viewport_breakpoint':      return await getViewportBreakpoint(cdp);
+        case 'browser_responsive_images2':       return await getResponsiveImages2(cdp);
+        case 'browser_flex_containers4':         return await getFlexContainers4(cdp);
+        case 'browser_grid_containers3':         return await getGridContainers3(cdp);
+        case 'browser_responsive_state':         return await getResponsiveState(cdp);
+        case 'browser_responsive_api_usage':     return await getResponsiveApiUsage(cdp);
+        // perf2 new
+        case 'browser_performance_metrics':      return await getPerformanceMetrics(cdp);
+        case 'browser_page_load_timing':         return await getPageLoadTiming(cdp);
+        case 'browser_resource_timing3':         return await getResourceTiming3(cdp);
+        case 'browser_largest_contentful_paint4': return await getLargestContentfulPaint4(cdp);
+        case 'browser_first_contentful_paint2':  return await getFirstContentfulPaint2(cdp);
+        case 'browser_cumulative_layout_shift4': return await getCumulativeLayoutShift4(cdp);
+        case 'browser_performance_state':        return await getPerformanceState(cdp);
+        case 'browser_perf_api_usage':           return await getPerfApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

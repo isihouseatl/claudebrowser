@@ -272,3 +272,322 @@ export async function getFlexContainers(
 
   return ok(JSON.parse(result.value as string));
 }
+
+// Detect active CSS breakpoints from stylesheets by parsing @media rules.
+export async function getBreakpoints(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var breakpoints = [];
+      var seen = {};
+      try {
+        var sheets = document.styleSheets;
+        for (var s = 0; s < sheets.length; s++) {
+          var rules;
+          try { rules = sheets[s].cssRules; } catch(e) { continue; }
+          if (!rules) continue;
+          for (var r = 0; r < rules.length; r++) {
+            var rule = rules[r];
+            if (rule.type === 4 && rule.conditionText) {
+              var cond = rule.conditionText;
+              if (seen[cond]) continue;
+              seen[cond] = true;
+              var matches = window.matchMedia(cond).matches;
+              var widthMatch = cond.match(/(?:min|max)-width:\\s*([\\d.]+)(px|em|rem)/i);
+              breakpoints.push({
+                query: cond,
+                matches: matches,
+                width: widthMatch ? parseFloat(widthMatch[1]) + widthMatch[2] : null,
+                type: cond.indexOf('min-width') !== -1 ? 'min-width' : cond.indexOf('max-width') !== -1 ? 'max-width' : 'other'
+              });
+              if (breakpoints.length >= 25) break;
+            }
+          }
+          if (breakpoints.length >= 25) break;
+        }
+      } catch(e) {}
+      return JSON.stringify({ count: breakpoints.length, breakpoints: breakpoints });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// Return which media queries are currently matching from a standard set.
+export async function getMediaQueryState(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var checks = [
+        { name: 'prefers-dark', q: '(prefers-color-scheme: dark)' },
+        { name: 'prefers-light', q: '(prefers-color-scheme: light)' },
+        { name: 'prefers-reduced-motion', q: '(prefers-reduced-motion: reduce)' },
+        { name: 'portrait', q: '(orientation: portrait)' },
+        { name: 'landscape', q: '(orientation: landscape)' },
+        { name: 'hover', q: '(hover: hover)' },
+        { name: 'pointer-coarse', q: '(pointer: coarse)' },
+        { name: 'pointer-fine', q: '(pointer: fine)' },
+        { name: 'min-width-576', q: '(min-width: 576px)' },
+        { name: 'min-width-768', q: '(min-width: 768px)' },
+        { name: 'min-width-992', q: '(min-width: 992px)' },
+        { name: 'min-width-1200', q: '(min-width: 1200px)' },
+        { name: 'min-width-1400', q: '(min-width: 1400px)' },
+        { name: 'high-dpr', q: '(min-resolution: 2dppx)' },
+        { name: 'print', q: 'print' }
+      ];
+      var state = {};
+      for (var i = 0; i < checks.length; i++) {
+        state[checks[i].name] = window.matchMedia(checks[i].q).matches;
+      }
+      return JSON.stringify({ state: state });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// Return the current viewport width and which common breakpoint it falls in (xs/sm/md/lg/xl).
+export async function getViewportBreakpoint(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var w = window.innerWidth;
+      var h = window.innerHeight;
+      var bp;
+      if (w < 576) bp = 'xs';
+      else if (w < 768) bp = 'sm';
+      else if (w < 992) bp = 'md';
+      else if (w < 1200) bp = 'lg';
+      else bp = 'xl';
+      return JSON.stringify({
+        viewportWidth: w,
+        viewportHeight: h,
+        breakpoint: bp,
+        devicePixelRatio: window.devicePixelRatio,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY
+      });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// Find images with srcset attributes or inside <picture> elements (max 20).
+// Named getResponsiveImages2 to avoid conflict with getResponsiveImages in image2.ts.
+export async function getResponsiveImages2(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var items = [];
+      var imgs = document.querySelectorAll('img[srcset], picture img, source[srcset]');
+      for (var i = 0; i < imgs.length && items.length < 20; i++) {
+        var el = imgs[i];
+        var inPicture = el.closest ? !!el.closest('picture') : false;
+        var srcset = el.getAttribute('srcset') || '';
+        var sizes = el.getAttribute('sizes') || null;
+        var src = el.getAttribute('src') || null;
+        var alt = el.getAttribute('alt') || null;
+        var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : {};
+        items.push({
+          tag: el.tagName.toLowerCase(),
+          src: src ? src.split('?')[0].split('/').slice(-1)[0] : null,
+          inPicture: inPicture,
+          hasSrcset: !!srcset,
+          srcsetEntries: srcset ? srcset.split(',').length : 0,
+          sizes: sizes,
+          alt: alt,
+          width: Math.round(rect.width || 0),
+          height: Math.round(rect.height || 0)
+        });
+      }
+      return JSON.stringify({ count: items.length, images: items });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// List elements using flexbox layout (max 20).
+// Named getFlexContainers4 to avoid conflict with getFlexContainers (responsive2),
+// getFlexContainers2 (grid2), and getFlexContainers3 (layout2).
+export async function getFlexContainers4(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var all = document.querySelectorAll('*');
+      var items = [];
+      var skip = { HTML: 1, HEAD: 1, SCRIPT: 1, STYLE: 1, META: 1, LINK: 1, TITLE: 1 };
+      for (var i = 0; i < all.length && items.length < 20; i++) {
+        var el = all[i];
+        if (skip[el.tagName]) continue;
+        var style = getComputedStyle(el);
+        var display = style.display;
+        if (display !== 'flex' && display !== 'inline-flex') continue;
+        var id = el.id ? '#' + el.id : null;
+        var cls = el.className && typeof el.className === 'string' && el.className.trim()
+          ? el.className.trim().split(/\\s+/).slice(0, 3).join('.')
+          : null;
+        var rect = el.getBoundingClientRect();
+        items.push({
+          tag: el.tagName.toLowerCase(),
+          id: id,
+          class: cls,
+          display: display,
+          flexDirection: style.flexDirection,
+          flexWrap: style.flexWrap,
+          justifyContent: style.justifyContent,
+          alignItems: style.alignItems,
+          childCount: el.children.length,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        });
+      }
+      return JSON.stringify({ count: items.length, elements: items });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// List elements using CSS grid layout (max 20).
+// Named getGridContainers3 to avoid conflict with getGridContainers (grid2) and getGridContainers2 (layout2).
+export async function getGridContainers3(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var all = document.querySelectorAll('*');
+      var items = [];
+      var skip = { HTML: 1, HEAD: 1, SCRIPT: 1, STYLE: 1, META: 1, LINK: 1, TITLE: 1 };
+      for (var i = 0; i < all.length && items.length < 20; i++) {
+        var el = all[i];
+        if (skip[el.tagName]) continue;
+        var style = getComputedStyle(el);
+        var display = style.display;
+        if (display !== 'grid' && display !== 'inline-grid') continue;
+        var id = el.id ? '#' + el.id : null;
+        var cls = el.className && typeof el.className === 'string' && el.className.trim()
+          ? el.className.trim().split(/\\s+/).slice(0, 3).join('.')
+          : null;
+        var rect = el.getBoundingClientRect();
+        items.push({
+          tag: el.tagName.toLowerCase(),
+          id: id,
+          class: cls,
+          display: display,
+          templateColumns: style.gridTemplateColumns,
+          templateRows: style.gridTemplateRows,
+          gap: style.gap,
+          columnCount: style.gridTemplateColumns !== 'none' ? style.gridTemplateColumns.trim().split(/\\s+/).length : null,
+          childCount: el.children.length,
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        });
+      }
+      return JSON.stringify({ count: items.length, elements: items });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// Summary of responsive state: viewport dimensions, breakpoint, flex/grid/responsive image presence.
+export async function getResponsiveState(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var w = window.innerWidth;
+      var h = window.innerHeight;
+      var bp;
+      if (w < 576) bp = 'xs';
+      else if (w < 768) bp = 'sm';
+      else if (w < 992) bp = 'md';
+      else if (w < 1200) bp = 'lg';
+      else bp = 'xl';
+      var hasFlex = false, hasGrid = false;
+      var all = document.querySelectorAll('*');
+      var skip = { HTML: 1, HEAD: 1, SCRIPT: 1, STYLE: 1, META: 1, LINK: 1, TITLE: 1 };
+      for (var i = 0; i < all.length; i++) {
+        if (skip[all[i].tagName]) continue;
+        var d = getComputedStyle(all[i]).display;
+        if (d === 'flex' || d === 'inline-flex') hasFlex = true;
+        if (d === 'grid' || d === 'inline-grid') hasGrid = true;
+        if (hasFlex && hasGrid) break;
+      }
+      var hasResponsiveImages = document.querySelectorAll('img[srcset], picture img').length > 0;
+      return JSON.stringify({
+        viewportWidth: w,
+        viewportHeight: h,
+        breakpoint: bp,
+        hasFlex: hasFlex,
+        hasGrid: hasGrid,
+        hasResponsiveImages: hasResponsiveImages
+      });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+// Detect which responsive CSS frameworks and layout patterns are in use on the page.
+export async function getResponsiveApiUsage(
+  cdp: any
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() {
+      var allClasses = Array.from(document.querySelectorAll('[class]')).map(function(el) {
+        return el.className && typeof el.className === 'string' ? el.className : '';
+      }).join(' ');
+      var hasTailwind = /\\b(flex|grid|container|mx-auto|px-|py-|text-|bg-|w-|h-|sm:|md:|lg:|xl:)/.test(allClasses);
+      var hasBootstrap = /\\b(col-|row|container|d-flex|d-grid|navbar|btn|card)/.test(allClasses);
+      var hasMui = /\\bMui[A-Z]/.test(allClasses) || !!document.querySelector('[data-mui-color-scheme]');
+      var hasFlexbox = false, hasCssGrid = false;
+      var all = document.querySelectorAll('*');
+      var skip = { HTML: 1, HEAD: 1, SCRIPT: 1, STYLE: 1, META: 1, LINK: 1, TITLE: 1 };
+      for (var i = 0; i < all.length; i++) {
+        if (skip[all[i].tagName]) continue;
+        var d = getComputedStyle(all[i]).display;
+        if (d === 'flex' || d === 'inline-flex') hasFlexbox = true;
+        if (d === 'grid' || d === 'inline-grid') hasCssGrid = true;
+        if (hasFlexbox && hasCssGrid) break;
+      }
+      var hasContainerQueries = false;
+      try {
+        var sheets = document.styleSheets;
+        for (var s = 0; s < sheets.length && !hasContainerQueries; s++) {
+          var rules;
+          try { rules = sheets[s].cssRules; } catch(e) { continue; }
+          if (!rules) continue;
+          for (var r = 0; r < rules.length; r++) {
+            if (rules[r].type === 6) { hasContainerQueries = true; break; }
+          }
+        }
+      } catch(e) {}
+      return JSON.stringify({
+        hasTailwind: hasTailwind,
+        hasBootstrap: hasBootstrap,
+        hasMui: hasMui,
+        hasFlexbox: hasFlexbox,
+        hasCssGrid: hasCssGrid,
+        hasContainerQueries: hasContainerQueries
+      });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}

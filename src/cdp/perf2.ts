@@ -535,3 +535,391 @@ export async function getPaintTiming2(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Batch 3 — Core Web Vitals & perf monitoring utilities
+// Suffix notes:
+//   getResourceTiming          -> getResourceTiming3  (getResourceTiming taken by perf3.ts,
+//                                                       getResourceTiming2 taken above)
+//   getLargestContentfulPaint  -> getLargestContentfulPaint4  (2 & 3 already taken)
+//   getFirstContentfulPaint    -> getFirstContentfulPaint2    (timing2.ts has the base name)
+//   getCumulativeLayoutShift   -> getCumulativeLayoutShift4   (2 & 3 already taken)
+//   getPerformanceMetrics, getPageLoadTiming, getPerformanceState, getPerfApiUsage
+//                              -> no conflicts, used as-is
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// B3-1. getPerformanceMetrics
+//       Core Web Vitals snapshot: lcp, fcp, cls, ttfb, domInteractive (all ms).
+// ---------------------------------------------------------------------------
+
+export async function getPerformanceMetrics(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var t = window.performance && window.performance.timing;
+        var ttfb = t ? (t.responseStart - t.navigationStart) : null;
+        var domInteractive = t ? (t.domInteractive - t.navigationStart) : null;
+        var paintEntries = performance.getEntriesByType('paint');
+        var fcp = null;
+        for (var i = 0; i < paintEntries.length; i++) {
+          if (paintEntries[i].name === 'first-contentful-paint') {
+            fcp = Math.round(paintEntries[i].startTime * 100) / 100;
+          }
+        }
+        var lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+        var lcp = lcpEntries.length > 0
+          ? Math.round(lcpEntries[lcpEntries.length - 1].startTime * 100) / 100
+          : null;
+        var shiftEntries = performance.getEntriesByType('layout-shift');
+        var cls = 0;
+        for (var j = 0; j < shiftEntries.length; j++) { cls += shiftEntries[j].value || 0; }
+        return JSON.stringify({
+          lcp: lcp,
+          fcp: fcp,
+          cls: Math.round(cls * 10000) / 10000,
+          ttfb: ttfb,
+          domInteractive: domInteractive
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? 'null');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-2. getPageLoadTiming
+//       Navigation Timing API: loadTime, domContentLoaded, firstByte (ms).
+// ---------------------------------------------------------------------------
+
+export async function getPageLoadTiming(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var t = window.performance && window.performance.timing;
+        if (!t) return null;
+        var nav = t.navigationStart;
+        var loadTime = t.loadEventEnd > 0 ? (t.loadEventEnd - nav) : null;
+        var dclEnd = t.domContentLoadedEventEnd > 0 ? (t.domContentLoadedEventEnd - nav) : null;
+        var firstByte = t.responseStart > 0 ? (t.responseStart - nav) : null;
+        return JSON.stringify({
+          loadTime: loadTime,
+          domContentLoaded: dclEnd,
+          firstByte: firstByte
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('performance.timing not available');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-3. getResourceTiming3
+//       Top 20 PerformanceResourceTiming entries sorted by duration descending.
+//       name_preview, initiatorType, duration, transferSize, decodedBodySize.
+//       (getResourceTiming taken by perf3.ts; getResourceTiming2 taken above)
+// ---------------------------------------------------------------------------
+
+export async function getResourceTiming3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var entries = performance.getEntriesByType('resource');
+        var sorted = entries.slice().sort(function(a, b) { return b.duration - a.duration; });
+        var limit = Math.min(sorted.length, 20);
+        var out = [];
+        for (var i = 0; i < limit; i++) {
+          var e = sorted[i];
+          var name = e.name || '';
+          out.push({
+            name_preview: name.length > 60 ? name.slice(name.length - 60) : name,
+            initiatorType: e.initiatorType,
+            duration: Math.round(e.duration * 100) / 100,
+            transferSize: e.transferSize || 0,
+            decodedBodySize: e.decodedBodySize || 0
+          });
+        }
+        return JSON.stringify(out);
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? '[]');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-4. getLargestContentfulPaint4
+//       LCP value and element tag/id/src from largest-contentful-paint entries.
+//       (getLargestContentfulPaint, getLargestContentfulPaint2,
+//        getLargestContentfulPaint3 are all taken)
+// ---------------------------------------------------------------------------
+
+export async function getLargestContentfulPaint4(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var entries = performance.getEntriesByType('largest-contentful-paint');
+        if (!entries || entries.length === 0) return null;
+        var last = entries[entries.length - 1];
+        var el = last.element;
+        var elementInfo = null;
+        if (el) {
+          elementInfo = {
+            tagName: el.tagName ? el.tagName.toLowerCase() : null,
+            id: el.id || null,
+            src: el.src || el.currentSrc || null
+          };
+        }
+        var url = last.url || '';
+        return JSON.stringify({
+          lcpMs: Math.round(last.startTime * 100) / 100,
+          size: last.size || 0,
+          url_preview: url.length > 80 ? url.slice(url.length - 80) : url,
+          element: elementInfo
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify(null) }] };
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-5. getFirstContentfulPaint2
+//       FCP value from paint PerformanceEntries (no PerformanceObserver needed).
+//       (getFirstContentfulPaint taken by timing2.ts)
+// ---------------------------------------------------------------------------
+
+export async function getFirstContentfulPaint2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var entries = performance.getEntriesByType('paint');
+        var fcp = null;
+        var fp = null;
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].name === 'first-contentful-paint') {
+            fcp = Math.round(entries[i].startTime * 100) / 100;
+          }
+          if (entries[i].name === 'first-paint') {
+            fp = Math.round(entries[i].startTime * 100) / 100;
+          }
+        }
+        return JSON.stringify({
+          fcpMs: fcp,
+          firstPaintMs: fp,
+          available: fcp !== null
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? '{"fcpMs":null,"firstPaintMs":null,"available":false}');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-6. getCumulativeLayoutShift4
+//       CLS score from layout-shift entries with hadRecentInput filtering.
+//       (getCumulativeLayoutShift, getCumulativeLayoutShift2,
+//        getCumulativeLayoutShift3 are all taken)
+// ---------------------------------------------------------------------------
+
+export async function getCumulativeLayoutShift4(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var entries = performance.getEntriesByType('layout-shift');
+        var clsAll = 0;
+        var clsFiltered = 0;
+        var totalEntries = entries.length;
+        var filteredEntries = 0;
+        for (var i = 0; i < entries.length; i++) {
+          var e = entries[i];
+          var v = e.value || 0;
+          clsAll += v;
+          if (!e.hadRecentInput) {
+            clsFiltered += v;
+            filteredEntries++;
+          }
+        }
+        return JSON.stringify({
+          clsScore: Math.round(clsFiltered * 10000) / 10000,
+          clsAllEntries: Math.round(clsAll * 10000) / 10000,
+          totalShiftEntries: totalEntries,
+          filteredShiftEntries: filteredEntries
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? '{"clsScore":0,"clsAllEntries":0,"totalShiftEntries":0,"filteredShiftEntries":0}');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-7. getPerformanceState
+//       Summary booleans + key metric values for a quick page health check.
+// ---------------------------------------------------------------------------
+
+export async function getPerformanceState(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var hasPerf = typeof window.performance !== 'undefined';
+        var lcpMs = null;
+        var fcpMs = null;
+        var ttfbMs = null;
+        var clsScore = 0;
+        if (hasPerf) {
+          var lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+          if (lcpEntries.length > 0) {
+            lcpMs = Math.round(lcpEntries[lcpEntries.length - 1].startTime * 100) / 100;
+          }
+          var paintEntries = performance.getEntriesByType('paint');
+          for (var i = 0; i < paintEntries.length; i++) {
+            if (paintEntries[i].name === 'first-contentful-paint') {
+              fcpMs = Math.round(paintEntries[i].startTime * 100) / 100;
+            }
+          }
+          var t = performance.timing;
+          if (t && t.responseStart > 0) {
+            ttfbMs = t.responseStart - t.navigationStart;
+          }
+          var shiftEntries = performance.getEntriesByType('layout-shift');
+          for (var j = 0; j < shiftEntries.length; j++) {
+            if (!shiftEntries[j].hadRecentInput) clsScore += shiftEntries[j].value || 0;
+          }
+        }
+        return JSON.stringify({
+          hasPerformanceApi: hasPerf,
+          lcpMs: lcpMs,
+          fcpMs: fcpMs,
+          ttfbMs: ttfbMs,
+          clsScore: Math.round(clsScore * 10000) / 10000
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? 'null');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// B3-8. getPerfApiUsage
+//       Detect third-party performance monitoring libraries on the page.
+// ---------------------------------------------------------------------------
+
+export async function getPerfApiUsage(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function() {
+        var hasWebVitals = typeof window.webVitals !== 'undefined'
+          || typeof window.__WEB_VITALS_POLYFILL__ !== 'undefined'
+          || (typeof window.performance !== 'undefined' && typeof window.performance.mark === 'function'
+              && document.querySelector('script[src*="web-vitals"]') !== null);
+        var hasNewRelic = typeof window.newrelic !== 'undefined'
+          || document.querySelector('script[src*="nr-spa"]') !== null
+          || document.querySelector('script[src*="newrelic"]') !== null;
+        var hasDatadog = typeof window.DD_RUM !== 'undefined'
+          || typeof window.DD_LOGS !== 'undefined'
+          || document.querySelector('script[src*="datadog"]') !== null;
+        var hasGoogleAnalytics = typeof window.gtag !== 'undefined'
+          || typeof window.ga !== 'undefined'
+          || typeof window._ga !== 'undefined'
+          || document.querySelector('script[src*="googletagmanager"]') !== null
+          || document.querySelector('script[src*="google-analytics"]') !== null;
+        var hasSentry = typeof window.Sentry !== 'undefined'
+          || typeof window.__SENTRY__ !== 'undefined'
+          || document.querySelector('script[src*="sentry"]') !== null;
+        return JSON.stringify({
+          hasWebVitals: hasWebVitals,
+          hasNewRelic: hasNewRelic,
+          hasDatadog: hasDatadog,
+          hasGoogleAnalytics: hasGoogleAnalytics,
+          hasSentry: hasSentry
+        });
+      })()`,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown JS error');
+    }
+    const data = JSON.parse((result.value as string) ?? 'null');
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
