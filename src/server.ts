@@ -124,7 +124,7 @@ import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePix
 import { getLists, getListItems2, getNestedListDepth, getDescriptionLists, getNavLists, getMenuItems, getCheckedListItems, getListCount } from './cdp/list2';
 import { getHeadings2, getHeadingOutline, getH1s, getHeadingCount, getLandmarks2, getPageSections, getSkipLinks, getReadingOrder } from './cdp/heading2';
 import { getPageTextContent, getTextBySelector, searchPageText, getVisibleText, getParagraphs2, getTextLength, getLinks, getLinksCount } from './cdp/text2';
-import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount } from './cdp/worker2';
+import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount, getServiceWorkers2, getWorkerCount2, getServiceWorkerScope, getBroadcastChannels2, getCacheStorageKeys, getIndexedDBNames, getWorkerSupport, getNavigatorInfo } from './cdp/worker2';
 import { getGeolocationSupport, getTimezone2, getLanguages, getUserAgentData, getBatteryInfo, getNetworkInfo, getMediaDevices, getPermissions } from './cdp/geo2';
 import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotElements, getAssignedNodes, getWebComponentCount, getComponentAttributes, isCustomElementDefined } from './cdp/slot2';
 import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
@@ -155,6 +155,8 @@ import { getNavElements, getBreadcrumbs, getPaginationLinks, getMenuItems2, getD
 import { getModals, getDialogs, getOverlays, getDrawers2, getPopups, getTooltips2, getPopovers, getAlertDialogs } from './cdp/modal2';
 import { getSearchForms, getSearchResults, getSearchSuggestions, getAutocomplete2, getFilterElements, getSortElements, getSearchBar, getDatalistOptions } from './cdp/search2';
 import { getCards, getArticles, getCarousels, getTabPanels, getAccordions, getStructuredListItems, getSteppers, getTimeline } from './cdp/card2';
+import { getCanvasElements3, getSvgCharts, getChartLabels, getChartLegend, getD3Elements, getCanvasSize2, getWebGLContexts, getSvgPaths } from './cdp/dataviz2';
+import { getMapElements, getAddressElements, getPhoneNumbers, getEmailLinks, getSocialLinks, getSchemaOrg2, getMicrodata, getGeolocationPermission2 } from './cdp/geo3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1667,6 +1669,33 @@ const TOOLS = [
   { name: 'browser_structured_list_items', description: 'All <li> elements: text_preview, hasLink, depth (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_steppers', description: '.stepper/.steps/[data-stepper] wizard UIs: stepCount, currentStep (max 5)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_timeline', description: '.timeline/[data-timeline] or ol/ul with <time>: items [{text, time}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── DataViz2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_canvas_elements3', description: 'All <canvas> elements: id, class, width, height, hasWebGL (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_svg_charts', description: 'SVG elements likely used as charts (contain <path> or <rect> with data attrs): id, class, childCount (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_labels', description: 'Text elements inside SVGs: content, x, y (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_legend', description: 'Legend elements inside SVG/canvas containers by class or aria-label: tag, id, text_preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_d3_elements', description: 'Elements with data-* attributes suggesting D3 usage: tag, id, dataAttrs (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_size2', description: 'Canvas elements with their rendered vs attribute size: id, attrW, attrH, clientW, clientH (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_webgl_contexts', description: 'Canvas elements that have a WebGL or WebGL2 context: id, class, contextType (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_svg_paths', description: 'All <path> elements inside SVGs: id, d_preview (first 60 chars), fill, stroke (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Worker2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_service_workers2', description: 'Active service workers: scriptURL, state, scope (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_count2', description: 'Count worker types: { serviceWorkers, cacheStorages, indexedDBs }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_scope', description: 'Service worker registrations with their scope: scope, scriptURL, updateViaCache (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_broadcast_channels2', description: 'BroadcastChannel support and any open channels detectable via page: { supported } (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cache_storage_keys', description: 'Cache storage cache names for this origin: names [] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexed_db_names', description: 'IndexedDB database names for this origin: names [] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_support', description: 'Worker API support flags: { serviceWorker, webWorker, sharedWorker, broadcastChannel, cacheAPI, indexedDB }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_navigator_info', description: 'Navigator properties: { userAgent, platform, language, onLine, cookieEnabled, hardwareConcurrency, maxTouchPoints }', inputSchema: { type: 'object', properties: {} } },
+  // ── Geo3 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_map_elements', description: 'Map iframes (Google Maps, OpenStreetMap, Mapbox): src_preview, id, width, height (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_address_elements', description: 'All <address> elements: text_preview, id (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_phone_numbers', description: 'Links with tel: protocol: href, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_email_links', description: 'Links with mailto: protocol: href, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_links', description: 'Links to social platforms (twitter, facebook, instagram, linkedin, youtube, tiktok): href, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_schema_org2', description: 'JSON-LD scripts with @type: type, name_preview (max 10 schemas)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_microdata', description: 'Elements with itemscope/itemtype: itemType, id (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geolocation_permission2', description: 'Geolocation permission state: { state, supported }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3262,6 +3291,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_structured_list_items':  return await getStructuredListItems(cdp);
         case 'browser_steppers':               return await getSteppers(cdp);
         case 'browser_timeline':               return await getTimeline(cdp);
+                // dataviz2
+        case 'browser_canvas_elements3':       return await getCanvasElements3(cdp);
+        case 'browser_svg_charts':             return await getSvgCharts(cdp);
+        case 'browser_chart_labels':           return await getChartLabels(cdp);
+        case 'browser_chart_legend':           return await getChartLegend(cdp);
+        case 'browser_d3_elements':            return await getD3Elements(cdp);
+        case 'browser_canvas_size2':           return await getCanvasSize2(cdp);
+        case 'browser_webgl_contexts':         return await getWebGLContexts(cdp);
+        case 'browser_svg_paths':              return await getSvgPaths(cdp);
+        // worker2 new
+        case 'browser_service_workers2':       return await getServiceWorkers2(cdp);
+        case 'browser_worker_count2':          return await getWorkerCount2(cdp);
+        case 'browser_service_worker_scope':   return await getServiceWorkerScope(cdp);
+        case 'browser_broadcast_channels2':    return await getBroadcastChannels2(cdp);
+        case 'browser_cache_storage_keys':     return await getCacheStorageKeys(cdp);
+        case 'browser_indexed_db_names':       return await getIndexedDBNames(cdp);
+        case 'browser_worker_support':         return await getWorkerSupport(cdp);
+        case 'browser_navigator_info':         return await getNavigatorInfo(cdp);
+        // geo3
+        case 'browser_map_elements':           return await getMapElements(cdp);
+        case 'browser_address_elements':       return await getAddressElements(cdp);
+        case 'browser_phone_numbers':          return await getPhoneNumbers(cdp);
+        case 'browser_email_links':            return await getEmailLinks(cdp);
+        case 'browser_social_links':           return await getSocialLinks(cdp);
+        case 'browser_schema_org2':            return await getSchemaOrg2(cdp);
+        case 'browser_microdata':              return await getMicrodata(cdp);
+        case 'browser_geolocation_permission2': return await getGeolocationPermission2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
