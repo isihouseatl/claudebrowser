@@ -229,3 +229,231 @@ export async function getMediaState(
   }
   return ok(result.value);
 }
+
+// ─── getVideoElements2 ───────────────────────────────────────────────────────
+// Get all <video> elements with state: src, currentTime, duration, paused,
+// muted, autoplay, loop, readyState, width, height (max 10).
+// Renamed from getVideoElements to avoid collision with server.ts / video.ts.
+export async function getVideoElements2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('video')).slice(0,10).map(function(v) {
+    return { src: (v.src || v.currentSrc || '').slice(0,80), currentTime: v.currentTime, duration: v.duration, paused: v.paused, muted: v.muted, autoplay: v.autoplay, loop: v.loop, readyState: v.readyState, width: v.videoWidth, height: v.videoHeight };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── getAudioElements ────────────────────────────────────────────────────────
+// Get all <audio> elements with state: src, currentTime, duration, paused,
+// muted, autoplay, loop, readyState (max 10).
+export async function getAudioElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('audio')).slice(0,10).map(function(a) {
+    return { src: (a.src || a.currentSrc || '').slice(0,80), currentTime: a.currentTime, duration: a.duration, paused: a.paused, muted: a.muted, autoplay: a.autoplay, loop: a.loop, readyState: a.readyState };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── getMediaCount ───────────────────────────────────────────────────────────
+// Count media elements on the page: videos, audios, iframes, embeds, objects.
+export async function getMediaCount(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify({ videos: document.querySelectorAll('video').length, audios: document.querySelectorAll('audio').length, iframes: document.querySelectorAll('iframe').length, embeds: document.querySelectorAll('embed').length, objects: document.querySelectorAll('object').length });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── getPlayingMedia ─────────────────────────────────────────────────────────
+// Find currently playing video/audio elements: tag, src, currentTime,
+// duration (max 10).
+export async function getPlayingMedia(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var result = [];
+  document.querySelectorAll('video,audio').forEach(function(el) {
+    if (!el.paused && result.length < 10) result.push({ tag: el.tagName.toLowerCase(), src: (el.src||el.currentSrc||'').slice(0,80), currentTime: el.currentTime, duration: el.duration });
+  });
+  return JSON.stringify(result);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── pauseAllMedia ───────────────────────────────────────────────────────────
+// Pause all currently playing video and audio elements.
+// Returns { paused: true, count: N }.
+export async function pauseAllMedia(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var count = 0;
+  document.querySelectorAll('video,audio').forEach(function(el) { if (!el.paused) { el.pause(); count++; } });
+  return JSON.stringify({ paused: true, count: count });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── muteAllMedia ────────────────────────────────────────────────────────────
+// Mute all video and audio elements on the page.
+// Returns { muted: true, count: N }.
+export async function muteAllMedia(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var count = 0;
+  document.querySelectorAll('video,audio').forEach(function(el) { if (!el.muted) { el.muted = true; count++; } });
+  return JSON.stringify({ muted: true, count: count });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── getVideoSubtitles ───────────────────────────────────────────────────────
+// Find <track> elements inside <video> elements: kind, src, srclang, label,
+// default (max 20).
+export async function getVideoSubtitles(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('video track')).slice(0,20).map(function(t) {
+    return { kind: t.kind, src: (t.src||'').slice(0,80), srclang: t.srclang, label: t.label, default: t.default };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ─── getEmbedSources ─────────────────────────────────────────────────────────
+// Find all embed/object/iframe src sources: tag, src, type (max 20).
+export async function getEmbedSources(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var result = [];
+  document.querySelectorAll('embed,object,[src]').forEach(function(el) {
+    if (result.length < 20) {
+      var src = el.src || el.getAttribute('data') || el.getAttribute('src') || '';
+      if (src) result.push({ tag: el.tagName.toLowerCase(), src: src.slice(0,100), type: el.type || el.getAttribute('type') || null });
+    }
+  });
+  return JSON.stringify(result);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}

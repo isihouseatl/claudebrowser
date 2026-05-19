@@ -88,7 +88,7 @@ import { findElementsByText, getPageTextBlocks, findByRegex, getHeadings, getPar
 import { getBrowserInfo, getScreenInfo, isMobileDevice, isTouchDevice, getMediaCapabilities, getFeatureSupport, getNetworkType, getTimeInfo } from './cdp/device';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { getFormFields, getFormValidationErrors, isFormValid, getRequiredFields, getEmptyRequiredFields, listSelectOptions, setMultipleSelectValues, getCheckedCheckboxes } from './cdp/form2';
-import { getVideoState, muteMedia, unmuteMedia, getAllMediaElements, playMedia as playMedia2, pauseMedia as pauseMedia2, setMediaVolume as setMediaVolume2, seekMedia as seekMedia2, getMediaState } from './cdp/media2';
+import { getVideoState, muteMedia, unmuteMedia, getAllMediaElements, playMedia as playMedia2, pauseMedia as pauseMedia2, setMediaVolume as setMediaVolume2, seekMedia as seekMedia2, getMediaState, getVideoElements2, getAudioElements, getMediaCount, getPlayingMedia, pauseAllMedia, muteAllMedia, getVideoSubtitles, getEmbedSources } from './cdp/media2';
 import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, setAnimationPlaybackRate, getPageAnimationCount, cancelAnimations } from './cdp/animation';
 import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
 import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyEvent, triggerInputEvent, triggerFocusEvent, waitForDomMutation, getFormSubmitUrl } from './cdp/events2';
@@ -146,6 +146,8 @@ import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOr
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
+import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessages, getWarningMessages, getLoadingIndicators, getProgressBars, getNotificationPermission2 } from './cdp/notify2';
+import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1551,6 +1553,33 @@ const TOOLS = [
   { name: 'browser_external_links', description: 'Find all <a> links going to different origin: href, text, domain (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_anchors', description: 'Find all anchor targets and ID elements for deep-linking: { anchors: [{id, tag, text}], count } (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_redirect_meta', description: 'Check for <meta http-equiv="refresh"> redirect: { hasRefresh, delay, targetUrl }', inputSchema: { type: 'object', properties: {} } },
+  // ── Notify2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_toast_messages', description: 'Find toast/snackbar notifications by aria-live, role="alert", or .toast/.snackbar class: tag, id, text, role (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_banner_elements', description: 'Find banner/alert/notification elements by role="banner" or .banner/.alert/.notification class: tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_error_messages', description: 'Find visible error messages by role="alert", .error, [aria-invalid], or .is-invalid: tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_success_messages', description: 'Find success messages by .success, .is-valid, role="status": tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_warning_messages', description: 'Find warning messages by role="alert", .warning, [aria-live]: tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_loading_indicators', description: 'Find loading spinners/skeletons by role="progressbar", .spinner, .skeleton, .loading: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_progress_bars', description: 'Find <progress> and role="progressbar" elements: tag, id, value, max, percent (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_permission2', description: 'Get Notification.permission: { permission, supported }', inputSchema: { type: 'object', properties: {} } },
+  // ── Media2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_video_elements2', description: 'All <video> elements: src, currentTime, duration, paused, muted, autoplay, loop, readyState, width, height (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_audio_elements', description: 'All <audio> elements: src, currentTime, duration, paused, muted, autoplay, loop, readyState (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_count', description: 'Count media elements: { videos, audios, iframes, embeds, objects }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_playing_media', description: 'Find currently playing video/audio: tag, src, currentTime, duration (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pause_all_media', description: 'Pause all playing video/audio: { paused: true, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mute_all_media', description: 'Mute all video/audio: { muted: true, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_video_subtitles', description: 'Find <track> elements inside <video>: kind, src, srclang, label, default (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_embed_sources', description: 'Find embed/object/[src] element sources: tag, src, type (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Button2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_all_buttons', description: 'All <button> and role="button" elements: tag, id, text, type, disabled (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_primary_buttons', description: 'Buttons with .primary/.btn-primary/[type=submit] class: tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_disabled_buttons', description: 'Buttons with disabled attribute or aria-disabled=true: tag, id, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_toggle_switches', description: 'Find toggle switches by role="switch" or input[type=checkbox].toggle: tag, id, checked (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_badges', description: 'Find badge/chip elements by .badge/.chip/.tag or role="status": tag, id, text (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_icon_buttons', description: 'Buttons containing only SVG or [aria-label] with no visible text: tag, id, ariaLabel (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_expand_collapse', description: 'Find expand/collapse controls by aria-expanded: tag, id, text, expanded (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_button_count', description: 'Count interactive controls: { buttons, submitButtons, resetButtons, roleButtons, total }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3039,6 +3068,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_external_links':           return await getExternalLinksFull(cdp);
         case 'browser_anchors':                  return await getAnchors(cdp);
         case 'browser_redirect_meta':            return await getRedirectMeta(cdp);
+                // notify2
+        case 'browser_toast_messages':         return await getToastMessages(cdp);
+        case 'browser_banner_elements':        return await getBannerElements(cdp);
+        case 'browser_error_messages':         return await getErrorMessages(cdp);
+        case 'browser_success_messages':       return await getSuccessMessages(cdp);
+        case 'browser_warning_messages':       return await getWarningMessages(cdp);
+        case 'browser_loading_indicators':     return await getLoadingIndicators(cdp);
+        case 'browser_progress_bars':          return await getProgressBars(cdp);
+        case 'browser_notification_permission2': return await getNotificationPermission2(cdp);
+        // media2 new
+        case 'browser_video_elements2':        return await getVideoElements2(cdp);
+        case 'browser_audio_elements':         return await getAudioElements(cdp);
+        case 'browser_media_count':            return await getMediaCount(cdp);
+        case 'browser_playing_media':          return await getPlayingMedia(cdp);
+        case 'browser_pause_all_media':        return await pauseAllMedia(cdp);
+        case 'browser_mute_all_media':         return await muteAllMedia(cdp);
+        case 'browser_video_subtitles':        return await getVideoSubtitles(cdp);
+        case 'browser_embed_sources':          return await getEmbedSources(cdp);
+        // button2
+        case 'browser_all_buttons':            return await getAllButtons(cdp);
+        case 'browser_primary_buttons':        return await getPrimaryButtons(cdp);
+        case 'browser_disabled_buttons':       return await getDisabledButtons(cdp);
+        case 'browser_toggle_switches':        return await getToggleSwitches(cdp);
+        case 'browser_badges':                 return await getBadges(cdp);
+        case 'browser_icon_buttons':           return await getIconButtons(cdp);
+        case 'browser_expand_collapse':        return await getExpandCollapseControls(cdp);
+        case 'browser_button_count':           return await getButtonCount(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
