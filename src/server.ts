@@ -104,7 +104,7 @@ import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocati
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
 import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState } from './cdp/history';
-import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent } from './cdp/event2';
+import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent, injectEventMonitor, getEventLog, clearEventLog, getClickListeners, getKeyboardListeners, getScrollListeners, getSubmitListeners, getResizeListeners } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages } from './cdp/image2';
@@ -126,6 +126,8 @@ import { getHeadings2, getHeadingOutline, getH1s, getHeadingCount, getLandmarks2
 import { getPageTextContent, getTextBySelector, searchPageText, getVisibleText, getParagraphs2, getTextLength, getLinks, getLinksCount } from './cdp/text2';
 import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount } from './cdp/worker2';
 import { getGeolocationSupport, getTimezone2, getLanguages, getUserAgentData, getBatteryInfo, getNetworkInfo, getMediaDevices, getPermissions } from './cdp/geo2';
+import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotElements, getAssignedNodes, getWebComponentCount, getComponentAttributes, isCustomElementDefined } from './cdp/slot2';
+import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1374,6 +1376,33 @@ const TOOLS = [
   { name: 'browser_network_info', description: 'Get navigator.connection info: effectiveType, downlink, rtt, saveData (or supported:false)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_media_devices', description: 'Count media devices by kind (no labels): { audioinput, audiooutput, videoinput }', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_permissions', description: 'Query camera, microphone, notifications, clipboard-read, clipboard-write permissions: { name, state }[]', inputSchema: { type: 'object', properties: {} } },
+  // ── Event2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_inject_event_monitor', description: 'Patch EventTarget.prototype.addEventListener to record events to window.__eventLog (circular 100)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_event_log', description: 'Get recorded event log: { events: [{type, target_tag, target_id, timestamp}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_event_log', description: 'Clear window.__eventLog: { cleared: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click_listeners', description: 'Find elements with onclick attribute: { elements: [{tag, id, hasOnclick}], count } (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyboard_listeners', description: 'Find elements with onkeydown/up/press attributes plus document/window: { elements, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_listeners', description: 'Find onscroll elements + window/document scroll handlers: { elements, hasWindowListener, hasDocumentListener }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_submit_listeners', description: 'Find forms with onsubmit attribute: { forms: [{id, action, hasOnsubmit}], count } (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_listeners', description: 'Check window.onresize and __resizeListeners: { hasWindowOnresize, listenerCount }', inputSchema: { type: 'object', properties: {} } },
+  // ── Slot2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_template_elements', description: 'Find all <template> elements: id, class, childCount (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_elements', description: 'Find all elements with hyphenated tag names (custom elements): tag, id, class (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_element_names', description: 'Get all defined custom element names via customElements registry: { names, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slot_elements', description: 'Find <slot> elements in shadow DOMs: { name, assignedCount }[] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_assigned_nodes', description: 'Get assigned nodes for each slot in a shadow host element: { slotName, nodes }[]', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_web_component_count', description: 'Count web components: { customElementsTotal, templatesTotal, slotsInLightDOM }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_component_attributes', description: 'Get all attributes of a custom element: { name, value }[]', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_custom_element_defined', description: 'Check if a custom element tag is registered: { tagName, defined }', inputSchema: { type: 'object', properties: { tagName: { type: 'string' } }, required: ['tagName'] } },
+  // ── JSON2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_json_ld', description: 'Find <script type="application/ld+json"> elements: { type, data_preview }[] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_opengraph_tags', description: 'Get all <meta property="og:*"> tags: { property, content }[]', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_twitter_card_tags', description: 'Get all <meta name="twitter:*"> tags: { name, content }[]', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_schema_org', description: 'Find [itemscope] microdata elements: tag, id, itemtype, itemid (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_json_data', description: 'Find <script type="application/json"> elements: id, type, keys, preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_window_json_globals', description: 'Find window.* properties containing plain objects/arrays (non-private): key, type, preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_attributes', description: 'Get all data-* attributes on elements matching selector: { selector, attributes }[] (max 20)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_page_datasets', description: 'Sample elements with data-* attributes: tag, id, dataset object (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2700,6 +2729,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_network_info':             return await getNetworkInfo(cdp);
         case 'browser_media_devices':            return await getMediaDevices(cdp);
         case 'browser_permissions':              return await getPermissions(cdp);
+                // event2 new
+        case 'browser_inject_event_monitor':     return await injectEventMonitor(cdp);
+        case 'browser_event_log':                return await getEventLog(cdp);
+        case 'browser_clear_event_log':          return await clearEventLog(cdp);
+        case 'browser_click_listeners':          return await getClickListeners(cdp);
+        case 'browser_keyboard_listeners':       return await getKeyboardListeners(cdp);
+        case 'browser_scroll_listeners':         return await getScrollListeners(cdp);
+        case 'browser_submit_listeners':         return await getSubmitListeners(cdp);
+        case 'browser_resize_listeners':         return await getResizeListeners(cdp);
+        // slot2
+        case 'browser_template_elements':        return await getTemplateElements(cdp);
+        case 'browser_custom_elements':          return await getCustomElements(cdp);
+        case 'browser_custom_element_names':     return await getCustomElementNames(cdp);
+        case 'browser_slot_elements':            return await getSlotElements(cdp);
+        case 'browser_assigned_nodes':           return await getAssignedNodes(cdp, a.selector as string);
+        case 'browser_web_component_count':      return await getWebComponentCount(cdp);
+        case 'browser_component_attributes':     return await getComponentAttributes(cdp, a.selector as string);
+        case 'browser_is_custom_element_defined': return await isCustomElementDefined(cdp, a.tagName as string);
+        // json2
+        case 'browser_json_ld':                  return await getJsonLdScripts(cdp);
+        case 'browser_opengraph_tags':           return await getOpenGraphTags2(cdp);
+        case 'browser_twitter_card_tags':        return await getTwitterCardTags2(cdp);
+        case 'browser_schema_org':               return await getSchemaOrg(cdp);
+        case 'browser_page_json_data':           return await getPageJsonData(cdp);
+        case 'browser_window_json_globals':      return await getWindowJsonGlobals(cdp);
+        case 'browser_data_attributes':          return await getDataAttributes(cdp, a.selector as string);
+        case 'browser_page_datasets':            return await getPageDatasets(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
