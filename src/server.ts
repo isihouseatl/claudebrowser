@@ -23,9 +23,9 @@ import { getSecurityInfo, hasMixedContent, getCSPInfo, getThirdPartyDomains, isS
 import { listCacheNames, getCacheEntries, deleteCache, deleteCacheEntry, clearAllCaches, getStorageQuota, getStorageBreakdown } from './cdp/cache';
 import { getZIndex, getElementsAtPoint, getPixelColor, getColors, highlightElement, removeHighlight, doElementsOverlap, getFontInfo } from './cdp/visual';
 import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
-import { queryShadow, getShadowHtml, evaluateInShadow } from './cdp/shadow';
+import { queryShadow, getShadowHtml, evaluateInShadow, getShadowHosts, getShadowRoot as getShadowRootInfo, queryShadowRoot as queryShadowRoot2, getShadowChildren as getShadowChildren2, isShadowHost, getShadowSlots as getShadowSlots2, getShadowCssVars, getShadowDepth } from './cdp/shadow';
 import { setAttribute, removeAttribute, addClass, removeClass, injectCss, removeInjectedCss, submitForm, resetForm } from './cdp/dom';
-import { writeClipboardText, readClipboardText, copyElementText, getSelectionText, selectAllText, clearSelection as clearPageSelection, hasClipboardAccess, pasteAtCursor } from './cdp/clipboard';
+import { writeClipboardText, getClipboardText as getClipboardTextV2, copyElementText, getSelectedText as getSelectedTextV2, selectAllText, clearSelection as clearPageSelection, isClipboardSupported } from './cdp/clipboard';
 import { listIndexedDatabases, getAllIndexedDb, getIndexedDb, clearIndexedDb } from './cdp/indexeddb';
 import { getPaintTiming, getNavigationTiming, getResourceTimings, clearPerformanceBuffer } from './cdp/performance';
 import { startWebSocketLog, getWebSocketMessages, getWebSocketConnections, clearWebSocketLog, stopWebSocketLog } from './cdp/websocket';
@@ -74,7 +74,7 @@ import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, c
 import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays } from './cdp/highlight2';
 import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input3';
 import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
-import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests } from './cdp/network2';
+import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests, getResourceTimings as getResourceTimings2, getResourcesByType, getLargestResources, getCachedResources, getTotalTransferSize, getFailedResources as getFailedResources2, clearResourceTimings, getNavigationTimingBasic } from './cdp/network2';
 import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAllStorage, getCookieCount, getCookieDomains, getStorageEstimate, clearOriginStorage } from './cdp/storage2';
 import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
 import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay, detectModals, getOverlayElements, hasBackdrop, closeModalByEscape, clickModalCloseButton, getPopoverElements, countZIndexLayers } from './cdp/modal';
@@ -1105,6 +1105,24 @@ const TOOLS = [
   { name: 'browser_measure_performance2', description: 'Create a performance.measure() between two marks, returns duration in ms', inputSchema: { type: 'object', properties: { name: { type: 'string' }, start_mark: { type: 'string' }, end_mark: { type: 'string' } }, required: ['name', 'start_mark', 'end_mark'] } },
   { name: 'browser_clear_perf_marks', description: 'Clear all performance marks via performance.clearMarks()', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_get_perf_marks2', description: 'Get all performance marks: name and startTime', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow DOM ──────────────────────────────────────────────────────────────────
+  { name: 'browser_shadow_hosts', description: 'List all elements with shadow roots: tag, id, class, mode (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_root_info', description: 'Get shadow root info for element: mode, delegatesFocus, childCount', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_query_shadow2', description: 'querySelector inside a shadow root, returns found, tag, id, class, text', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, inner_selector: { type: 'string' } }, required: ['selector', 'inner_selector'] } },
+  { name: 'browser_shadow_children2', description: 'List direct children of a shadow root: tag, id, class, text snippet', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_shadow_host', description: 'Check if element has a shadow root and return its mode', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_shadow_slots2', description: 'List <slot> elements inside a shadow root: name, assignedCount', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_shadow_css_vars', description: 'Get CSS custom properties (--var) computed on a shadow host element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_shadow_depth', description: 'Count how many shadow DOM levels deep an element is (0 = not in shadow)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Network2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_resource_timings2', description: 'Get all resource timing entries: name, duration, transferSize, initiatorType (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resources_by_type', description: 'Filter resource timings by initiatorType: script, img, css, fetch, xmlhttprequest, etc.', inputSchema: { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] } },
+  { name: 'browser_largest_resources', description: 'Get top N resources by transferSize (default 10)', inputSchema: { type: 'object', properties: { limit: { type: 'number' } } } },
+  { name: 'browser_cached_resources', description: 'Get resources served from cache (transferSize=0, duration>0)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_total_transfer_size', description: 'Sum all resource transferSize: totalBytes, totalKb, count', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_failed_resources', description: 'Get resources with duration=0 and no transferSize (likely failed)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_resource_timings', description: 'Call performance.clearResourceTimings() to reset the buffer', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_timing_basic', description: 'Get navigation timing: domContentLoaded and loadEventEnd in ms from PerformanceTiming', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1266,7 +1284,7 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_reset_form':             { await resetForm(cdp, a.selector as string); return ok('Form reset'); }
         // Clipboard
         case 'browser_set_clipboard':          { await writeClipboardText(cdp, a.text as string); return ok('Clipboard set'); }
-        case 'browser_get_clipboard':          { const r = await readClipboardText(cdp); const parsed = JSON.parse(r.content[0].text.startsWith('Error') ? '{"text":""}' : r.content[0].text); return ok({ text: parsed.text }); }
+        case 'browser_get_clipboard':          { const r = await getClipboardTextV2(cdp); return ok({ text: r.content[0].text }); }
         // IndexedDB
         case 'browser_list_indexed_databases': return ok(await listIndexedDatabases(cdp));
         case 'browser_get_all_indexed_db':     return ok(await getAllIndexedDb(cdp, a.db_name as string, a.store_name as string));
@@ -1973,11 +1991,11 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_wait_attribute_change':    return await waitForAttributeChange(cdp, a.selector as string, a.attribute as string, a.timeout_ms as number ?? 5000);
                 // clipboard extended
         case 'browser_copy_element_text':        return await copyElementText(cdp, a.selector as string);
-        case 'browser_selection_text':           return await getSelectionText(cdp);
+        case 'browser_selection_text':           return await getSelectedTextV2(cdp);
         case 'browser_select_all_text':          return await selectAllText(cdp, a.selector as string);
         case 'browser_clear_selection_alt':      return await clearPageSelection(cdp);
-        case 'browser_clipboard_access':         return await hasClipboardAccess(cdp);
-        case 'browser_paste_at_cursor':          return await pasteAtCursor(cdp, a.selector as string, a.text as string);
+        case 'browser_clipboard_access':         return await isClipboardSupported(cdp);
+        case 'browser_paste_at_cursor':          return ok('pasteAtCursor is no longer supported; use writeClipboardText instead');
         // storage2 new
         case 'browser_localstorage_keys':        return await getLocalStorageKeys(cdp);
         case 'browser_sessionstorage_keys':      return await getSessionStorageKeys(cdp);
@@ -2180,6 +2198,24 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_measure_performance2':     return await measurePerformance2(cdp, a.name as string, a.start_mark as string, a.end_mark as string);
         case 'browser_clear_perf_marks':         return await clearPerformanceMarks(cdp);
         case 'browser_get_perf_marks2':          return await getPerformanceMarks2(cdp);
+                // shadow
+        case 'browser_shadow_hosts':             return await getShadowHosts(cdp);
+        case 'browser_shadow_root_info':         return await getShadowRootInfo(cdp, a.selector as string);
+        case 'browser_query_shadow2':            return await queryShadowRoot2(cdp, a.selector as string, a.inner_selector as string);
+        case 'browser_shadow_children2':         return await getShadowChildren2(cdp, a.selector as string);
+        case 'browser_is_shadow_host':           return await isShadowHost(cdp, a.selector as string);
+        case 'browser_shadow_slots2':            return await getShadowSlots2(cdp, a.selector as string);
+        case 'browser_shadow_css_vars':          return await getShadowCssVars(cdp, a.selector as string);
+        case 'browser_shadow_depth':             return await getShadowDepth(cdp, a.selector as string);
+        // network2 new
+        case 'browser_resource_timings2':        return await getResourceTimings2(cdp);
+        case 'browser_resources_by_type':        return await getResourcesByType(cdp, a.type as string);
+        case 'browser_largest_resources':        return await getLargestResources(cdp, a.limit as number | undefined);
+        case 'browser_cached_resources':         return await getCachedResources(cdp);
+        case 'browser_total_transfer_size':      return await getTotalTransferSize(cdp);
+        case 'browser_failed_resources':         return await getFailedResources2(cdp);
+        case 'browser_clear_resource_timings':   return await clearResourceTimings(cdp);
+        case 'browser_nav_timing_basic':         return await getNavigationTimingBasic(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

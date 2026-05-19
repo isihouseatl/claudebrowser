@@ -246,3 +246,268 @@ export async function getCachedRequests(
   })()`;
   return evaluate<CachedRequest[]>(client, expression);
 }
+
+// ---------------------------------------------------------------------------
+// Performance API / Resource Inspection block
+// Functions 9–16: return { content: [{ type: 'text'; text: string }] }
+// ---------------------------------------------------------------------------
+
+function ok(v: unknown): { content: [{ type: 'text'; text: string }] } {
+  return {
+    content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v) }],
+  };
+}
+
+function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 9. getResourceTimings
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all PerformanceResourceTiming entries: name (URL), duration,
+ * transferSize, and initiatorType. Capped at 30 entries.
+ */
+export async function getResourceTimings(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var entries = performance.getEntriesByType('resource').slice(0, 30);
+    return entries.map(function(e) {
+      return {
+        name: e.name,
+        duration: Math.round(e.duration * 100) / 100,
+        transferSize: e.transferSize,
+        initiatorType: e.initiatorType
+      };
+    });
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 10. getResourcesByType
+// ---------------------------------------------------------------------------
+
+/**
+ * Filter PerformanceResourceTiming entries by initiatorType.
+ * Common values: 'script', 'img', 'css', 'fetch', 'xmlhttprequest', 'link'.
+ */
+export async function getResourcesByType(
+  client: CdpClient,
+  type: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function(type) {
+    return performance.getEntriesByType('resource')
+      .filter(function(e) { return e.initiatorType === type; })
+      .map(function(e) {
+        return {
+          name: e.name,
+          duration: Math.round(e.duration * 100) / 100,
+          transferSize: e.transferSize,
+          initiatorType: e.initiatorType
+        };
+      });
+  })(${JSON.stringify(type)})`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 11. getLargestResources
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the top N resources by transferSize, sorted descending.
+ * Default limit: 10.
+ */
+export async function getLargestResources(
+  client: CdpClient,
+  limit = 10,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function(limit) {
+    var entries = performance.getEntriesByType('resource').slice();
+    entries.sort(function(a, b) { return b.transferSize - a.transferSize; });
+    return entries.slice(0, limit).map(function(e) {
+      return {
+        name: e.name,
+        transferSize: e.transferSize,
+        duration: Math.round(e.duration * 100) / 100,
+        initiatorType: e.initiatorType
+      };
+    });
+  })(${limit})`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 12. getCachedResources
+// ---------------------------------------------------------------------------
+
+/**
+ * Return resources served from cache: transferSize === 0 but duration > 0.
+ */
+export async function getCachedResources(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    return performance.getEntriesByType('resource')
+      .filter(function(e) { return e.transferSize === 0 && e.duration > 0; })
+      .map(function(e) {
+        return {
+          name: e.name,
+          duration: Math.round(e.duration * 100) / 100,
+          initiatorType: e.initiatorType
+        };
+      });
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 13. getTotalTransferSize
+// ---------------------------------------------------------------------------
+
+/**
+ * Sum all resource transferSize values.
+ * Returns { totalBytes, totalKb, count }.
+ */
+export async function getTotalTransferSize(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var entries = performance.getEntriesByType('resource');
+    var total = 0;
+    for (var i = 0; i < entries.length; i++) { total += entries[i].transferSize; }
+    return {
+      totalBytes: total,
+      totalKb: Math.round((total / 1024) * 100) / 100,
+      count: entries.length
+    };
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 14. getFailedResources
+// ---------------------------------------------------------------------------
+
+/**
+ * Return resources with duration === 0 and transferSize === 0, likely failed.
+ * Excludes data: URIs.
+ */
+export async function getFailedResources(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    return performance.getEntriesByType('resource')
+      .filter(function(e) {
+        return e.duration === 0 && e.transferSize === 0 && e.name.indexOf('data:') !== 0;
+      })
+      .map(function(e) {
+        return { name: e.name, initiatorType: e.initiatorType };
+      });
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 15. clearResourceTimings
+// ---------------------------------------------------------------------------
+
+/**
+ * Call performance.clearResourceTimings() in the page.
+ */
+export async function clearResourceTimings(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    performance.clearResourceTimings();
+    return 'cleared';
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
+
+// ---------------------------------------------------------------------------
+// 16. getNavigationTimingBasic
+// (Named getNavigationTimingBasic because getNavigationTiming already exists
+// in performance.ts and is imported into server.ts under that name.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return window.performance.timing values as relative milliseconds:
+ * - domContentLoaded: domContentLoadedEventEnd - navigationStart
+ * - loadEventEnd:     loadEventEnd - navigationStart
+ * - navigationStart:  0 (anchor reference)
+ */
+export async function getNavigationTimingBasic(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var t = window.performance.timing;
+    var nav = t.navigationStart;
+    return {
+      navigationStart: 0,
+      domContentLoaded: t.domContentLoadedEventEnd - nav,
+      loadEventEnd: t.loadEventEnd - nav
+    };
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+  }
+  return ok(result.value);
+}
