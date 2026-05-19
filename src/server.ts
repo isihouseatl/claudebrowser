@@ -200,6 +200,9 @@ import { getBreadcrumbs3, getBreadcrumbItems, getSidebarNavigation, getTreeNavig
 import { getPriceElements, getAddToCartButtons2, getCartCount, getCheckoutButton, getProductPrices2, getDiscountElements, getCurrencySymbols2, getPromoCodeInputs } from './cdp/pricing2';
 import { getDashboardCards, getWidgetElements, getStatCards, getKpiElements, getDashboardLayout, getMetricDisplays, getProgressBars3, getGaugeElements } from './cdp/dashboard2';
 import { getContentEditableElements, getEditorToolbars, getEditorContent, getEditorSelection, getWysiwygFrames, getEditorButtons, getEditorPlugins, getEditorState } from './cdp/richtext2';
+import { getIframeElements, getEmbedElements3, getObjectElements3, getCrossOriginFrames, getSameOriginFrames, getFrameSandbox, getFramePermissions, getThirdPartyScripts } from './cdp/embed3';
+import { getKeyboardShortcuts, getInputMode, getHotkeys, getKeyboardNavElements, getArrowKeyTargets, getEnterKeyTargets, getEscapeKeyTargets, getKeyboardListeners2 } from './cdp/keyboard3';
+import { getCookies3, getSessionStorageItems3, getLocalStorageItems3, getIndexedDBDatabases5, getCacheStorageNames3, getStorageQuota5, getCookieCount5, getStorageState } from './cdp/cookie3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2303,6 +2306,33 @@ const TOOLS = [
   { name: 'browser_editor_buttons', description: 'Formatting buttons in editor toolbar: [{tag, id, text_preview, class_preview, isActive}] (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_editor_plugins', description: 'Detected editor frameworks: {hasTinyMCE, hasCKEditor, hasQuill, hasDraft, hasSlate, hasProseMirror}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_editor_state', description: 'Editor active state: {hasEditor, editorType, isEditing, isFocused, hasSelection}', inputSchema: { type: 'object', properties: {} } },
+  // ── Embed3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_iframe_elements', description: 'iFrame elements: [{id, src_preview, name, width, height, sandbox}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_embed_elements3', description: 'Embed elements: [{id, src_preview, type, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_object_elements3', description: 'Object elements: [{id, data_preview, type, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cross_origin_frames', description: 'Cross-origin iframes: [{id, src_preview, origin}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_same_origin_frames', description: 'Same-origin iframes: [{id, src_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_frame_sandbox', description: 'iFrame sandbox attributes: [{id, src_preview, sandbox, allowedFeatures}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_frame_permissions', description: 'iFrame allow/permissions policy: [{id, src_preview, allow}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_third_party_scripts', description: 'Third-party script elements: [{src_preview, async, defer, type}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Keyboard3 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_keyboard_shortcuts', description: 'Elements with accesskey attributes: [{tag, id, text_preview, accesskey}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_input_mode', description: 'Elements with inputmode attribute: [{tag, id, inputmode, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hotkeys', description: 'Elements with data-hotkey/data-shortcut: [{tag, id, hotkey_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyboard_nav_elements', description: 'Elements reachable by keyboard: [{tag, id, tabIndex, role, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_arrow_key_targets', description: 'Elements with arrow-key navigation role: [{tag, id, role, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_enter_key_targets', description: 'Buttons and links activated by Enter: [{tag, id, text_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_escape_key_targets', description: 'Modals/dialogs dismissible by Escape: [{tag, id, role, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyboard_listeners2', description: 'Summary of keyboard event listener presence: {hasKeydown, hasKeyup, hasKeypress, listenerCount}', inputSchema: { type: 'object', properties: {} } },
+  // ── Cookie3 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_cookies3', description: 'All cookies: [{name, value_preview, domain, path, secure, httpOnly, sameSite}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage_items3', description: 'sessionStorage key/value pairs: [{key, value_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_local_storage_items3', description: 'localStorage key/value pairs: [{key, value_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexed_db_databases5', description: 'IndexedDB database names: [{name, version}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cache_storage_names3', description: 'Cache API cache names: [string] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_quota5', description: 'Storage quota info: {quota, usage, usageDetails}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_count5', description: 'Cookie breakdown: {count, secureCookies, httpOnlyCookies, sameSiteStrict, sameSiteLax, sameSiteNone}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_state', description: 'Storage summary: {hasCookies, hasLocalStorage, hasSessionStorage, hasIndexedDB, hasCacheStorage}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4492,6 +4522,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_editor_buttons':           return await getEditorButtons(cdp);
         case 'browser_editor_plugins':           return await getEditorPlugins(cdp);
         case 'browser_editor_state':             return await getEditorState(cdp);
+                // embed3 new
+        case 'browser_iframe_elements':          return await getIframeElements(cdp);
+        case 'browser_embed_elements3':          return await getEmbedElements3(cdp);
+        case 'browser_object_elements3':         return await getObjectElements3(cdp);
+        case 'browser_cross_origin_frames':      return await getCrossOriginFrames(cdp);
+        case 'browser_same_origin_frames':       return await getSameOriginFrames(cdp);
+        case 'browser_frame_sandbox':            return await getFrameSandbox(cdp);
+        case 'browser_frame_permissions':        return await getFramePermissions(cdp);
+        case 'browser_third_party_scripts':      return await getThirdPartyScripts(cdp);
+        // keyboard3 new
+        case 'browser_keyboard_shortcuts':       return await getKeyboardShortcuts(cdp);
+        case 'browser_input_mode':               return await getInputMode(cdp);
+        case 'browser_hotkeys':                  return await getHotkeys(cdp);
+        case 'browser_keyboard_nav_elements':    return await getKeyboardNavElements(cdp);
+        case 'browser_arrow_key_targets':        return await getArrowKeyTargets(cdp);
+        case 'browser_enter_key_targets':        return await getEnterKeyTargets(cdp);
+        case 'browser_escape_key_targets':       return await getEscapeKeyTargets(cdp);
+        case 'browser_keyboard_listeners2':      return await getKeyboardListeners2(cdp);
+        // cookie3 new
+        case 'browser_cookies3':                 return await getCookies3(cdp);
+        case 'browser_session_storage_items3':   return await getSessionStorageItems3(cdp);
+        case 'browser_local_storage_items3':     return await getLocalStorageItems3(cdp);
+        case 'browser_indexed_db_databases5':    return await getIndexedDBDatabases5(cdp);
+        case 'browser_cache_storage_names3':     return await getCacheStorageNames3(cdp);
+        case 'browser_storage_quota5':           return await getStorageQuota5(cdp);
+        case 'browser_cookie_count5':            return await getCookieCount5(cdp);
+        case 'browser_storage_state':            return await getStorageState(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
