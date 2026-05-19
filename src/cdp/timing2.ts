@@ -226,3 +226,300 @@ export async function getSlowResources(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ---------------------------------------------------------------------------
+// New timing inspection functions (8 exported)
+// Naming notes:
+//   getNavigationTiming4   — versions 1-3 already used in performance/pageload/performance2
+//   getResourceCount2      — getResourceCount already exported above in this file
+//   getTimeToFirstByte2    — getTimeToFirstByte already exported above in this file
+//   getLongTasks2          — getLongTasks already exported from performance2.ts
+// ---------------------------------------------------------------------------
+
+/**
+ * getNavigationTiming4 — Returns key PerformanceNavigationTiming values as
+ * offsets from fetchStart: domContentLoaded, loadEventEnd, domInteractive,
+ * responseStart, requestStart, fetchStart (absolute).
+ */
+export async function getNavigationTiming4(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var t = performance.timing;
+  var fs = t.fetchStart;
+  return JSON.stringify({
+    fetchStart: fs,
+    requestStart: t.requestStart - fs,
+    responseStart: t.responseStart - fs,
+    domInteractive: t.domInteractive - fs,
+    domContentLoaded: t.domContentLoadedEventEnd - fs,
+    loadEventEnd: t.loadEventEnd - fs,
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPaintTimings — Returns all paint entries from the Paint Timing API.
+ * Each entry: { name, startTime }. Typically includes first-paint and
+ * first-contentful-paint.
+ */
+export async function getPaintTimings(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('paint');
+  var out = [];
+  for (var i = 0; i < entries.length; i++) {
+    out.push({ name: entries[i].name, startTime: entries[i].startTime });
+  }
+  return JSON.stringify(out);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getLargestContentfulPaint — Returns the most recent LCP entry via
+ * performance.getEntriesByType('largest-contentful-paint').
+ * Returns { lcp_ms, element, url } or { lcp_ms: null, reason: 'not yet observed' }.
+ */
+export async function getLargestContentfulPaint(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('largest-contentful-paint');
+  if (!entries || entries.length === 0) {
+    return JSON.stringify({ lcp_ms: null, reason: 'not yet observed' });
+  }
+  var last = entries[entries.length - 1];
+  var el = last.element;
+  var elementDesc = el ? (el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + String(el.className).split(' ').join('.') : '')) : null;
+  return JSON.stringify({
+    lcp_ms: last.startTime,
+    element: elementDesc,
+    url: last.url || null,
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getFirstInputDelay — Returns FID from performance.getEntriesByType('first-input').
+ * Returns { fid_ms, processingStart, target } or { fid_ms: null } if no input yet.
+ */
+export async function getFirstInputDelay(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('first-input');
+  if (!entries || entries.length === 0) {
+    return JSON.stringify({ fid_ms: null });
+  }
+  var e = entries[0];
+  var targetDesc = e.target ? (e.target.tagName + (e.target.id ? '#' + e.target.id : '')) : null;
+  return JSON.stringify({
+    fid_ms: e.processingStart - e.startTime,
+    processingStart: e.processingStart,
+    target: targetDesc,
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getCumulativeLayoutShift — Returns CLS score and shift count from
+ * performance.getEntriesByType('layout-shift').
+ * Returns { cls_score, shiftCount }.
+ */
+export async function getCumulativeLayoutShift(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('layout-shift');
+  var cls = 0;
+  for (var i = 0; i < entries.length; i++) {
+    cls += entries[i].value;
+  }
+  return JSON.stringify({ cls_score: cls, shiftCount: entries.length });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getResourceCount2 — Returns total resource count plus breakdown by initiatorType:
+ * { total, script, css, img, fetch, xhr, font, other }.
+ * (Renamed from getResourceCount to avoid collision with the existing export above.)
+ */
+export async function getResourceCount2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('resource');
+  var counts = { total: entries.length, script: 0, css: 0, img: 0, fetch: 0, xhr: 0, font: 0, other: 0 };
+  var known = { script: true, css: true, img: true, fetch: true, xhr: true, font: true };
+  for (var i = 0; i < entries.length; i++) {
+    var t = entries[i].initiatorType;
+    if (known[t]) {
+      counts[t]++;
+    } else {
+      counts.other++;
+    }
+  }
+  return JSON.stringify(counts);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getTimeToFirstByte2 — Returns TTFB from performance.timing:
+ * { ttfb_ms, requestStart, responseStart }.
+ * (Renamed from getTimeToFirstByte to avoid collision with the existing export above.)
+ */
+export async function getTimeToFirstByte2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var t = performance.timing;
+  return JSON.stringify({
+    ttfb_ms: t.responseStart - t.requestStart,
+    requestStart: t.requestStart,
+    responseStart: t.responseStart,
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getLongTasks2 — Returns long tasks (duration > 50ms) from
+ * performance.getEntriesByType('longtask').
+ * Returns { tasks: [{duration, startTime}], count, totalBlockingTime }.
+ * (Renamed from getLongTasks to avoid collision with performance2.ts export.)
+ */
+export async function getLongTasks2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var entries = performance.getEntriesByType('longtask');
+  var tasks = [];
+  var tbt = 0;
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    tasks.push({ startTime: e.startTime, duration: e.duration });
+    tbt += e.duration - 50;
+  }
+  return JSON.stringify({ tasks: tasks, count: tasks.length, totalBlockingTime: tbt });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}

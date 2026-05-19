@@ -99,7 +99,7 @@ import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, w
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
-import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2 } from './cdp/timing2';
+import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2, getNavigationTiming4, getPaintTimings, getLargestContentfulPaint, getFirstInputDelay, getCumulativeLayoutShift, getResourceCount2, getTimeToFirstByte2, getLongTasks2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
@@ -124,6 +124,8 @@ import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePix
 import { getLists, getListItems2, getNestedListDepth, getDescriptionLists, getNavLists, getMenuItems, getCheckedListItems, getListCount } from './cdp/list2';
 import { getHeadings2, getHeadingOutline, getH1s, getHeadingCount, getLandmarks2, getPageSections, getSkipLinks, getReadingOrder } from './cdp/heading2';
 import { getPageTextContent, getTextBySelector, searchPageText, getVisibleText, getParagraphs2, getTextLength, getLinks, getLinksCount } from './cdp/text2';
+import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount } from './cdp/worker2';
+import { getGeolocationSupport, getTimezone2, getLanguages, getUserAgentData, getBatteryInfo, getNetworkInfo, getMediaDevices, getPermissions } from './cdp/geo2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1345,6 +1347,33 @@ const TOOLS = [
   { name: 'browser_text_length', description: 'Get char and word count for element matching selector: { charCount, wordCount, text_preview }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_links', description: 'Get all <a> elements: text, href, id, class, target, isExternal (max 50)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_links_count', description: 'Count links: total, internal, external, withoutText, broken_possible (empty href or "#")', inputSchema: { type: 'object', properties: {} } },
+  // ── Timing2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_nav_timing4', description: 'Get navigation timing: domContentLoaded, loadEventEnd, domInteractive, responseStart, requestStart as ms from fetchStart', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paint_timings', description: 'Get first-paint and first-contentful-paint entries: { name, startTime }[]', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lcp', description: 'Get Largest Contentful Paint: { lcp_ms, element, url } or { lcp_ms: null } if not yet observed', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fid', description: 'Get First Input Delay: { fid_ms, processingStart, target } or { fid_ms: null }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cls', description: 'Get Cumulative Layout Shift score: { cls_score, shiftCount }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_count2', description: 'Count resources by initiatorType: { total, script, css, img, fetch, xhr, font, other }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ttfb', description: 'Get Time To First Byte: { ttfb_ms, requestStart, responseStart }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_long_tasks2', description: 'Get tasks > 50ms: { tasks: [{duration, startTime}], count, totalBlockingTime }', inputSchema: { type: 'object', properties: {} } },
+  // ── Worker2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_service_worker_status', description: 'Check service worker: supported, hasController, controllerState, scriptURL', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_registrations', description: 'List service worker registrations: scope, active, installing, waiting', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cache_storage_names', description: 'List all Cache Storage cache names: { caches, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cache_entry_count', description: 'Count entries in a named cache: { cacheName, count }', inputSchema: { type: 'object', properties: { cacheName: { type: 'string' } }, required: ['cacheName'] } },
+  { name: 'browser_clear_cache', description: 'Delete a named cache from Cache Storage: { deleted, cacheName }', inputSchema: { type: 'object', properties: { cacheName: { type: 'string' } }, required: ['cacheName'] } },
+  { name: 'browser_web_worker_count', description: 'Count Web Workers created via patched Worker constructor: { count, patched }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_broadcast_channels', description: 'List BroadcastChannel names via constructor patch: { channels, count, patched }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shared_worker_count', description: 'Count SharedWorkers via constructor patch: { count, patched }', inputSchema: { type: 'object', properties: {} } },
+  // ── Geo2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_geolocation_support', description: 'Check geolocation API support and permission state: { supported, permissionState }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timezone', description: 'Get timezone and offset: { timezone, offsetMinutes }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_languages', description: 'Get navigator.language and navigator.languages: { language, languages }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_user_agent_data', description: 'Get navigator.userAgentData (brands, mobile, platform) or navigator.userAgent fallback', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_battery_info', description: 'Get battery status via navigator.getBattery(): level, charging, times (or supported:false)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_info', description: 'Get navigator.connection info: effectiveType, downlink, rtt, saveData (or supported:false)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_devices', description: 'Count media devices by kind (no labels): { audioinput, audiooutput, videoinput }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_permissions', description: 'Query camera, microphone, notifications, clipboard-read, clipboard-write permissions: { name, state }[]', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1401,7 +1430,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.45.0' },
+    { name: 'claudebrowser', version: '1.46.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -2644,6 +2673,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_text_length':              return await getTextLength(cdp, a.selector as string);
         case 'browser_links':                    return await getLinks(cdp);
         case 'browser_links_count':              return await getLinksCount(cdp);
+                // timing2 new
+        case 'browser_nav_timing4':              return await getNavigationTiming4(cdp);
+        case 'browser_paint_timings':            return await getPaintTimings(cdp);
+        case 'browser_lcp':                      return await getLargestContentfulPaint(cdp);
+        case 'browser_fid':                      return await getFirstInputDelay(cdp);
+        case 'browser_cls':                      return await getCumulativeLayoutShift(cdp);
+        case 'browser_resource_count2':          return await getResourceCount2(cdp);
+        case 'browser_ttfb':                     return await getTimeToFirstByte2(cdp);
+        case 'browser_long_tasks2':              return await getLongTasks2(cdp);
+        // worker2
+        case 'browser_service_worker_status':    return await getServiceWorkerStatus(cdp);
+        case 'browser_service_worker_registrations': return await getServiceWorkerRegistrations2(cdp);
+        case 'browser_cache_storage_names':      return await getCacheStorageNames(cdp);
+        case 'browser_cache_entry_count':        return await getCacheEntryCount(cdp, a.cacheName as string);
+        case 'browser_clear_cache':              return await clearCacheStorage(cdp, a.cacheName as string);
+        case 'browser_web_worker_count':         return await getWebWorkerCount(cdp);
+        case 'browser_broadcast_channels':       return await getBroadcastChannels(cdp);
+        case 'browser_shared_worker_count':      return await getSharedWorkerCount(cdp);
+        // geo2
+        case 'browser_geolocation_support':      return await getGeolocationSupport(cdp);
+        case 'browser_timezone':                 return await getTimezone2(cdp);
+        case 'browser_languages':                return await getLanguages(cdp);
+        case 'browser_user_agent_data':          return await getUserAgentData(cdp);
+        case 'browser_battery_info':             return await getBatteryInfo(cdp);
+        case 'browser_network_info':             return await getNetworkInfo(cdp);
+        case 'browser_media_devices':            return await getMediaDevices(cdp);
+        case 'browser_permissions':              return await getPermissions(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
