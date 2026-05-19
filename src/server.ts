@@ -197,6 +197,9 @@ import { getErrorMessages2, getFormValidationErrors2, getAlertElements2, getErro
 import { getViewportSize3, getScrollPosition4, getVisibleArea, getStickyElements3, getFixedElements2, getOffscreenElements3, getViewportOverflow, getScrollableElements2 } from './cdp/viewport3';
 import { getPageLanguage3, getHtmlLang, getHreflangLinks3, getLangAttributes3, getLocaleInfo3, getRtlElements3, getI18nElements, getTranslationKeys } from './cdp/i18n3';
 import { getBreadcrumbs3, getBreadcrumbItems, getSidebarNavigation, getTreeNavigation, getExpandedNavItems, getActiveNavItem, getNavDepth, getNavBreadcrumb } from './cdp/breadcrumb3';
+import { getPriceElements, getAddToCartButtons2, getCartCount, getCheckoutButton, getProductPrices2, getDiscountElements, getCurrencySymbols2, getPromoCodeInputs } from './cdp/pricing2';
+import { getDashboardCards, getWidgetElements, getStatCards, getKpiElements, getDashboardLayout, getMetricDisplays, getProgressBars3, getGaugeElements } from './cdp/dashboard2';
+import { getContentEditableElements, getEditorToolbars, getEditorContent, getEditorSelection, getWysiwygFrames, getEditorButtons, getEditorPlugins, getEditorState } from './cdp/richtext2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2273,6 +2276,33 @@ const TOOLS = [
   { name: 'browser_active_nav_item', description: 'Currently active nav item: {tag, id, class_preview, text_preview, href_preview}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_nav_depth', description: 'Maximum nesting depth of nav elements: {maxDepth, navContainerCount}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_nav_breadcrumb', description: 'Structured breadcrumb data: {items:[{text, href_preview}], separator_preview, totalItems}', inputSchema: { type: 'object', properties: {} } },
+  // ── Pricing2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_price_elements', description: 'Elements displaying prices: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_add_to_cart_buttons2', description: 'Add to cart buttons: [{tag, id, class_preview, text_preview, disabled}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cart_count', description: 'Cart item count badge: {count, text_preview, element_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_checkout_button', description: 'Checkout/buy now buttons: [{tag, id, class_preview, text_preview, disabled}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_prices2', description: 'Structured price data: [{original_preview, sale_preview, currency, isOnSale}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_discount_elements', description: 'Discount/sale badges: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_currency_symbols2', description: 'Currency symbols on page: {symbols, mostCommon, count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_promo_code_inputs', description: 'Promo/coupon code inputs: [{id, placeholder_preview, value_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Dashboard2 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_dashboard_cards', description: 'Dashboard card/panel elements: [{tag, id, class_preview, title_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_widget_elements', description: 'Widget containers: [{tag, id, class_preview, type_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stat_cards', description: 'Stat/metric card elements: [{tag, id, class_preview, label_preview, value_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_kpi_elements', description: 'KPI/counter elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dashboard_layout', description: 'Dashboard grid/layout structure: {containerCount, columnCount, rowCount, hasGrid}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_metric_displays', description: 'Numeric metric display elements: [{tag, id, class_preview, value_preview, unit_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_progress_bars3', description: 'Progress bar elements: [{tag, id, class_preview, value, max, percentage}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_gauge_elements', description: 'Gauge/dial elements: [{tag, id, class_preview, value_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Richtext2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_content_editable_elements', description: 'contenteditable elements: [{tag, id, class_preview, text_preview, isEmpty}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_toolbars', description: 'Editor toolbar elements: [{tag, id, class_preview, buttonCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_content', description: 'Content of focused/main editor: {tag, id, html_preview, text_preview, wordCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_selection', description: 'Current text selection in editor: {text_preview, isCollapsed, length}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wysiwyg_frames', description: 'iframes used by WYSIWYG editors: [{src_preview, id, width, height, editorType}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_buttons', description: 'Formatting buttons in editor toolbar: [{tag, id, text_preview, class_preview, isActive}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_plugins', description: 'Detected editor frameworks: {hasTinyMCE, hasCKEditor, hasQuill, hasDraft, hasSlate, hasProseMirror}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_state', description: 'Editor active state: {hasEditor, editorType, isEditing, isFocused, hasSelection}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4435,6 +4465,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_active_nav_item':          return await getActiveNavItem(cdp);
         case 'browser_nav_depth':                return await getNavDepth(cdp);
         case 'browser_nav_breadcrumb':           return await getNavBreadcrumb(cdp);
+                // pricing2 new
+        case 'browser_price_elements':           return await getPriceElements(cdp);
+        case 'browser_add_to_cart_buttons2':     return await getAddToCartButtons2(cdp);
+        case 'browser_cart_count':               return await getCartCount(cdp);
+        case 'browser_checkout_button':          return await getCheckoutButton(cdp);
+        case 'browser_product_prices2':          return await getProductPrices2(cdp);
+        case 'browser_discount_elements':        return await getDiscountElements(cdp);
+        case 'browser_currency_symbols2':        return await getCurrencySymbols2(cdp);
+        case 'browser_promo_code_inputs':        return await getPromoCodeInputs(cdp);
+        // dashboard2 new
+        case 'browser_dashboard_cards':          return await getDashboardCards(cdp);
+        case 'browser_widget_elements':          return await getWidgetElements(cdp);
+        case 'browser_stat_cards':               return await getStatCards(cdp);
+        case 'browser_kpi_elements':             return await getKpiElements(cdp);
+        case 'browser_dashboard_layout':         return await getDashboardLayout(cdp);
+        case 'browser_metric_displays':          return await getMetricDisplays(cdp);
+        case 'browser_progress_bars3':           return await getProgressBars3(cdp);
+        case 'browser_gauge_elements':           return await getGaugeElements(cdp);
+        // richtext2 new
+        case 'browser_content_editable_elements': return await getContentEditableElements(cdp);
+        case 'browser_editor_toolbars':          return await getEditorToolbars(cdp);
+        case 'browser_editor_content':           return await getEditorContent(cdp);
+        case 'browser_editor_selection':         return await getEditorSelection(cdp);
+        case 'browser_wysiwyg_frames':           return await getWysiwygFrames(cdp);
+        case 'browser_editor_buttons':           return await getEditorButtons(cdp);
+        case 'browser_editor_plugins':           return await getEditorPlugins(cdp);
+        case 'browser_editor_state':             return await getEditorState(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
