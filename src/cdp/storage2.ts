@@ -563,3 +563,188 @@ export async function getCookieCount2(
     return err(e?.message ?? String(e));
   }
 }
+
+// --- Storage Inspection Functions (storage2 batch 2) ---
+
+type McpContent = { content: [{ type: 'text'; text: string }] };
+
+function okJson(data: unknown): McpContent {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+}
+
+function errJson(msg: string): McpContent {
+  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }, null, 2) }] };
+}
+
+// 1. Get all localStorage key-value pairs (max 30 items).
+export async function getLocalStorageItems(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        const items = [];
+        for (let i = 0; i < Math.min(localStorage.length, 30); i++) {
+          const k = localStorage.key(i);
+          const v = localStorage.getItem(k);
+          items.push({ key: k, value_preview: (v||'').slice(0,100), valueLength: (v||'').length });
+        }
+        return { items, count: localStorage.length };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 2. Get all sessionStorage key-value pairs (max 30 items).
+export async function getSessionStorageItems(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        const items = [];
+        for (let i = 0; i < Math.min(sessionStorage.length, 30); i++) {
+          const k = sessionStorage.key(i);
+          const v = sessionStorage.getItem(k);
+          items.push({ key: k, value_preview: (v||'').slice(0,100), valueLength: (v||'').length });
+        }
+        return { items, count: sessionStorage.length };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 3. Get total size of all localStorage values in bytes.
+// Named getLocalStorageSize3 to avoid conflict with getLocalStorageSize in this file.
+export async function getLocalStorageSize3(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          total += (k + (localStorage.getItem(k)||'')).length * 2;
+        }
+        return { totalBytes: total, itemCount: localStorage.length };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 4. Get total size of sessionStorage in bytes.
+// Named getSessionStorageSize3 to avoid conflict with getSessionStorageSize in this file.
+export async function getSessionStorageSize3(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        let total = 0;
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const k = sessionStorage.key(i);
+          total += (k + (sessionStorage.getItem(k)||'')).length * 2;
+        }
+        return { totalBytes: total, itemCount: sessionStorage.length };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 5. List IndexedDB database names and versions.
+// Named getIndexedDBDatabases3 to avoid conflict with getIndexedDBDatabases and getIndexedDBDatabases2 in this file.
+export async function getIndexedDBDatabases3(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (async () => {
+        if (!indexedDB.databases) return { databases: [], supported: false };
+        const dbs = await indexedDB.databases();
+        return { databases: dbs, count: dbs.length };
+      })()
+    `,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 6. Parse document.cookie into name-value pairs (JS-visible cookies only, no httpOnly).
+export async function getDocumentCookies(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        const raw = document.cookie;
+        if (!raw) return { cookies: [], count: 0 };
+        const cookies = raw.split(';').map(c => {
+          const [name, ...v] = c.trim().split('=');
+          return { name: name.trim(), value_preview: v.join('=').slice(0,50) };
+        });
+        return { cookies: cookies.slice(0,30), count: cookies.length };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 7. Get navigator.storage.estimate() quota and usage.
+// Named getStorageQuota3 to avoid conflict with getStorageQuota in this file.
+export async function getStorageQuota3(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (async () => {
+        if (!navigator.storage || !navigator.storage.estimate) return { supported: false };
+        const est = await navigator.storage.estimate();
+        return {
+          quota: est.quota,
+          usage: est.usage,
+          usagePercent: est.quota ? Math.round((est.usage / est.quota) * 100) : null,
+        };
+      })()
+    `,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}
+
+// 8. Clear all localStorage items.
+// Named clearLocalStorage2 to avoid conflict with clearLocalStorage in storage.ts.
+export async function clearLocalStorage2(client: CdpClient): Promise<McpContent> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `
+      (() => {
+        const count = localStorage.length;
+        localStorage.clear();
+        return { cleared: true, itemsRemoved: count };
+      })()
+    `,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return errJson(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
+  }
+  return okJson(result.value as Record<string, unknown>);
+}

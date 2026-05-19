@@ -128,6 +128,9 @@ import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorage
 import { getGeolocationSupport, getTimezone2, getLanguages, getUserAgentData, getBatteryInfo, getNetworkInfo, getMediaDevices, getPermissions } from './cdp/geo2';
 import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotElements, getAssignedNodes, getWebComponentCount, getComponentAttributes, isCustomElementDefined } from './cdp/slot2';
 import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
+import { getAnimatingElements, getCssAnimations, getCssTransitions, getAnimationDuration, getAnimationPlayState, pauseAllAnimations2, resumeAllAnimations2, getScrollAnimations } from './cdp/animation2';
+import { getLocalStorageItems, getSessionStorageItems, getLocalStorageSize3, getSessionStorageSize3, getIndexedDBDatabases3, getDocumentCookies, getStorageQuota3, clearLocalStorage2 } from './cdp/storage2';
+import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts } from './cdp/shadow2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1403,6 +1406,33 @@ const TOOLS = [
   { name: 'browser_window_json_globals', description: 'Find window.* properties containing plain objects/arrays (non-private): key, type, preview (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_data_attributes', description: 'Get all data-* attributes on elements matching selector: { selector, attributes }[] (max 20)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_page_datasets', description: 'Sample elements with data-* attributes: tag, id, dataset object (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Animation2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_animating_elements', description: 'Find elements with active Web Animations: tag, id, animationName, playState, currentTime (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_animations', description: 'Get all CSS @keyframes rules from stylesheets: name, keyframesCount (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_transitions', description: 'Find elements with CSS transition property set: tag, id, transition value (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animation_duration', description: 'Get CSS animation-name/duration/iterationCount for animated elements (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animation_play_state', description: 'Get play state of all Web Animations API animations: type, playState, currentTime, duration (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pause_animations', description: 'Pause all Web Animations API animations: { paused: true, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resume_animations', description: 'Resume all paused Web Animations: { resumed: true, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_animations', description: 'Find elements with scroll-behavior:smooth, scroll-snap, or sticky positioning: tag, id, scrollBehavior, snapType, position (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Storage2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_local_storage', description: 'Get all localStorage key-value pairs: key, value_preview (100 chars), valueLength (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage', description: 'Get all sessionStorage key-value pairs: key, value_preview (100 chars), valueLength (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_local_storage_size', description: 'Total localStorage byte size: { totalBytes, itemCount }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_storage_size', description: 'Total sessionStorage byte size: { totalBytes, itemCount }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_indexed_db', description: 'List IndexedDB database names and versions: { databases: [{name, version}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_document_cookies', description: 'Parse JS-visible document.cookie into name-value pairs (no httpOnly): { cookies, count } (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_storage_quota', description: 'Get navigator.storage.estimate(): { quota, usage, usagePercent } (or supported:false)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_local_storage', description: 'Clear all localStorage items: { cleared: true, itemsRemoved }', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_shadow_hosts', description: 'Find all elements with a shadow root: tag, id, class, shadowMode (open/closed) (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_dom_content', description: 'Get innerHTML preview of each shadow root: tag, id, innerHTML_preview (200 chars) (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_depth', description: 'Get max shadow DOM nesting depth: { maxDepth, hostCount }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_iframes', description: 'Find all iframes: src, id, name, width, height, isVisible, sandbox (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_iframe_count', description: 'Count iframes: { total, visible, crossOrigin, sandboxed }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_styles', description: 'Get adoptedStyleSheets count and inline style count per shadow root (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_shadow_roots', description: 'List open shadow roots and their direct child tags: tag, id, childTags[] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nested_shadow_hosts', description: 'Find shadow hosts living inside another shadow root (nested): tag, id, depth (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2756,6 +2786,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_window_json_globals':      return await getWindowJsonGlobals(cdp);
         case 'browser_data_attributes':          return await getDataAttributes(cdp, a.selector as string);
         case 'browser_page_datasets':            return await getPageDatasets(cdp);
+                // animation2
+        case 'browser_animating_elements':       return await getAnimatingElements(cdp);
+        case 'browser_css_animations':           return await getCssAnimations(cdp);
+        case 'browser_css_transitions':          return await getCssTransitions(cdp);
+        case 'browser_animation_duration':       return await getAnimationDuration(cdp);
+        case 'browser_animation_play_state':     return await getAnimationPlayState(cdp);
+        case 'browser_pause_animations':         return await pauseAllAnimations2(cdp);
+        case 'browser_resume_animations':        return await resumeAllAnimations2(cdp);
+        case 'browser_scroll_animations':        return await getScrollAnimations(cdp);
+        // storage2
+        case 'browser_local_storage':            return await getLocalStorageItems(cdp);
+        case 'browser_session_storage':          return await getSessionStorageItems(cdp);
+        case 'browser_local_storage_size':       return await getLocalStorageSize3(cdp);
+        case 'browser_session_storage_size':     return await getSessionStorageSize3(cdp);
+        case 'browser_indexed_db':               return await getIndexedDBDatabases3(cdp);
+        case 'browser_document_cookies':         return await getDocumentCookies(cdp);
+        case 'browser_storage_quota':            return await getStorageQuota3(cdp);
+        case 'browser_clear_local_storage':      return await clearLocalStorage2(cdp);
+        // shadow2
+        case 'browser_shadow_hosts':             return await getShadowHosts2(cdp);
+        case 'browser_shadow_dom_content':       return await getShadowDOMContent(cdp);
+        case 'browser_shadow_depth':             return await getShadowDepth2(cdp);
+        case 'browser_iframes':                  return await getIframes3(cdp);
+        case 'browser_iframe_count':             return await getIframeCount3(cdp);
+        case 'browser_shadow_styles':            return await getShadowStyles(cdp);
+        case 'browser_open_shadow_roots':        return await getOpenShadowRoots(cdp);
+        case 'browser_nested_shadow_hosts':      return await getNestedShadowHosts(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
