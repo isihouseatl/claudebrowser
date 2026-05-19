@@ -131,6 +131,9 @@ import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg,
 import { getAnimatingElements, getCssAnimations, getCssTransitions, getAnimationDuration, getAnimationPlayState, pauseAllAnimations2, resumeAllAnimations2, getScrollAnimations } from './cdp/animation2';
 import { getLocalStorageItems, getSessionStorageItems, getLocalStorageSize3, getSessionStorageSize3, getIndexedDBDatabases3, getDocumentCookies, getStorageQuota3, clearLocalStorage2 } from './cdp/storage2';
 import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts } from './cdp/shadow2';
+import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecentlyAddedElements, getHiddenElements, getDOMNodeCount, getDeepestElement, getOrphanedNodes } from './cdp/mutation2';
+import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
+import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1433,6 +1436,33 @@ const TOOLS = [
   { name: 'browser_shadow_styles', description: 'Get adoptedStyleSheets count and inline style count per shadow root (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_open_shadow_roots', description: 'List open shadow roots and their direct child tags: tag, id, childTags[] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_nested_shadow_hosts', description: 'Find shadow hosts living inside another shadow root (nested): tag, id, depth (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Mutation2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_inject_mutation_observer', description: 'Inject MutationObserver that records DOM changes to window.__mutationLog (circular 50): { injected: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mutation_log2', description: 'Get recorded DOM mutation log: { events: [{type, target, added, removed, attr, ts}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_mutation_log2', description: 'Clear window.__mutationLog: { cleared: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_recently_added_elements', description: 'Find elements with data-dynamic, data-loaded, or aria-live attributes: tag, id, text_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hidden_elements', description: 'Find elements with display:none or visibility:hidden: tag, id, class (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dom_node_count', description: 'Count all DOM nodes by type: { elements, textNodes, commentNodes, total }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_deepest_element', description: 'Find deepest nested DOM element and its depth: { tag, id, depth, path }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_orphaned_nodes', description: 'Find bare text nodes directly under <body>: { count, previews }', inputSchema: { type: 'object', properties: {} } },
+  // ── Fetch2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_inject_fetch_monitor', description: 'Patch window.fetch to record requests to window.__fetchLog (circular 50): { injected: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fetch_log', description: 'Get recorded fetch request log: { requests: [{url, method, ts}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_fetch_log', description: 'Clear window.__fetchLog: { cleared: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_inject_xhr_monitor', description: 'Patch XMLHttpRequest.open to record XHR requests to window.__xhrLog (circular 50): { injected: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_xhr_log', description: 'Get recorded XHR request log: { requests: [{method, url, ts}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_xhr_log', description: 'Clear window.__xhrLog: { cleared: true }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_links', description: 'Find all img/script/link/video/audio/iframe src values as inferred requests: tag, src (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_api_endpoints', description: 'Find URLs in page HTML matching /api/, /v1/, /v2/, graphql patterns: { endpoints, count } (max 20 unique)', inputSchema: { type: 'object', properties: {} } },
+  // ── Clipboard3 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_text_selection', description: 'Get currently selected text and container: { text, anchorTag, focusTag, isCollapsed }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selectable_text', description: 'Get total word and char count of body.innerText: { wordCount, charCount }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_draggable_count', description: 'Count elements with draggable=true: { count, elements: [{tag, id, text_preview}] } (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_zones2', description: 'Find elements with ondrop, data-droptarget, or dropzone attribute: tag, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_content_editable', description: 'Find all contenteditable elements: tag, id, class, text_preview, isPlainText (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focused_element2', description: 'Get currently focused element: { tag, id, type, role, value_preview, focused }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_order2', description: 'Get elements in tab order (tabIndex >= 0) sorted by tabIndex: tag, id, tabIndex (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_support', description: 'Check Clipboard API support: { supported, readSupported, writeSupported }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2813,6 +2843,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_shadow_styles':            return await getShadowStyles(cdp);
         case 'browser_open_shadow_roots':        return await getOpenShadowRoots(cdp);
         case 'browser_nested_shadow_hosts':      return await getNestedShadowHosts(cdp);
+                // mutation2
+        case 'browser_inject_mutation_observer': return await injectMutationObserver(cdp);
+        case 'browser_mutation_log2':            return await getMutationLog2(cdp);
+        case 'browser_clear_mutation_log2':      return await clearMutationLog2(cdp);
+        case 'browser_recently_added_elements':  return await getRecentlyAddedElements(cdp);
+        case 'browser_hidden_elements':          return await getHiddenElements(cdp);
+        case 'browser_dom_node_count':           return await getDOMNodeCount(cdp);
+        case 'browser_deepest_element':          return await getDeepestElement(cdp);
+        case 'browser_orphaned_nodes':           return await getOrphanedNodes(cdp);
+        // fetch2
+        case 'browser_inject_fetch_monitor':     return await injectFetchMonitor(cdp);
+        case 'browser_fetch_log':                return await getFetchLog(cdp);
+        case 'browser_clear_fetch_log':          return await clearFetchLog(cdp);
+        case 'browser_inject_xhr_monitor':       return await injectXhrMonitor(cdp);
+        case 'browser_xhr_log':                  return await getXhrLog(cdp);
+        case 'browser_clear_xhr_log':            return await clearXhrLog(cdp);
+        case 'browser_network_links':            return await getNetworkLinks(cdp);
+        case 'browser_api_endpoints':            return await getApiEndpoints(cdp);
+        // clipboard3
+        case 'browser_text_selection':           return await getTextSelection(cdp);
+        case 'browser_selectable_text':          return await getSelectableText(cdp);
+        case 'browser_draggable_count':          return await getDraggableCount(cdp);
+        case 'browser_drop_zones2':              return await getDropZones2(cdp);
+        case 'browser_content_editable':         return await getContentEditable(cdp);
+        case 'browser_focused_element2':         return await getFocusedElement2(cdp);
+        case 'browser_tab_order2':               return await getTabOrder2(cdp);
+        case 'browser_clipboard_support':        return await getClipboardSupport(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
