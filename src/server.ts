@@ -107,7 +107,7 @@ import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward a
 import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent, injectEventMonitor, getEventLog, clearEventLog, getClickListeners, getKeyboardListeners, getScrollListeners, getSubmitListeners, getResizeListeners } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
-import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages } from './cdp/image2';
+import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages, getAllImages2, getImagesWithoutAlt2, getLazyImages2, getSvgElements2, getImageDimensions2, getBrokenImages2, getBackgroundImages2, getResponsiveImages } from './cdp/image2';
 import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs, getAllInputs3, getTextInputs, getPasswordInputs2, getCheckboxes, getRadioButtons, getSelectElements, getTextareas2, getFileInputs2 } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
@@ -150,6 +150,8 @@ import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessag
 import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
 import { getInlineStyles2, getCssVariables3 as getCssVariables4, getMediaQueries2, getCssAnimations2, getCssTransitions2, getComputedStyles2, getCssClasses, getStyleRules } from './cdp/css3';
 import { getAriaRoles2, getAriaLabels2, getAriaDescriptions2, getAriaLive, getAriaInvalid, getAriaRequired, getLandmarks3, getAriaExpanded2 } from './cdp/aria2';
+import { getTableHeaders4, getTableFooters, getTableCaption, getNestedTables, getDataGrid4, getTableLinks, getTableButtons, getTableCheckboxes } from './cdp/table4';
+import { getNavElements, getBreadcrumbs, getPaginationLinks, getMenuItems2, getDropdownMenus, getSidebarElements, getFooterLinks, getHeaderLinks } from './cdp/nav2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1608,6 +1610,33 @@ const TOOLS = [
   { name: 'browser_aria_required', description: 'Form fields with aria-required=true or required: tag, id, name (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_landmarks3', description: 'Elements with landmark roles (main, nav, header, footer, aside, form, section): role, tag, id (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_aria_expanded2', description: 'Elements with aria-expanded: tag, id, text, expanded (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Image2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_all_images2', description: 'All <img> elements: src (80), alt, width, height, loading, naturalWidth, naturalHeight (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_images_without_alt2', description: 'Img elements missing or empty alt: src, id (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lazy_images2', description: 'Img with loading="lazy" or data-src: src, id (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_svg_elements2', description: 'All <svg> elements: id, class, width, height, viewBox (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_image_dimensions2', description: 'All img: rendered vs natural size comparison: src_preview, renderedW, renderedH, naturalW, naturalH (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_broken_images2', description: 'Img where naturalWidth===0 (failed to load): src, id (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_background_images2', description: 'Elements with computed background-image (not none): tag, id, backgroundImage (80) (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_responsive_images', description: 'Img elements with srcset attribute: src_preview, srcset_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Table4 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_table_headers4', description: 'All <th> elements: text, colspan, rowspan, scope, tableIndex (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_footers', description: 'All <tfoot> elements and cells: text, rowCount, tableIndex (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_caption', description: 'All <caption> elements: text, tableIndex (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nested_tables', description: 'Tables nested inside tables: depth, innerTableCount (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_grid4', description: 'Elements with role="grid" or role="treegrid": id, class, rowCount, label (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_links', description: 'All <a> inside <table>: href, text, tableIndex (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_buttons', description: 'All <button> inside <table>: text, type, disabled, tableIndex (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_checkboxes', description: 'All <input type="checkbox"> inside <table>: id, name, checked, value, tableIndex (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Nav2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_nav_elements', description: 'All <nav> and role="navigation": id, class, linkCount, text_preview (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_breadcrumbs', description: 'Breadcrumb navs by aria-label/class: items [{text, href, current}] (max 5 navs)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pagination_links', description: 'Pagination by aria-label/class: items [{text, href, current}] (max 5 containers)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_menu_items2', description: 'role="menuitem" or nav li elements: text, href, hasSubmenu (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dropdown_menus', description: 'role="menu" or .dropdown-menu: id, class, itemCount, isVisible (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sidebar_elements', description: '<aside> and role="complementary": id, class, linkCount (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_footer_links', description: '<a> inside <footer>: href, text (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_header_links', description: '<a> inside <header>: href, text (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3149,6 +3178,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_aria_required':          return await getAriaRequired(cdp);
         case 'browser_landmarks3':             return await getLandmarks3(cdp);
         case 'browser_aria_expanded2':         return await getAriaExpanded2(cdp);
+                // image2 new
+        case 'browser_all_images2':            return await getAllImages2(cdp);
+        case 'browser_images_without_alt2':    return await getImagesWithoutAlt2(cdp);
+        case 'browser_lazy_images2':           return await getLazyImages2(cdp);
+        case 'browser_svg_elements2':          return await getSvgElements2(cdp);
+        case 'browser_image_dimensions2':      return await getImageDimensions2(cdp);
+        case 'browser_broken_images2':         return await getBrokenImages2(cdp);
+        case 'browser_background_images2':     return await getBackgroundImages2(cdp);
+        case 'browser_responsive_images':      return await getResponsiveImages(cdp);
+        // table4
+        case 'browser_table_headers4':         return await getTableHeaders4(cdp);
+        case 'browser_table_footers':          return await getTableFooters(cdp);
+        case 'browser_table_caption':          return await getTableCaption(cdp);
+        case 'browser_nested_tables':          return await getNestedTables(cdp);
+        case 'browser_data_grid4':             return await getDataGrid4(cdp);
+        case 'browser_table_links':            return await getTableLinks(cdp);
+        case 'browser_table_buttons':          return await getTableButtons(cdp);
+        case 'browser_table_checkboxes':       return await getTableCheckboxes(cdp);
+        // nav2
+        case 'browser_nav_elements':           return await getNavElements(cdp);
+        case 'browser_breadcrumbs':            return await getBreadcrumbs(cdp);
+        case 'browser_pagination_links':       return await getPaginationLinks(cdp);
+        case 'browser_menu_items2':            return await getMenuItems2(cdp);
+        case 'browser_dropdown_menus':         return await getDropdownMenus(cdp);
+        case 'browser_sidebar_elements':       return await getSidebarElements(cdp);
+        case 'browser_footer_links':           return await getFooterLinks(cdp);
+        case 'browser_header_links':           return await getHeaderLinks(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
