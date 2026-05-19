@@ -488,3 +488,257 @@ export async function getRangeInputs(
   const parsed: unknown = JSON.parse(result.value as string);
   return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
 }
+
+// ─── Advanced Form Introspection Functions ────────────────────────────────────
+// The 8 functions below extend input2 with deeper introspection: value previews,
+// grouped radio buttons, select option counts, and richer textarea metadata.
+// Naming: suffix 3/2 added where prior exports conflict.
+
+// 17. getAllInputs3 — all input elements with value_preview (truncated to 50 chars).
+//     Returns { tag, type, id, name, value_preview, placeholder, required, disabled }[].
+//     Limited to 30 elements.
+//     (getAllInputs and getAllInputs2 already exported above — this is the third variant.)
+export async function getAllInputs3(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('input, textarea, select')).slice(0, 30);
+    var result = els.map(function(el) {
+      var raw = el.value || '';
+      return {
+        tag: el.tagName.toLowerCase(),
+        type: el.tagName === 'SELECT' ? 'select'
+            : el.tagName === 'TEXTAREA' ? 'textarea'
+            : (el.getAttribute('type') || 'text'),
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        value_preview: raw.length > 50 ? raw.slice(0, 50) + '...' : raw,
+        placeholder: el.getAttribute('placeholder') || '',
+        required: !!el.required,
+        disabled: !!el.disabled,
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 18. getTextInputs — text/email/tel/url/search inputs.
+//     Returns { id, name, value_preview, placeholder }[]. Limited to 20 elements.
+export async function getTextInputs(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var types = ['text', 'email', 'tel', 'url', 'search'];
+    var selector = types.map(function(t) { return 'input[type="' + t + '"]'; }).join(', ') + ', input:not([type])';
+    var els = Array.from(document.querySelectorAll(selector)).slice(0, 20);
+    var result = els.map(function(el) {
+      var raw = el.value || '';
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        value_preview: raw.length > 50 ? raw.slice(0, 50) + '...' : raw,
+        placeholder: el.getAttribute('placeholder') || '',
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 19. getPasswordInputs2 — password inputs with autocomplete attribute.
+//     Returns { id, name, autocomplete }[]. Limited to 10 elements.
+//     (getPasswordInputs already exported above — this variant omits hasValue for privacy.)
+export async function getPasswordInputs2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('input[type="password"]')).slice(0, 10);
+    var result = els.map(function(el) {
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        autocomplete: el.getAttribute('autocomplete') || '',
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 20. getCheckboxes — all checkbox inputs.
+//     Returns { id, name, checked, value }[]. Limited to 20 elements.
+export async function getCheckboxes(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('input[type="checkbox"]')).slice(0, 20);
+    var result = els.map(function(el) {
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        checked: !!el.checked,
+        value: el.getAttribute('value') || '',
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 21. getRadioButtons — radio buttons grouped by name attribute.
+//     Returns { name, options: [{ value, checked }] }[]. Limited to 10 groups.
+export async function getRadioButtons(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('input[type="radio"]'));
+    var groupMap = {};
+    els.forEach(function(el) {
+      var name = el.getAttribute('name') || '__unnamed__';
+      if (!groupMap[name]) groupMap[name] = [];
+      groupMap[name].push({ value: el.getAttribute('value') || '', checked: !!el.checked });
+    });
+    var groups = Object.keys(groupMap).slice(0, 10).map(function(name) {
+      return { name: name, options: groupMap[name] };
+    });
+    return JSON.stringify(groups);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 22. getSelectElements — select dropdowns with selected value and option count.
+//     Returns { id, name, selectedValue, optionCount }[]. Limited to 20 elements.
+export async function getSelectElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('select')).slice(0, 20);
+    var result = els.map(function(el) {
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        selectedValue: el.value || '',
+        optionCount: el.options ? el.options.length : 0,
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 23. getTextareas2 — textareas with value_preview and maxlength.
+//     Returns { id, name, value_preview, maxlength, rows }[]. Limited to 20 elements.
+//     (getTextareas already exported above — this variant adds value_preview and maxlength.)
+export async function getTextareas2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('textarea')).slice(0, 20);
+    var result = els.map(function(el) {
+      var raw = el.value || '';
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        value_preview: raw.length > 50 ? raw.slice(0, 50) + '...' : raw,
+        maxlength: el.getAttribute('maxlength') ? parseInt(el.getAttribute('maxlength'), 10) : null,
+        rows: el.rows || null,
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}
+
+// 24. getFileInputs2 — file inputs with accept and multiple attributes.
+//     Returns { id, name, accept, multiple }[]. Limited to 10 elements.
+//     (getFileInputs already exported above — this variant omits hasFiles for a leaner response.)
+export async function getFileInputs2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+    var els = Array.from(document.querySelectorAll('input[type="file"]')).slice(0, 10);
+    var result = els.map(function(el) {
+      return {
+        id: el.getAttribute('id') || '',
+        name: el.getAttribute('name') || '',
+        accept: el.getAttribute('accept') || '',
+        multiple: !!el.multiple,
+      };
+    });
+    return JSON.stringify(result);
+  })()`;
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown error');
+  }
+  const parsed: unknown = JSON.parse(result.value as string);
+  return { content: [{ type: 'text' as const, text: JSON.stringify(parsed, null, 2) }] };
+}

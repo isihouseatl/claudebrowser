@@ -108,7 +108,7 @@ import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEv
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages } from './cdp/image2';
-import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs } from './cdp/input2';
+import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs, getAllInputs3, getTextInputs, getPasswordInputs2, getCheckboxes, getRadioButtons, getSelectElements, getTextareas2, getFileInputs2 } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
 import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2 } from './cdp/perf2';
@@ -148,6 +148,8 @@ import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wi
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { getToastMessages, getBannerElements, getErrorMessages, getSuccessMessages, getWarningMessages, getLoadingIndicators, getProgressBars, getNotificationPermission2 } from './cdp/notify2';
 import { getAllButtons, getPrimaryButtons, getDisabledButtons, getToggleSwitches, getBadges, getIconButtons, getExpandCollapseControls, getButtonCount } from './cdp/button2';
+import { getInlineStyles2, getCssVariables3 as getCssVariables4, getMediaQueries2, getCssAnimations2, getCssTransitions2, getComputedStyles2, getCssClasses, getStyleRules } from './cdp/css3';
+import { getAriaRoles2, getAriaLabels2, getAriaDescriptions2, getAriaLive, getAriaInvalid, getAriaRequired, getLandmarks3, getAriaExpanded2 } from './cdp/aria2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1346,6 +1348,14 @@ const TOOLS = [
   { name: 'browser_date_inputs', description: 'Find date/time inputs (date, time, datetime-local, month, week): id, name, type, value, min, max (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_file_inputs', description: 'Find <input type="file"> elements: id, name, accept, multiple, hasFiles (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_range_inputs', description: 'Find range and number inputs: id, name, type, value, min, max, step (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_all_inputs3', description: 'Get all input/textarea/select elements with value_preview (truncated 50 chars), placeholder, required, disabled (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_inputs', description: 'Find text/email/tel/url/search inputs: id, name, value_preview, placeholder (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_password_inputs2', description: 'Find <input type="password"> elements: id, name, autocomplete (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_checkboxes', description: 'Find all checkbox inputs: id, name, checked, value (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_radio_buttons', description: 'Find radio buttons grouped by name: name, options [{value, checked}] (max 10 groups)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_elements', description: 'Find select dropdowns: id, name, selectedValue, optionCount (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_textareas2', description: 'Find textareas with value_preview and maxlength: id, name, value_preview, maxlength, rows (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_file_inputs2', description: 'Find <input type="file"> elements: id, name, accept, multiple (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Heading2 ────────────────────────────────────────────────────────────────────
   { name: 'browser_headings', description: 'Find all h1-h6 elements: level, text, id, class (max 50)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_heading_outline', description: 'Build hierarchical heading outline as a tree: { outline: [{level, text, children}] }', inputSchema: { type: 'object', properties: {} } },
@@ -1580,6 +1590,24 @@ const TOOLS = [
   { name: 'browser_icon_buttons', description: 'Buttons containing only SVG or [aria-label] with no visible text: tag, id, ariaLabel (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_expand_collapse', description: 'Find expand/collapse controls by aria-expanded: tag, id, text, expanded (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_button_count', description: 'Count interactive controls: { buttons, submitButtons, resetButtons, roleButtons, total }', inputSchema: { type: 'object', properties: {} } },
+  // ── CSS3 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_inline_styles2', description: 'Elements with non-empty style attribute: tag, id, style (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_variables3', description: 'CSS custom properties (--*) from :root computed style: name, value (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_queries2', description: '@media rules from stylesheets: conditionText (max 20 unique)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_animations2', description: 'Elements with non-none animation-name: tag, id, animationName (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_transitions2', description: 'Elements with non-zero transition-duration: tag, id, transition (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_computed_styles2', description: 'Top 10 computed style properties for element matching selector: { display, position, color, background-color, font-size, font-family, margin, padding, width, height }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_css_classes', description: 'All unique class names in use across elements: { count, classes } (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_style_rules', description: 'Count style rules per stylesheet origin: { total, external, inline, keyframes }', inputSchema: { type: 'object', properties: {} } },
+  // ── ARIA2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_aria_roles2', description: 'Elements with explicit role attribute: tag, id, role, text_preview (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_labels2', description: 'Elements with aria-label or resolved aria-labelledby: tag, id, ariaLabel (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_descriptions2', description: 'Elements with aria-describedby and resolved description text: tag, id, description (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_live', description: 'Elements with aria-live (polite/assertive): tag, id, ariaLive, text_preview (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_invalid', description: 'Form fields with aria-invalid=true: tag, id, name (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_required', description: 'Form fields with aria-required=true or required: tag, id, name (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_landmarks3', description: 'Elements with landmark roles (main, nav, header, footer, aside, form, section): role, tag, id (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_expanded2', description: 'Elements with aria-expanded: tag, id, text, expanded (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2861,6 +2889,14 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_date_inputs':              return await getDateInputs(cdp);
         case 'browser_file_inputs':              return await getFileInputs(cdp);
         case 'browser_range_inputs':             return await getRangeInputs(cdp);
+        case 'browser_all_inputs3':              return await getAllInputs3(cdp);
+        case 'browser_text_inputs':              return await getTextInputs(cdp);
+        case 'browser_password_inputs2':         return await getPasswordInputs2(cdp);
+        case 'browser_checkboxes':               return await getCheckboxes(cdp);
+        case 'browser_radio_buttons':            return await getRadioButtons(cdp);
+        case 'browser_select_elements':          return await getSelectElements(cdp);
+        case 'browser_textareas2':               return await getTextareas2(cdp);
+        case 'browser_file_inputs2':             return await getFileInputs2(cdp);
         // heading2
         case 'browser_headings':                 return await getHeadings2(cdp);
         case 'browser_heading_outline':          return await getHeadingOutline(cdp);
@@ -3095,6 +3131,24 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_icon_buttons':           return await getIconButtons(cdp);
         case 'browser_expand_collapse':        return await getExpandCollapseControls(cdp);
         case 'browser_button_count':           return await getButtonCount(cdp);
+                // css3
+        case 'browser_inline_styles2':         return await getInlineStyles2(cdp);
+        case 'browser_css_variables3':         return await getCssVariables4(cdp);
+        case 'browser_media_queries2':         return await getMediaQueries2(cdp);
+        case 'browser_css_animations2':        return await getCssAnimations2(cdp);
+        case 'browser_css_transitions2':       return await getCssTransitions2(cdp);
+        case 'browser_computed_styles2':       return await getComputedStyles2(cdp, a.selector as string);
+        case 'browser_css_classes':            return await getCssClasses(cdp);
+        case 'browser_style_rules':            return await getStyleRules(cdp);
+        // aria2
+        case 'browser_aria_roles2':            return await getAriaRoles2(cdp);
+        case 'browser_aria_labels2':           return await getAriaLabels2(cdp);
+        case 'browser_aria_descriptions2':     return await getAriaDescriptions2(cdp);
+        case 'browser_aria_live':              return await getAriaLive(cdp);
+        case 'browser_aria_invalid':           return await getAriaInvalid(cdp);
+        case 'browser_aria_required':          return await getAriaRequired(cdp);
+        case 'browser_landmarks3':             return await getLandmarks3(cdp);
+        case 'browser_aria_expanded2':         return await getAriaExpanded2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
