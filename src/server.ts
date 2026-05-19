@@ -229,6 +229,9 @@ import { getHoverElements, getHoverState, getTooltipTriggers, getHoverEffects, g
 import { getFocusableElements4, getFocusState, getFocusRing, getTabOrder4, getAutoFocusElements, getFocusTrap2, getFocusListeners, getFocusApiUsage } from './cdp/focus2';
 import { getAnimations3, getCssAnimations5, getCssTransitions5, getAnimatedElements2, getAnimationState, getKeyframeAnimations2, getWebAnimations, getAnimationApiUsage } from './cdp/animation3';
 import { getServiceWorkers3, getWebWorkers, getWorkerState, getSharedWorkers2, getWorkerMessages, getWorkerRegistrations, getWorkerScope, getWorkerApiUsage } from './cdp/worker2';
+import { getWebSocketConnections2, getWebSocketState, getRealtimeElements, getSocketIoElements, getWebSocketMessages2, getWebSocketHandlers, getEventSourceElements, getWebSocketApiUsage } from './cdp/websocket2';
+import { getDateInputs2, getDatePickerElements, getCalendarElements2, getTimeInputs, getDateRangeInputs, getDatePickerState, getDatePickerTriggers, getDatePickerApiUsage } from './cdp/datepicker2';
+import { getRichTextEditors2, getContentEditableElements2, getEditorToolbars2, getWysiwygElements, getRichTextState, getEditorContent2, getMarkdownEditors2, getRichTextApiUsage } from './cdp/richtext2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2593,6 +2596,33 @@ const TOOLS = [
   { name: 'browser_worker_registrations', description: 'Full service worker registration list: {supported, registrations: [{scope, status, updateViaCache, scriptURL}]}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_worker_scope', description: 'Service worker controller scope: {supported, isControlled, scope, scriptURL, state, readyScope}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_worker_api_usage', description: 'Detected worker patterns: {hasServiceWorker, hasWebWorker, hasSharedWorker, hasBroadcastChannel, hasWorklet}', inputSchema: { type: 'object', properties: {} } },
+  // ── WebSocket2 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_websocket_connections2', description: 'Active WebSocket connections: {count, connections: [{url_preview, readyState}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_state', description: 'WebSocket/realtime summary: {hasWebSocket, connectionCount, hasSocketIo, hasSockJs, hasSignalR}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_realtime_elements', description: 'UI elements likely bound to real-time updates: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_socket_io_elements', description: 'Socket.io usage detection: {hasSocketIo, version, namespaces}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_messages2', description: 'WebSocket message handler detection: {hasOnmessage, hasAddEventListener, messageCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_handlers', description: 'Elements/scripts with WS event handlers: [{tag, id, hasOnmessage, hasOnopen, hasOnclose}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_event_source_elements', description: 'Server-Sent Events (EventSource) usage: {hasEventSource, connectionCount, sources: [{url_preview, readyState}]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_websocket_api_usage', description: 'Detected realtime patterns: {hasWebSocket, hasSocketIo, hasSse, hasMqtt, hasSignalR}', inputSchema: { type: 'object', properties: {} } },
+  // ── DatePicker2 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_date_inputs2', description: 'Native date/datetime-local/month/week inputs: [{id, type, value, min, max, disabled, required}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_picker_elements', description: 'Custom date picker widget containers: [{tag, id, class_preview, matchedSelector}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_calendar_elements2', description: 'Calendar grid/popup elements: [{tag, id, class_preview, cellCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_time_inputs', description: 'Native time inputs and time picker widgets: [{tag, id, type, value, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_range_inputs', description: 'Date range picker widgets: [{tag, id, class_preview, inputCount, startValue, endValue}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_picker_state', description: 'Date picker summary: {hasNativeDateInput, hasCustomPicker, hasCalendar, hasTimeInput, hasDateRange}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_picker_triggers', description: 'Buttons/icons that open date pickers: [{tag, id, class_preview, ariaExpanded, x, y}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_picker_api_usage', description: 'Detected date picker libraries: {hasFlatpickr, hasDatepickerJs, hasPikaday, hasReactDatepicker, hasMuiDatepicker}', inputSchema: { type: 'object', properties: {} } },
+  // ── RichText2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_rich_text_editors2', description: 'Rich text editor containers: [{tag, id, class_preview, editorLib, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_content_editable_elements2', description: 'Elements with contenteditable=true: [{tag, id, class_preview, text_preview, visible}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_toolbars2', description: 'Editor toolbar elements: [{tag, id, class_preview, buttonCount, matchedSelector}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wysiwyg_elements', description: 'WYSIWYG iframe-based editors: [{tag, id, class_preview, src_preview, editorType}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rich_text_state', description: 'Rich text summary: {hasRichTextEditor, hasContentEditable, hasWysiwyg, hasMarkdownEditor, editorCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_editor_content2', description: 'Current text content of editable elements: [{tag, id, text_preview, charCount, wordCount}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_markdown_editors2', description: 'Markdown editor widgets: [{tag, id, class_preview, editorType}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rich_text_api_usage', description: 'Detected editor libraries: {hasQuill, hasTiptap, hasProseMirror, hasTinymce, hasCkeditor, hasDraftjs, hasSlate, hasCodeMirror, hasMonaco}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -5043,6 +5073,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_worker_registrations':     return await getWorkerRegistrations(cdp);
         case 'browser_worker_scope':             return await getWorkerScope(cdp);
         case 'browser_worker_api_usage':         return await getWorkerApiUsage(cdp);
+                // websocket2 new
+        case 'browser_websocket_connections2':   return await getWebSocketConnections2(cdp);
+        case 'browser_websocket_state':          return await getWebSocketState(cdp);
+        case 'browser_realtime_elements':        return await getRealtimeElements(cdp);
+        case 'browser_socket_io_elements':       return await getSocketIoElements(cdp);
+        case 'browser_websocket_messages2':      return await getWebSocketMessages2(cdp);
+        case 'browser_websocket_handlers':       return await getWebSocketHandlers(cdp);
+        case 'browser_event_source_elements':    return await getEventSourceElements(cdp);
+        case 'browser_websocket_api_usage':      return await getWebSocketApiUsage(cdp);
+        // datepicker2 new
+        case 'browser_date_inputs2':             return await getDateInputs2(cdp);
+        case 'browser_date_picker_elements':     return await getDatePickerElements(cdp);
+        case 'browser_calendar_elements2':       return await getCalendarElements2(cdp);
+        case 'browser_time_inputs':              return await getTimeInputs(cdp);
+        case 'browser_date_range_inputs':        return await getDateRangeInputs(cdp);
+        case 'browser_date_picker_state':        return await getDatePickerState(cdp);
+        case 'browser_date_picker_triggers':     return await getDatePickerTriggers(cdp);
+        case 'browser_date_picker_api_usage':    return await getDatePickerApiUsage(cdp);
+        // richtext2 new
+        case 'browser_rich_text_editors2':       return await getRichTextEditors2(cdp);
+        case 'browser_content_editable_elements2': return await getContentEditableElements2(cdp);
+        case 'browser_editor_toolbars2':         return await getEditorToolbars2(cdp);
+        case 'browser_wysiwyg_elements':         return await getWysiwygElements(cdp);
+        case 'browser_rich_text_state':          return await getRichTextState(cdp);
+        case 'browser_editor_content2':          return await getEditorContent2(cdp);
+        case 'browser_markdown_editors2':        return await getMarkdownEditors2(cdp);
+        case 'browser_rich_text_api_usage':      return await getRichTextApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
