@@ -67,7 +67,7 @@ import { getSelectionRange, selectText, clearSelection, getCaretPosition, setCar
 import { touchTap, touchDoubleTap, touchLongPress, touchSwipe, touchPinch, touchScroll, touchDrag, getTouchSupport } from './cdp/touch';
 import { setDarkMode, setLightMode, clearColorScheme, getColorScheme, setContrastPreference, getThemeColors, takeThemeScreenshots } from './cdp/darkmode';
 import { printToPdfBuffer, getPageCount, getPrintableArea, setPageTitle, injectPrintStyle, removePrintStyles, getPrintCssRules, printPageToHtml } from './cdp/printing';
-import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElementVisibilityRatio, getOffScreenElements, getScrollableElements, getElementScrollPosition } from './cdp/viewport2';
+import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElementVisibilityRatio, getOffScreenElements, getScrollableElements, getElementScrollPosition, getScrollPosition as getScrollPosition2, getViewportSize as getViewportSize2, getDocumentSize, scrollTo as scrollToWindow, scrollBy as scrollByWindow, scrollToElement as scrollToElement2, isElementInViewport } from './cdp/viewport2';
 import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceEvaluate, retryEvaluate, getHighResolutionTime, measureExpressionTime } from './cdp/timing';
 import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
 import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml } from './cdp/clipboard2';
@@ -103,6 +103,8 @@ import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageT
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
+import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState } from './cdp/history';
+import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent } from './cdp/event2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -990,6 +992,32 @@ const TOOLS = [
   { name: 'browser_volume', description: 'Set media element volume (0.0–1.0)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, volume: { type: 'number' } }, required: ['selector', 'volume'] } },
   { name: 'browser_seek2', description: 'Seek media element to time in seconds', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, time: { type: 'number' } }, required: ['selector', 'time'] } },
   { name: 'browser_media_state', description: 'Get full state of media element: paused, muted, volume, currentTime, duration, src, etc.', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── History ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_history_length', description: 'Get window.history.length', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_go_back', description: 'Navigate back in history (window.history.back())', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_go_forward', description: 'Navigate forward in history (window.history.forward())', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_go_delta', description: 'Navigate by delta in history (window.history.go(n))', inputSchema: { type: 'object', properties: { delta: { type: 'number' } }, required: ['delta'] } },
+  { name: 'browser_current_url', description: 'Get current window.location.href', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_title', description: 'Get current document.title', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_push_state', description: 'Push a new entry onto the history stack (history.pushState)', inputSchema: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' } }, required: ['url'] } },
+  { name: 'browser_replace_state', description: 'Replace current history entry (history.replaceState)', inputSchema: { type: 'object', properties: { url: { type: 'string' }, title: { type: 'string' } }, required: ['url'] } },
+  // ── Viewport2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_pos', description: 'Get current window scroll position (scrollX, scrollY)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport2', description: 'Get viewport inner width and height', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_document_size', description: 'Get full document scrollWidth and scrollHeight', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_xy', description: 'Call window.scrollTo(x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_scroll_by_xy', description: 'Call window.scrollBy(x, y)', inputSchema: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } },
+  { name: 'browser_scroll_to_element2', description: 'Scroll element into view smoothly (scrollIntoView center)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_in_viewport', description: 'Check if element is visible in viewport and get visibility ratio', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Event2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_dispatch_custom2', description: 'Dispatch a CustomEvent on element with optional detail payload', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, event_name: { type: 'string' }, detail: {} }, required: ['selector', 'event_name'] } },
+  { name: 'browser_dispatch_window_event', description: 'Dispatch a CustomEvent on window', inputSchema: { type: 'object', properties: { event_name: { type: 'string' } }, required: ['event_name'] } },
+  { name: 'browser_event_listeners', description: 'Check inline event handler properties on element (onclick, onchange, etc.)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_input2', description: 'Dispatch input event on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_change', description: 'Dispatch change event on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_focus2', description: 'Dispatch focus event and call el.focus() on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_blur', description: 'Dispatch blur event and call el.blur() on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_trigger_submit', description: 'Dispatch submit event on a form element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1601,7 +1629,7 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_visibility_ratio':    return ok({ ratio: await getElementVisibilityRatio(cdp, a.selector as string) });
         case 'browser_offscreen_elements':  return ok(await getOffScreenElements(cdp));
         case 'browser_get_scrollable':      return ok(await getScrollableElements(cdp));
-        case 'browser_element_scroll_pos':  return ok(await getElementScrollPosition(cdp, a.selector as string));
+        case 'browser_element_scroll_pos':  return await getElementScrollPosition(cdp, a.selector as string);
         // Timing / polling
         case 'browser_sleep':               { await sleep(cdp, a.ms as number); return ok('Done'); }
         case 'browser_measure_duration':    return ok(await measureDuration(cdp, a.expression as string));
@@ -1959,6 +1987,32 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_volume':                   return await setMediaVolume2(cdp, a.selector as string, a.volume as number);
         case 'browser_seek2':                    return await seekMedia2(cdp, a.selector as string, a.time as number);
         case 'browser_media_state':              return await getMediaState(cdp, a.selector as string);
+                // history
+        case 'browser_history_length':           return await getHistoryLength2(cdp);
+        case 'browser_go_back':                  return await goBackNav(cdp);
+        case 'browser_go_forward':               return await goForwardNav(cdp);
+        case 'browser_go_delta':                 return await goTo(cdp, a.delta as number);
+        case 'browser_current_url':              return await getCurrentUrl(cdp);
+        case 'browser_page_title':               return await getPageTitle(cdp);
+        case 'browser_push_state':               return await pushHistoryState(cdp, a.url as string, a.title as string ?? '');
+        case 'browser_replace_state':            return await replaceHistoryState(cdp, a.url as string, a.title as string ?? '');
+        // viewport2 new
+        case 'browser_scroll_pos':               return await getScrollPosition2(cdp);
+        case 'browser_viewport2':                return await getViewportSize2(cdp);
+        case 'browser_document_size':            return await getDocumentSize(cdp);
+        case 'browser_scroll_to_xy':             return await scrollToWindow(cdp, a.x as number, a.y as number);
+        case 'browser_scroll_by_xy':             return await scrollByWindow(cdp, a.x as number, a.y as number);
+        case 'browser_scroll_to_element2':       return await scrollToElement2(cdp, a.selector as string);
+        case 'browser_in_viewport':              return await isElementInViewport(cdp, a.selector as string);
+        // event2
+        case 'browser_dispatch_custom2':         return await dispatchCustomEvent2(cdp, a.selector as string, a.event_name as string, a.detail);
+        case 'browser_dispatch_window_event':    return await dispatchWindowEvent(cdp, a.event_name as string);
+        case 'browser_event_listeners':          return await getEventListenerCount(cdp, a.selector as string);
+        case 'browser_trigger_input2':           return await triggerInputEvent2(cdp, a.selector as string);
+        case 'browser_trigger_change':           return await triggerChangeEvent(cdp, a.selector as string);
+        case 'browser_trigger_focus2':           return await triggerFocusEvent2(cdp, a.selector as string);
+        case 'browser_trigger_blur':             return await triggerBlurEvent(cdp, a.selector as string);
+        case 'browser_trigger_submit':           return await triggerSubmitEvent(cdp, a.selector as string);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
