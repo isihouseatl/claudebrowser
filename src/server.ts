@@ -98,7 +98,7 @@ import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable a
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable, getDraggableElements3, getDropTargets2, getSortableLists, getTouchActionElements2, getPointerEvents3, getResizableElements, getCursorStyles2, getDragHandles } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers, getDialogElements2, getOpenDialogs3, getModalRoles, getTooltips3, getAlerts, getPopoverElements2, getOverlays2, getAriaExpanded3 } from './cdp/dialog2';
-import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
+import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements, getCanvasElements4, getWebGLContexts2, getCanvasSize3, getCanvas2dContexts, getCanvasDataUrl2, getOffscreenCanvases, getCanvasEventListeners, getCanvasAnimations } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2, getNavigationTiming4, getPaintTimings, getLargestContentfulPaint, getFirstInputDelay, getCumulativeLayoutShift, getResourceCount2, getTimeToFirstByte2, getLongTasks2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
@@ -124,7 +124,7 @@ import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePix
 import { getLists, getListItems2, getNestedListDepth, getDescriptionLists, getNavLists, getMenuItems, getCheckedListItems, getListCount } from './cdp/list2';
 import { getHeadings2, getHeadingOutline, getH1s, getHeadingCount, getLandmarks2, getPageSections, getSkipLinks, getReadingOrder } from './cdp/heading2';
 import { getPageTextContent, getTextBySelector, searchPageText, getVisibleText, getParagraphs2, getTextLength, getLinks, getLinksCount } from './cdp/text2';
-import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount, getServiceWorkers2, getWorkerCount2, getServiceWorkerScope, getBroadcastChannels2, getCacheStorageKeys, getIndexedDBNames, getWorkerSupport, getNavigatorInfo } from './cdp/worker2';
+import { getServiceWorkerStatus, getServiceWorkerRegistrations2, getCacheStorageNames, getCacheEntryCount, clearCacheStorage, getWebWorkerCount, getBroadcastChannels, getSharedWorkerCount, getServiceWorkers2, getWorkerCount2, getServiceWorkerScope, getBroadcastChannels2, getCacheStorageKeys, getIndexedDBNames, getWorkerSupport, getNavigatorInfo, getServiceWorkerState, getSharedWorkers, getWorkerScripts, getBroadcastChannels3, getMessageChannels, getWorkerModules, getServiceWorkerScope3, getWorkerCount3 } from './cdp/worker2';
 import { getGeolocationSupport, getTimezone2, getLanguages, getUserAgentData, getBatteryInfo, getNetworkInfo, getMediaDevices, getPermissions } from './cdp/geo2';
 import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotElements, getAssignedNodes, getWebComponentCount, getComponentAttributes, isCustomElementDefined } from './cdp/slot2';
 import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
@@ -173,6 +173,7 @@ import { getDocumentLanguage, getLangAttributes, getDirAttributes, getHreflangLi
 import { getWebAppManifest, getThemeColorMeta, getAppleTouchIcons, getPwaInstallPrompt, getAppIcons, getPwaDisplayMode, getOfflineReadiness, getWebShareSupport } from './cdp/pwa2';
 import { getTextOverflow, getWhitespace, getLetterSpacing, getTextTransform, getTextDecoration, getTextShadow, getTextAlign, getVerticalAlign } from './cdp/typography2';
 import { getAddToCartButtons, getProductImages, getCartIndicator, getWishlistButtons, getQuantityInputs, getProductVariants, getShippingInfo, getPromoElements } from './cdp/ecommerce2';
+import { getHoverableElements, getClickTargets, getDoubleClickTargets, getContextMenuElements, getLongPressElements, getSwipeableContainers, getPinchZoomElements, getPointerCapture3 } from './cdp/pointer2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -2009,6 +2010,33 @@ const TOOLS = [
   { name: 'browser_storage_quota4', description: 'Storage quota info: {quota, usage, usagePercent}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_local_storage_size4', description: 'localStorage total char count: {size, itemCount}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_session_storage_size4', description: 'sessionStorage total char count: {size, itemCount}', inputSchema: { type: 'object', properties: {} } },
+  // ── Canvas2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_canvas_elements4', description: 'All canvas elements: [{id, width, height, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_webgl_contexts2', description: 'Canvas elements with WebGL contexts: [{id, contextType}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_size3', description: 'Total canvas pixel area: {canvasCount, totalPixels, largestCanvas}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_2d_contexts', description: 'Canvas elements with 2D context: [{id, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_data_url2', description: 'First canvas data URL prefix: {exists, prefix, width, height}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_offscreen_canvases', description: 'OffscreenCanvas support: {supported, workerTransferSupported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_event_listeners', description: 'Canvas interaction summary: {canvasCount, hasInteractiveCanvas}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_animations', description: 'Canvas animation summary: {canvasCount, hasAnimationFrameRef, rafSupported}', inputSchema: { type: 'object', properties: {} } },
+  // ── Worker2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_service_worker_state', description: 'Service worker registration state: {registrations: [{scope, state}], count}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shared_workers', description: 'SharedWorker support: {supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_scripts', description: 'Scripts that look like worker files: [{src_preview, async, defer, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_broadcast_channels3', description: 'BroadcastChannel support: {supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_message_channels', description: 'MessageChannel support: {supported, postMessageSupported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_modules', description: 'Scripts with type=module: [{src_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_scope3', description: 'Current service worker controller scope: {controlled, scope, state}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_count3', description: 'Worker API support summary: {serviceWorkerSupported, sharedWorkerSupported, workerSupported, dedicatedWorkerSupported}', inputSchema: { type: 'object', properties: {} } },
+  // ── Pointer2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_hoverable_elements', description: 'Interactive elements: [{tag, id, class_preview, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click_targets', description: 'Elements with onclick handlers: [{tag, id, class_preview, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_double_click_targets', description: 'Elements with ondblclick: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_menu_elements', description: 'Elements with oncontextmenu: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_long_press_elements', description: 'Elements with long-press patterns: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_swipeable_containers', description: 'Elements with swipe/gesture classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pinch_zoom_elements', description: 'Elements with pinch/zoom attributes: [{tag, id, class_preview, touchAction}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pointer_capture3', description: 'Pointer events API support: {pointerEventsSupported, touchEventsSupported, maxTouchPoints}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3928,6 +3956,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_storage_quota4':           return await getStorageQuota4(cdp);
         case 'browser_local_storage_size4':      return await getLocalStorageSize4(cdp);
         case 'browser_session_storage_size4':    return await getSessionStorageSize4(cdp);
+                // canvas2 new
+        case 'browser_canvas_elements4':         return await getCanvasElements4(cdp);
+        case 'browser_webgl_contexts2':          return await getWebGLContexts2(cdp);
+        case 'browser_canvas_size3':             return await getCanvasSize3(cdp);
+        case 'browser_canvas_2d_contexts':       return await getCanvas2dContexts(cdp);
+        case 'browser_canvas_data_url2':         return await getCanvasDataUrl2(cdp);
+        case 'browser_offscreen_canvases':       return await getOffscreenCanvases(cdp);
+        case 'browser_canvas_event_listeners':   return await getCanvasEventListeners(cdp);
+        case 'browser_canvas_animations':        return await getCanvasAnimations(cdp);
+        // worker2 new
+        case 'browser_service_worker_state':     return await getServiceWorkerState(cdp);
+        case 'browser_shared_workers':           return await getSharedWorkers(cdp);
+        case 'browser_worker_scripts':           return await getWorkerScripts(cdp);
+        case 'browser_broadcast_channels3':      return await getBroadcastChannels3(cdp);
+        case 'browser_message_channels':         return await getMessageChannels(cdp);
+        case 'browser_worker_modules':           return await getWorkerModules(cdp);
+        case 'browser_service_worker_scope3':    return await getServiceWorkerScope3(cdp);
+        case 'browser_worker_count3':            return await getWorkerCount3(cdp);
+        // pointer2 new
+        case 'browser_hoverable_elements':       return await getHoverableElements(cdp);
+        case 'browser_click_targets':            return await getClickTargets(cdp);
+        case 'browser_double_click_targets':     return await getDoubleClickTargets(cdp);
+        case 'browser_context_menu_elements':    return await getContextMenuElements(cdp);
+        case 'browser_long_press_elements':      return await getLongPressElements(cdp);
+        case 'browser_swipeable_containers':     return await getSwipeableContainers(cdp);
+        case 'browser_pinch_zoom_elements':      return await getPinchZoomElements(cdp);
+        case 'browser_pointer_capture3':         return await getPointerCapture3(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

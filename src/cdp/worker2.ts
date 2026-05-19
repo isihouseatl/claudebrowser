@@ -497,3 +497,113 @@ export async function getNavigatorInfo(client: CdpClient) {
   }
   return ok(result.value);
 }
+
+// ===========================================================================
+// WORKER2 BATCH 3 — 8 new functions (cdp: any pattern)
+// Naming conflict resolutions:
+//   getBroadcastChannels3  — getBroadcastChannels already in this file (original 8)
+//   getServiceWorkerScope3 — getServiceWorkerScope already in this file (new 8)
+//   getWorkerCount3        — getWorkerCount exists in workers.ts and worker.ts
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// 1. getServiceWorkerState
+// Service worker registration state: { registrations: [{scope, state}], count }
+// ---------------------------------------------------------------------------
+export async function getServiceWorkerState(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async()=>{if(!navigator.serviceWorker)return{registrations:[],count:0,supported:false};try{const regs=await navigator.serviceWorker.getRegistrations();return{registrations:regs.slice(0,10).map(r=>({scope:r.scope,state:r.active?'active':r.waiting?'waiting':r.installing?'installing':'none'})),count:regs.length,supported:true}}catch(e){return{registrations:[],count:0,error:e.message}}})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 2. getSharedWorkers
+// SharedWorker support check: { supported }
+// ---------------------------------------------------------------------------
+export async function getSharedWorkers(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return{supported:typeof SharedWorker!=='undefined'}})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 3. getWorkerScripts
+// Scripts that look like worker files: [{ src_preview, async, defer, type }] (max 20)
+// ---------------------------------------------------------------------------
+export async function getWorkerScripts(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return Array.from(document.querySelectorAll('script[src]')).slice(0,50).filter(s=>s.src.includes('worker')||s.src.includes('sw.')).slice(0,20).map(s=>({src_preview:s.src.slice(-60),async:s.async,defer:s.defer,type:s.type||'text/javascript'}))})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 4. getBroadcastChannels3
+// BroadcastChannel support: { supported }
+// Renamed: getBroadcastChannels already exported above (original 8).
+// ---------------------------------------------------------------------------
+export async function getBroadcastChannels3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return{supported:typeof BroadcastChannel!=='undefined'}})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 5. getMessageChannels
+// MessageChannel support and usage hints: { supported, postMessageSupported }
+// ---------------------------------------------------------------------------
+export async function getMessageChannels(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return{supported:typeof MessageChannel!=='undefined',postMessageSupported:typeof window.postMessage==='function'}})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 6. getWorkerModules
+// Scripts with type=module that may be workers: [{ src_preview, type }] (max 20)
+// ---------------------------------------------------------------------------
+export async function getWorkerModules(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return Array.from(document.querySelectorAll('script[type="module"]')).slice(0,20).map(s=>({src_preview:(s.src||'inline').slice(-60),type:'module'}))})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 7. getServiceWorkerScope3
+// Current service worker controller scope: { controlled, scope, state }
+// Renamed: getServiceWorkerScope already exported above (new 8).
+// ---------------------------------------------------------------------------
+export async function getServiceWorkerScope3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async()=>{if(!navigator.serviceWorker)return{controlled:false,supported:false};const ctrl=navigator.serviceWorker.controller;return{controlled:!!ctrl,scope:ctrl?ctrl.scriptURL:null,state:ctrl?ctrl.state:null,supported:true}})()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// 8. getWorkerCount3
+// Summary of worker API support on page:
+// { serviceWorkerSupported, sharedWorkerSupported, workerSupported, dedicatedWorkerSupported }
+// Renamed: getWorkerCount exists in workers.ts and worker.ts; getWorkerCount2 is above.
+// ---------------------------------------------------------------------------
+export async function getWorkerCount3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function(){return{serviceWorkerSupported:typeof navigator.serviceWorker!=='undefined',sharedWorkerSupported:typeof SharedWorker!=='undefined',workerSupported:typeof Worker!=='undefined',dedicatedWorkerSupported:typeof Worker!=='undefined'}})()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

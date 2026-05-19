@@ -435,3 +435,77 @@ export async function isWebGLCanvas(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ── New batch (canvas2 set 2) ────────────────────────────────────────────────
+
+// 9. All canvas elements: [{id, width, height, class_preview}] (max 20)
+export async function getCanvasElements4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('canvas')).slice(0,20).map(c=>({id:c.id||null,width:c.width,height:c.height,class_preview:(c.className||'').slice(0,40)})); })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 10. Canvas elements with WebGL contexts: [{id, contextType}] (max 20)
+export async function getWebGLContexts2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('canvas')).slice(0,20).map(c=>{let t=null;try{if(c.getContext('webgl2'))t='webgl2';else if(c.getContext('webgl'))t='webgl';}catch(e){}return t?{id:c.id||null,contextType:t}:null}).filter(Boolean); })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 11. Total canvas pixel area on page: {canvasCount, totalPixels, largestCanvas}
+export async function getCanvasSize3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var cs=Array.from(document.querySelectorAll('canvas'));var areas=cs.map(c=>c.width*c.height);var max=areas.length?Math.max.apply(null,areas):0;return{canvasCount:cs.length,totalPixels:areas.reduce(function(a,b){return a+b},0),largestCanvas:max}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 12. Canvas elements with 2D context: [{id, width, height}] (max 20)
+export async function getCanvas2dContexts(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('canvas')).slice(0,20).filter(c=>{try{return!!c.getContext('2d')}catch(e){return false}}).map(c=>({id:c.id||null,width:c.width,height:c.height})); })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 13. First canvas data URL prefix (first 100 chars): {exists, prefix, width, height}
+export async function getCanvasDataUrl2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var c=document.querySelector('canvas');if(!c)return{exists:false};try{var d=c.toDataURL();return{exists:true,prefix:d.slice(0,100),width:c.width,height:c.height}}catch(e){return{exists:true,error:e.message}} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 14. Check if OffscreenCanvas is supported: {supported, workerTransferSupported}
+export async function getOffscreenCanvases(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return{supported:typeof OffscreenCanvas!=='undefined',workerTransferSupported:typeof OffscreenCanvas!=='undefined'&&typeof HTMLCanvasElement.prototype.transferControlToOffscreen==='function'}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 15. Canvas elements with mouse/touch events: {canvasCount, hasInteractiveCanvas}
+export async function getCanvasEventListeners(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var cs=Array.from(document.querySelectorAll('canvas'));return{canvasCount:cs.length,hasInteractiveCanvas:cs.some(function(c){return c.onclick||c.onmousedown||c.ontouchstart||c.onmousemove})}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// 16. Check for requestAnimationFrame usage patterns: {canvasCount, hasAnimationFrameRef, rafSupported}
+export async function getCanvasAnimations(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { var cs=document.querySelectorAll('canvas');var hasRaf=false;try{hasRaf=typeof window.requestAnimationFrame==='function'&&cs.length>0}catch(e){}return{canvasCount:cs.length,hasAnimationFrameRef:hasRaf,rafSupported:typeof window.requestAnimationFrame==='function'}; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
