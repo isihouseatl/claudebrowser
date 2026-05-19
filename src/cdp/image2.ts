@@ -1,23 +1,30 @@
 // src/cdp/image2.ts
 import type { CdpClient } from './client';
 
-function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
-  return { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] };
+type McpResult = { content: [{ type: 'text'; text: string }] };
+
+function ok(data: unknown): McpResult {
+  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
 }
-function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+function err(msg: string): McpResult {
   return { content: [{ type: 'text', text: `Error: ${msg}` }] };
 }
 
-// ─── getAllImages ─────────────────────────────────────────────────────────────
-// Get all <img> elements on the page. Returns JSON array of up to 30 items
-// with src, alt, width, height, naturalWidth, naturalHeight, id, class.
-export async function getAllImages(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
+// ─── getImages ────────────────────────────────────────────────────────────────
+// Find all <img> elements: src, alt, width, height, naturalWidth, naturalHeight,
+// loading, isVisible. Max 20.
+export async function getImages(client: CdpClient): Promise<McpResult> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(function() {
-      var els = Array.prototype.slice.call(document.querySelectorAll('img'), 0, 30);
+      var els = Array.prototype.slice.call(document.querySelectorAll('img'), 0, 20);
       return els.map(function(el) {
+        var style = window.getComputedStyle(el);
+        var rect = el.getBoundingClientRect();
+        var isVisible = style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && style.opacity !== '0'
+          && rect.width > 0
+          && rect.height > 0;
         return {
           src: el.src || el.getAttribute('src') || '',
           alt: el.alt || '',
@@ -25,94 +32,8 @@ export async function getAllImages(
           height: el.height,
           naturalWidth: el.naturalWidth,
           naturalHeight: el.naturalHeight,
-          id: el.id || '',
-          class: el.className || ''
-        };
-      });
-    })()`,
-    returnByValue: true,
-    awaitPromise: false,
-  });
-  if (exceptionDetails) {
-    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
-  }
-  return ok(result.value);
-}
-
-// ─── getBrokenImages ─────────────────────────────────────────────────────────
-// Get images that failed to load: naturalWidth === 0 AND naturalHeight === 0
-// but src is non-empty. Returns JSON array of up to 20 items with src, alt, id.
-export async function getBrokenImages(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
-  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
-    expression: `(function() {
-      var els = Array.prototype.slice.call(document.querySelectorAll('img'));
-      var broken = [];
-      for (var i = 0; i < els.length && broken.length < 20; i++) {
-        var el = els[i];
-        var src = el.src || el.getAttribute('src') || '';
-        if (src !== '' && el.naturalWidth === 0 && el.naturalHeight === 0) {
-          broken.push({ src: src, alt: el.alt || '', id: el.id || '' });
-        }
-      }
-      return broken;
-    })()`,
-    returnByValue: true,
-    awaitPromise: false,
-  });
-  if (exceptionDetails) {
-    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
-  }
-  return ok(result.value);
-}
-
-// ─── getImageCount ────────────────────────────────────────────────────────────
-// Count all <img> elements. Returns JSON { total, loaded, broken }.
-// loaded = naturalWidth > 0. broken = src non-empty AND naturalWidth === 0.
-export async function getImageCount(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
-  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
-    expression: `(function() {
-      var els = Array.prototype.slice.call(document.querySelectorAll('img'));
-      var total = els.length;
-      var loaded = 0;
-      var broken = 0;
-      for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        var src = el.src || el.getAttribute('src') || '';
-        if (el.naturalWidth > 0) {
-          loaded++;
-        } else if (src !== '') {
-          broken++;
-        }
-      }
-      return { total: total, loaded: loaded, broken: broken };
-    })()`,
-    returnByValue: true,
-    awaitPromise: false,
-  });
-  if (exceptionDetails) {
-    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
-  }
-  return ok(result.value);
-}
-
-// ─── getLazyImages ────────────────────────────────────────────────────────────
-// Get images with loading="lazy". Returns JSON array of up to 20 items
-// with src, alt, id.
-export async function getLazyImages(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
-  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
-    expression: `(function() {
-      var els = Array.prototype.slice.call(document.querySelectorAll('img[loading="lazy"]'), 0, 20);
-      return els.map(function(el) {
-        return {
-          src: el.src || el.getAttribute('src') || '',
-          alt: el.alt || '',
-          id: el.id || ''
+          loading: el.getAttribute('loading') || '',
+          isVisible: isVisible
         };
       });
     })()`,
@@ -126,11 +47,9 @@ export async function getLazyImages(
 }
 
 // ─── getImagesWithoutAlt ──────────────────────────────────────────────────────
-// Get images missing alt attribute or with empty alt. Returns JSON array of
-// up to 20 items with src, id, class.
-export async function getImagesWithoutAlt(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
+// Find <img> elements missing alt attribute or with empty alt.
+// Returns { src, id, class }[]. Max 20.
+export async function getImagesWithoutAlt(client: CdpClient): Promise<McpResult> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(function() {
       var els = Array.prototype.slice.call(document.querySelectorAll('img'));
@@ -157,22 +76,85 @@ export async function getImagesWithoutAlt(
   return ok(result.value);
 }
 
-// ─── getSvgElements ───────────────────────────────────────────────────────────
-// List all inline <svg> elements on the page. Returns JSON array of up to 20
-// items with id, class, width, height, viewBox.
-export async function getSvgElements(
+// ─── getLazyImages ────────────────────────────────────────────────────────────
+// Find <img> elements with loading="lazy" or data-src attribute (lazy load pattern).
+// Returns { src, dataSrc, id, class }[]. Max 20.
+export async function getLazyImages(client: CdpClient): Promise<McpResult> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(function() {
+      var all = Array.prototype.slice.call(document.querySelectorAll('img'));
+      var results = [];
+      for (var i = 0; i < all.length && results.length < 20; i++) {
+        var el = all[i];
+        var isLazy = el.getAttribute('loading') === 'lazy';
+        var dataSrc = el.getAttribute('data-src') || '';
+        if (isLazy || dataSrc !== '') {
+          results.push({
+            src: el.src || el.getAttribute('src') || '',
+            dataSrc: dataSrc,
+            id: el.id || '',
+            class: el.className || ''
+          });
+        }
+      }
+      return results;
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value);
+}
+
+// ─── getImageDimensions ───────────────────────────────────────────────────────
+// Get { width, height, naturalWidth, naturalHeight, clientWidth, clientHeight }
+// for a specific image matched by CSS selector.
+export async function getImageDimensions(
   client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  selector: string,
+): Promise<McpResult> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(function() {
+      var el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      return {
+        width: el.width,
+        height: el.height,
+        naturalWidth: el.naturalWidth,
+        naturalHeight: el.naturalHeight,
+        clientWidth: el.clientWidth,
+        clientHeight: el.clientHeight
+      };
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  if (result.value === null || result.value === undefined) {
+    return err('Element not found');
+  }
+  return ok(result.value);
+}
+
+// ─── getSvgElements ───────────────────────────────────────────────────────────
+// Find all <svg> elements: { id, class, width, height, viewBox, title }. Max 20.
+export async function getSvgElements(client: CdpClient): Promise<McpResult> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(function() {
       var els = Array.prototype.slice.call(document.querySelectorAll('svg'), 0, 20);
       return els.map(function(el) {
+        var titleEl = el.querySelector('title');
         return {
           id: el.id || '',
           class: el.getAttribute('class') || '',
           width: el.getAttribute('width') || '',
           height: el.getAttribute('height') || '',
-          viewBox: el.getAttribute('viewBox') || ''
+          viewBox: el.getAttribute('viewBox') || '',
+          title: titleEl ? (titleEl.textContent || '') : ''
         };
       });
     })()`,
@@ -185,12 +167,71 @@ export async function getSvgElements(
   return ok(result.value);
 }
 
+// ─── getBackgroundImages ──────────────────────────────────────────────────────
+// Find elements with CSS background-image containing url(.
+// Returns { tag, id, class, backgroundImage }[]. Max 20.
+export async function getBackgroundImages(client: CdpClient): Promise<McpResult> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(function() {
+      var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+      var results = [];
+      for (var i = 0; i < all.length && results.length < 20; i++) {
+        var el = all[i];
+        var bg = window.getComputedStyle(el).backgroundImage;
+        if (bg && bg.indexOf('url(') !== -1) {
+          results.push({
+            tag: el.tagName.toLowerCase(),
+            id: el.id || '',
+            class: el.className || '',
+            backgroundImage: bg
+          });
+        }
+      }
+      return results;
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value);
+}
+
+// ─── getBrokenImages ─────────────────────────────────────────────────────────
+// Find <img> elements where naturalWidth === 0 (failed to load).
+// Returns { src, id, class }[]. Max 20.
+export async function getBrokenImages(client: CdpClient): Promise<McpResult> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(function() {
+      var els = Array.prototype.slice.call(document.querySelectorAll('img'));
+      var results = [];
+      for (var i = 0; i < els.length && results.length < 20; i++) {
+        var el = els[i];
+        var src = el.src || el.getAttribute('src') || '';
+        if (src !== '' && el.naturalWidth === 0) {
+          results.push({
+            src: src,
+            id: el.id || '',
+            class: el.className || ''
+          });
+        }
+      }
+      return results;
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
+  }
+  return ok(result.value);
+}
+
 // ─── getPictureElements ───────────────────────────────────────────────────────
-// List all <picture> elements with their source srcsets. Returns JSON array of
-// up to 10 items, each with sources: [{ srcset, media, type }] and fallbackSrc.
-export async function getPictureElements(
-  client: CdpClient,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
+// Find <picture> elements with their <source> srcset and media attributes.
+// Returns { sources: [{srcset, media, type}], fallbackSrc }[]. Max 10.
+export async function getPictureElements(client: CdpClient): Promise<McpResult> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(function() {
       var pictures = Array.prototype.slice.call(document.querySelectorAll('picture'), 0, 10);
@@ -216,28 +257,25 @@ export async function getPictureElements(
   return ok(result.value);
 }
 
-// ─── getImageDimensions ───────────────────────────────────────────────────────
-// Get dimensions of a specific image by CSS selector. Returns JSON
-// { src, width, height, naturalWidth, naturalHeight, displayWidth, displayHeight }
-// where displayWidth/displayHeight come from getBoundingClientRect().
-export async function getImageDimensions(
-  client: CdpClient,
-  selector: string,
-): Promise<{ content: [{ type: 'text'; text: string }] }> {
+// ─── getAllImages ─────────────────────────────────────────────────────────────
+// Legacy: Get all <img> elements. Returns up to 30 items.
+// Kept for server.ts compatibility.
+export async function getAllImages(client: CdpClient): Promise<McpResult> {
   const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
     expression: `(function() {
-      var el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return null;
-      var rect = el.getBoundingClientRect();
-      return {
-        src: el.src || el.getAttribute('src') || '',
-        width: el.width,
-        height: el.height,
-        naturalWidth: el.naturalWidth,
-        naturalHeight: el.naturalHeight,
-        displayWidth: rect.width,
-        displayHeight: rect.height
-      };
+      var els = Array.prototype.slice.call(document.querySelectorAll('img'), 0, 30);
+      return els.map(function(el) {
+        return {
+          src: el.src || el.getAttribute('src') || '',
+          alt: el.alt || '',
+          width: el.width,
+          height: el.height,
+          naturalWidth: el.naturalWidth,
+          naturalHeight: el.naturalHeight,
+          id: el.id || '',
+          class: el.className || ''
+        };
+      });
     })()`,
     returnByValue: true,
     awaitPromise: false,
@@ -245,8 +283,35 @@ export async function getImageDimensions(
   if (exceptionDetails) {
     return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
   }
-  if (result.value === null || result.value === undefined) {
-    return err('Element not found');
+  return ok(result.value);
+}
+
+// ─── getImageCount ────────────────────────────────────────────────────────────
+// Legacy: Count all <img> elements. Returns { total, loaded, broken }.
+// Kept for server.ts compatibility.
+export async function getImageCount(client: CdpClient): Promise<McpResult> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(function() {
+      var els = Array.prototype.slice.call(document.querySelectorAll('img'));
+      var total = els.length;
+      var loaded = 0;
+      var broken = 0;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var src = el.src || el.getAttribute('src') || '';
+        if (el.naturalWidth > 0) {
+          loaded++;
+        } else if (src !== '') {
+          broken++;
+        }
+      }
+      return { total: total, loaded: loaded, broken: broken };
+    })()`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'JS error');
   }
   return ok(result.value);
 }

@@ -2,6 +2,8 @@
 // CDP module for interacting with HTML <dialog> elements and page overlays.
 // Covers: getDialogElements, getOpenDialogs, openDialog, closeDialog,
 //         getDialogReturnValue, isDialogOpen, getActiveModals, clickDialogButton
+// Extended: getOpenDialogs2, getDialogCount, getAlertElements, getTooltips,
+//           getPopupMenus, getNotifications, getFocusTrap, getDrawers
 import { CdpClient } from './client';
 
 function ok(text: string): { content: [{ type: 'text'; text: string }] } {
@@ -386,6 +388,396 @@ export async function clickDialogButton(
       return ok('No button found');
     }
     return ok('Button clicked');
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getOpenDialogs2
+// ---------------------------------------------------------------------------
+
+/**
+ * Find all <dialog> elements that are open (have the `open` attribute).
+ * Returns JSON array of { id, class, hasCloseButton, text_snippet }[]. Max 10.
+ * NOTE: named getOpenDialogs2 because getOpenDialogs already exists above.
+ */
+export async function getOpenDialogs2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var dialogs = Array.from(document.querySelectorAll('dialog[open]'));
+  var results = dialogs.slice(0, 10).map(function(el) {
+    var closeBtn = el.querySelector('button[aria-label*="close" i], button[class*="close" i], button[data-dismiss], [role="button"][aria-label*="close" i]');
+    var text = (el.textContent || '').replace(/\\s+/g, ' ').trim().substring(0, 120);
+    return {
+      id: el.id || null,
+      class: el.className || null,
+      hasCloseButton: !!closeBtn,
+      text_snippet: text
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getDialogCount
+// ---------------------------------------------------------------------------
+
+/**
+ * Return counts of dialog elements on the page.
+ * Returns { total, open, withOpen, withRole } where:
+ *   total    = all <dialog> elements
+ *   open     = dialogs with .open === true
+ *   withOpen = dialogs with the `open` HTML attribute
+ *   withRole = elements with role="dialog"
+ */
+export async function getDialogCount(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var allDialogs = document.querySelectorAll('dialog');
+  var openProp = Array.from(allDialogs).filter(function(el) { return el.open; });
+  var withAttr = Array.from(allDialogs).filter(function(el) { return el.hasAttribute('open'); });
+  var withRole = document.querySelectorAll('[role="dialog"]');
+  return JSON.stringify({
+    total: allDialogs.length,
+    open: openProp.length,
+    withOpen: withAttr.length,
+    withRole: withRole.length
+  });
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getAlertElements
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements with role="alert" or role="alertdialog".
+ * Returns JSON array of { tag, id, class, text }[]. Max 10.
+ */
+export async function getAlertElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="alert"], [role="alertdialog"]'));
+  var results = els.slice(0, 10).map(function(el) {
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      text: (el.textContent || '').replace(/\\s+/g, ' ').trim().substring(0, 200)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getTooltips
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements with role="tooltip" or a data-tooltip attribute.
+ * Returns JSON array of { tag, id, text, targetId }[]. Max 20.
+ * targetId is the value of aria-describedby on any element pointing to this tooltip.
+ */
+export async function getTooltips(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="tooltip"], [data-tooltip]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var tooltipId = el.id || null;
+    var targetId = null;
+    if (tooltipId) {
+      var ref = document.querySelector('[aria-describedby="' + tooltipId + '"]');
+      if (ref) targetId = ref.id || null;
+    }
+    var text = el.hasAttribute('data-tooltip')
+      ? (el.getAttribute('data-tooltip') || '')
+      : (el.textContent || '').replace(/\\s+/g, ' ').trim().substring(0, 200);
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: tooltipId,
+      text: text,
+      targetId: targetId
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getPopupMenus
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements with role="menu" or role="listbox" that are visible
+ * (computed display is not none). Returns { tag, id, class, itemCount }[]. Max 10.
+ */
+export async function getPopupMenus(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="menu"], [role="listbox"]'));
+  var visible = els.filter(function(el) {
+    var style = window.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+  });
+  var results = visible.slice(0, 10).map(function(el) {
+    var items = el.querySelectorAll('[role="menuitem"], [role="option"], li, [role="menuitemcheckbox"], [role="menuitemradio"]');
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      itemCount: items.length
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getNotifications
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements with role="status", role="log", or an aria-live attribute.
+ * Returns { tag, id, ariaLive, text }[]. Max 20.
+ */
+export async function getNotifications(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var els = Array.from(document.querySelectorAll('[role="status"], [role="log"], [aria-live]'));
+  var results = els.slice(0, 20).map(function(el) {
+    var liveVal = el.getAttribute('aria-live') || el.getAttribute('role') || null;
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      ariaLive: liveVal,
+      text: (el.textContent || '').replace(/\\s+/g, ' ').trim().substring(0, 200)
+    };
+  });
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getFocusTrap
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if a focus trap is active on the page.
+ * Returns { hasFocusTrap, modalElement } where modalElement is a descriptor
+ * string of the trapping element if found, or null.
+ * Detects: aria-modal="true" elements, and programmatically focused
+ * tabindex="-1" elements that match the active element.
+ */
+export async function getFocusTrap(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var hasFocusTrap = false;
+  var modalElement = null;
+
+  // Check aria-modal="true"
+  var ariaModals = Array.from(document.querySelectorAll('[aria-modal="true"]'));
+  if (ariaModals.length > 0) {
+    hasFocusTrap = true;
+    var m = ariaModals[0];
+    modalElement = m.tagName.toLowerCase() + (m.id ? '#' + m.id : '') + (m.className ? '.' + String(m.className).split(' ')[0] : '');
+  }
+
+  // Check programmatically focused tabindex="-1" element
+  var active = document.activeElement;
+  if (!hasFocusTrap && active && active !== document.body) {
+    var ti = active.getAttribute('tabindex');
+    if (ti === '-1') {
+      hasFocusTrap = true;
+      var tag = active.tagName.toLowerCase();
+      var id = active.id ? '#' + active.id : '';
+      var cls = active.className ? '.' + String(active.className).split(' ')[0] : '';
+      modalElement = tag + id + cls;
+    }
+  }
+
+  return JSON.stringify({ hasFocusTrap: hasFocusTrap, modalElement: modalElement });
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// getDrawers
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements that look like drawers or sidebars by class name patterns:
+ * "drawer", "sidebar", "panel", "flyout", "offcanvas".
+ * Returns { tag, id, class, isVisible }[]. Max 10.
+ * isVisible = computed display !== none AND visibility !== hidden.
+ */
+export async function getDrawers(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(function() {
+  var patterns = ['drawer', 'sidebar', 'panel', 'flyout', 'offcanvas'];
+  var seen = new Set();
+  var results = [];
+  var all = Array.from(document.querySelectorAll('*'));
+  for (var i = 0; i < all.length && results.length < 10; i++) {
+    var el = all[i];
+    var cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+    var matches = patterns.some(function(p) { return cls.indexOf(p) !== -1; });
+    if (!matches) continue;
+    if (seen.has(el)) continue;
+    seen.add(el);
+    var style = window.getComputedStyle(el);
+    var visible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || null,
+      class: el.className || null,
+      isVisible: visible
+    });
+  }
+  return JSON.stringify(results);
+})()`;
+
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'unknown JS error');
+    }
+    if (result.value === null || result.value === undefined) {
+      return err('evaluate returned null or undefined');
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

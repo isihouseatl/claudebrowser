@@ -97,7 +97,7 @@ import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, g
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
 import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
-import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton } from './cdp/dialog2';
+import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
@@ -107,7 +107,7 @@ import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward a
 import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
-import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions } from './cdp/image2';
+import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages } from './cdp/image2';
 import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
@@ -121,6 +121,7 @@ import { pressEnter, pressTab, pressEscape, pressArrowDown, pressArrowUp, typeTe
 import { getElementDepth, getElementPath, getSiblings, getParentElement, getElementsByText, getElementsWithAttribute, countElementsByTag, getFirstVisible } from './cdp/element2';
 import { getForms, getFormFields2, getSelectOptions2, setSelectOption, getRadioGroup, getFormValidation, submitForm2, resetForm2 } from './cdp/form2';
 import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePixelRatio, getViewportOrientation, simulatePrintMedia, getContainerQueries, getFlexContainers } from './cdp/responsive2';
+import { getLists, getListItems2, getNestedListDepth, getDescriptionLists, getNavLists, getMenuItems, getCheckedListItems, getListCount } from './cdp/list2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1293,6 +1294,27 @@ const TOOLS = [
   { name: 'browser_search_table_column', description: 'Find rows where column colIndex contains query (case-insensitive), max 20 results', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, colIndex: { type: 'number' }, query: { type: 'string' } }, required: ['selector', 'colIndex', 'query'] } },
   { name: 'browser_table_count', description: 'Count tables: total, withCaption, withHeader, withFooter, sortable (aria-sort present)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_data_grid_info', description: 'Find elements with role="grid" or "treegrid": tag, id, class, rowCount, colCount (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Dialog2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_open_dialogs2', description: 'Find open <dialog> elements: id, class, hasCloseButton, text_snippet (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dialog_count', description: 'Count dialogs: total, open, withOpen, withRole', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alert_elements', description: 'Find elements with role="alert" or "alertdialog": tag, id, class, text (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tooltips', description: 'Find elements with role="tooltip" or data-tooltip: tag, id, text, targetId (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_popup_menus', description: 'Find visible elements with role="menu" or "listbox": tag, id, class, itemCount (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notifications', description: 'Find elements with role="status", "log", or aria-live: tag, id, ariaLive, text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_trap', description: 'Check for focus trap: aria-modal="true" or focused tabindex="-1" element', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drawers', description: 'Find drawer/sidebar/panel elements by class name: tag, id, class, isVisible (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Image2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_images', description: 'List all <img> elements: src, alt, width, height, naturalWidth, naturalHeight, loading, isVisible (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_background_images', description: 'Find elements with CSS background-image url(): tag, id, class, backgroundImage (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── List2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_lists', description: 'Find all <ul> and <ol> elements: tag, id, class, itemCount, listType (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_list_items', description: 'Get all <li> text content from a specific list selector: { items, count }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_nested_list_depth', description: 'Get maximum nesting depth of ul/ol/li inside a list selector: { maxDepth }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_description_lists', description: 'Find all <dl> elements and extract dt/dd term-description pairs (max 10 dl, 20 pairs)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_lists', description: 'Find <nav> elements containing lists: id, class, linkCount, links (max 10 navs, 10 links)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_menu_items', description: 'Find elements with role="menuitem", "option", or "listitem": tag, id, text, role (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_checked_list_items', description: 'Find <li> elements containing checked checkboxes: text, checkedCount, totalCount per list', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_list_count', description: 'Count list elements: ul, ol, dl, nav, menuRole', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1349,7 +1371,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.43.0' },
+    { name: 'claudebrowser', version: '1.44.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -2544,6 +2566,27 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_search_table_column':      return await searchTableColumn(cdp, a.selector as string, a.colIndex as number, a.query as string);
         case 'browser_table_count':              return await getTableCount2(cdp);
         case 'browser_data_grid_info':           return await getDataGridInfo(cdp);
+                // dialog2 new
+        case 'browser_open_dialogs2':            return await getOpenDialogs2(cdp);
+        case 'browser_dialog_count':             return await getDialogCount(cdp);
+        case 'browser_alert_elements':           return await getAlertElements(cdp);
+        case 'browser_tooltips':                 return await getTooltips(cdp);
+        case 'browser_popup_menus':              return await getPopupMenus(cdp);
+        case 'browser_notifications':            return await getNotifications(cdp);
+        case 'browser_focus_trap':               return await getFocusTrap(cdp);
+        case 'browser_drawers':                  return await getDrawers(cdp);
+        // image2 new
+        case 'browser_images':                   return await getImages(cdp);
+        case 'browser_background_images':        return await getBackgroundImages(cdp);
+        // list2
+        case 'browser_lists':                    return await getLists(cdp);
+        case 'browser_list_items':               return await getListItems2(cdp, a.selector as string);
+        case 'browser_nested_list_depth':        return await getNestedListDepth(cdp, a.selector as string);
+        case 'browser_description_lists':        return await getDescriptionLists(cdp);
+        case 'browser_nav_lists':                return await getNavLists(cdp);
+        case 'browser_menu_items':               return await getMenuItems(cdp);
+        case 'browser_checked_list_items':       return await getCheckedListItems(cdp);
+        case 'browser_list_count':               return await getListCount(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
