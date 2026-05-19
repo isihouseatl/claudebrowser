@@ -19,7 +19,7 @@ import { isEnabled, isChecked, getBoundingBox, countElements, getComputedStyle a
 import { startConsoleMonitor as startCdpConsole, getConsoleMessages as getCdpConsoleMessages, clearConsoleMessages as clearCdpConsoleMessages, getJsErrors, clearJsErrors, stopConsoleMonitor as stopCdpConsole } from './cdp/console';
 import { startNetworkLog, getNetworkLog, clearNetworkLog as clearNetLog, stopNetworkLog } from './cdp/netlog';
 import { setUserAgent, setDeviceMetrics, clearDeviceMetrics, setNetworkConditions, clearNetworkConditions, setGeolocation, clearGeolocation, grantPermission, resetPermissions, setMediaType, setColorScheme, setPrefersReducedMotion } from './cdp/emulation';
-import { getSecurityInfo, hasMixedContent, getCSPInfo, getThirdPartyDomains, isSecureContext } from './cdp/security';
+import { getSecurityInfo, hasMixedContent, getCSPInfo, getThirdPartyDomains, isSecureContext, getContentSecurityPolicy, getMixedContentInfo, getExternalScripts, getThirdPartyResources, hasXFrameOptionsHeader, getSubresourceIntegrity, getPostMessageListeners, getOpenRedirects } from './cdp/security';
 import { listCacheNames, getCacheEntries, deleteCache, deleteCacheEntry, clearAllCaches, getStorageQuota, getStorageBreakdown } from './cdp/cache';
 import { getZIndex, getElementsAtPoint, getPixelColor, getColors, highlightElement, removeHighlight, doElementsOverlap, getFontInfo } from './cdp/visual';
 import { getInnerHtml, getTableData, screenshotElement } from './cdp/extract';
@@ -120,6 +120,8 @@ import { getScrollDepth2, isAtBottom, isAtTop, scrollToBottom2, scrollToTop2, ge
 import { pressEnter, pressTab, pressEscape, pressArrowDown, pressArrowUp, typeText2, getActiveElement, getFocusPath } from './cdp/keyboard2';
 import { getElementDepth, getElementPath, getSiblings, getParentElement, getElementsByText, getElementsWithAttribute, countElementsByTag, getFirstVisible } from './cdp/element2';
 import { getForms, getFormFields2, getSelectOptions2, setSelectOption, getRadioGroup, getFormValidation, submitForm2, resetForm2 } from './cdp/form2';
+import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePixelRatio, getViewportOrientation, simulatePrintMedia, getContainerQueries, getFlexContainers } from './cdp/responsive2';
+import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
@@ -1241,6 +1243,33 @@ const TOOLS = [
   { name: 'browser_window_errors', description: 'Get captured window.onerror entries: message, source, lineno, stack (auto-injects on first call)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_clear_window_errors', description: 'Clear window.__windowErrors log', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_unhandled_rejections', description: 'Get captured unhandledrejection events: message, stack, timestamp (auto-injects listener)', inputSchema: { type: 'object', properties: {} } },
+  // ── Responsive2 ─────────────────────────────────────────────────────────────────
+  { name: 'browser_breakpoint_info', description: 'Get current viewport width/height and which CSS breakpoint it matches (xs/sm/md/lg/xl)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_query_matches', description: 'Check if a CSS media query string currently matches (e.g. "(max-width: 768px)")', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'browser_is_mobile_viewport', description: 'Check if viewport width is <= 768px (mobile breakpoint)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_device_pixel_ratio', description: 'Get window.devicePixelRatio (1 = standard, 2 = retina, etc.)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_viewport_orientation', description: 'Get viewport orientation: portrait or landscape based on width vs height', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_simulate_print', description: 'Add or remove CSS class to simulate print media (adds .print-preview to body)', inputSchema: { type: 'object', properties: { enable: { type: 'boolean' } }, required: ['enable'] } },
+  { name: 'browser_container_queries', description: 'Find elements using CSS container queries (@container rules) on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flex_containers', description: 'List all flex containers: tag, id, class, flexDirection, childCount (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Color ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_element_colors', description: 'Get color, background-color, border-color of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_dominant_colors', description: 'Get all unique background-color values used across the page (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_contrast', description: 'Calculate WCAG contrast ratio between foreground and background color of an element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_transparent_background', description: 'Check if element has transparent or rgba(0,0,0,0) background', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_all_colors', description: 'Get all unique color + background-color values from all elements on the page (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_gradients', description: 'Find all elements using CSS gradient backgrounds: linear-gradient, radial-gradient', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_scheme', description: 'Get prefers-color-scheme media query result: dark, light, or no-preference', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_link_colors', description: 'Get computed color of a, a:visited, a:hover link elements on page', inputSchema: { type: 'object', properties: {} } },
+  // ── Security2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_content_security_policy', description: 'Get CSP header value from meta tag or response header', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mixed_content_info', description: 'Find mixed content: HTTP resources loaded on HTTPS page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_external_scripts', description: 'List all external <script> src URLs loaded on the page (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_third_party_resources', description: 'List resources from domains different from the current page origin (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_x_frame_options', description: 'Check if X-Frame-Options meta header is present on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_subresource_integrity', description: 'Find <script> and <link> tags with integrity attribute (SRI)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_postmessage_listeners', description: 'Check if window has message event listeners (postMessage) via window.__hasMessageListeners', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_redirects', description: 'Find links with redirect patterns in href (e.g. ?url=, ?redirect=, ?next=)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1297,7 +1326,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.25.0' },
+    { name: 'claudebrowser', version: '1.42.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -2442,6 +2471,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_window_errors':            return await getWindowErrors(cdp);
         case 'browser_clear_window_errors':      return await clearWindowErrors(cdp);
         case 'browser_unhandled_rejections':     return await getUnhandledRejections(cdp);
+                // responsive2
+        case 'browser_breakpoint_info':          return await getBreakpointInfo(cdp);
+        case 'browser_media_query_matches':      return await getMediaQueryMatches(cdp);
+        case 'browser_is_mobile_viewport':       return await isMobileViewport(cdp);
+        case 'browser_device_pixel_ratio':       return await getDevicePixelRatio(cdp);
+        case 'browser_viewport_orientation':     return await getViewportOrientation(cdp);
+        case 'browser_simulate_print':           return await simulatePrintMedia(cdp);
+        case 'browser_container_queries':        return await getContainerQueries(cdp);
+        case 'browser_flex_containers':          return await getFlexContainers(cdp);
+        // color
+        case 'browser_element_colors':           return await getElementColors(cdp, a.selector as string);
+        case 'browser_dominant_colors':          return await getDominantColors(cdp);
+        case 'browser_color_contrast':           return await getColorContrast(cdp, a.selector as string);
+        case 'browser_transparent_background':   return await hasTransparentBackground(cdp, a.selector as string);
+        case 'browser_all_colors':               return await getAllColors(cdp);
+        case 'browser_gradients':                return await getGradients(cdp);
+        case 'browser_color_scheme':             return await getColorScheme2(cdp);
+        case 'browser_link_colors':              return await getLinkColors(cdp);
+        // security2
+        case 'browser_content_security_policy': return await getContentSecurityPolicy(cdp);
+        case 'browser_mixed_content_info':       return await getMixedContentInfo(cdp);
+        case 'browser_external_scripts':         return await getExternalScripts(cdp);
+        case 'browser_third_party_resources':    return await getThirdPartyResources(cdp);
+        case 'browser_x_frame_options':          return await hasXFrameOptionsHeader(cdp);
+        case 'browser_subresource_integrity':    return await getSubresourceIntegrity(cdp);
+        case 'browser_postmessage_listeners':    return await getPostMessageListeners(cdp);
+        case 'browser_open_redirects':           return await getOpenRedirects(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

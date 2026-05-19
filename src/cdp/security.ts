@@ -209,3 +209,262 @@ export async function isSecureContext(client: CdpClient): Promise<boolean> {
   }
   return result.value as boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Security inspection tools (ok/err pattern)
+// ---------------------------------------------------------------------------
+
+function ok(v: unknown): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v) }] };
+}
+
+function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }] };
+}
+
+// Get CSP from meta tags and report-only headers via document meta.
+export async function getContentSecurityPolicy(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const policies = [];
+  const metas = document.querySelectorAll('meta[http-equiv]');
+  for (const m of metas) {
+    const name = (m.getAttribute('http-equiv') || '').toLowerCase();
+    if (name === 'content-security-policy' || name === 'content-security-policy-report-only') {
+      policies.push({ httpEquiv: m.getAttribute('http-equiv'), content: m.getAttribute('content') });
+    }
+  }
+  return JSON.stringify({ policies, count: policies.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// Find HTTP resources on an HTTPS page: images, scripts, iframes with http:// src.
+export async function getMixedContentInfo(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const isHttps = location.protocol === 'https:';
+  const mixed = [];
+  const selectors = [
+    { tag: 'img', attr: 'src' },
+    { tag: 'script', attr: 'src' },
+    { tag: 'iframe', attr: 'src' },
+    { tag: 'link', attr: 'href' },
+    { tag: 'audio', attr: 'src' },
+    { tag: 'video', attr: 'src' },
+  ];
+  for (const { tag, attr } of selectors) {
+    const els = document.querySelectorAll(tag + '[' + attr + ']');
+    for (const el of els) {
+      const val = el.getAttribute(attr) || '';
+      if (val.startsWith('http:')) {
+        mixed.push({ tag, attr, url: val });
+      }
+    }
+  }
+  return JSON.stringify({ isHttpsPage: isHttps, mixedResources: mixed, count: mixed.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// List all external <script src> URLs with async, defer, crossOrigin attributes.
+export async function getExternalScripts(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const scripts = [];
+  const els = document.querySelectorAll('script[src]');
+  for (const el of els) {
+    scripts.push({
+      src: el.getAttribute('src'),
+      async: el.hasAttribute('async'),
+      defer: el.hasAttribute('defer'),
+      crossOrigin: el.getAttribute('crossorigin'),
+      type: el.getAttribute('type'),
+    });
+  }
+  return JSON.stringify({ scripts, count: scripts.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// Find resources (script, img, link, iframe) from different origins than the page.
+export async function getThirdPartyResources(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const pageOrigin = location.origin;
+  const resources = [];
+  const checks = [
+    { tag: 'script', attr: 'src' },
+    { tag: 'img', attr: 'src' },
+    { tag: 'link', attr: 'href' },
+    { tag: 'iframe', attr: 'src' },
+  ];
+  for (const { tag, attr } of checks) {
+    const els = document.querySelectorAll(tag + '[' + attr + ']');
+    for (const el of els) {
+      const val = el.getAttribute(attr) || '';
+      try {
+        const u = new URL(val, location.href);
+        if (u.origin !== pageOrigin && u.origin !== 'null') {
+          resources.push({ tag, attr, url: val, origin: u.origin });
+        }
+      } catch (_) {}
+    }
+  }
+  return JSON.stringify({ pageOrigin, thirdPartyResources: resources, count: resources.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// Check if page has X-Frame-Options or frame-ancestors CSP directive (via meta).
+export async function hasXFrameOptionsHeader(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const metas = document.querySelectorAll('meta[http-equiv]');
+  let xFrameOptions = null;
+  let frameAncestors = null;
+  for (const m of metas) {
+    const name = (m.getAttribute('http-equiv') || '').toLowerCase();
+    const content = m.getAttribute('content') || '';
+    if (name === 'x-frame-options') {
+      xFrameOptions = content;
+    }
+    if (name === 'content-security-policy' || name === 'content-security-policy-report-only') {
+      const match = content.match(/frame-ancestors[^;]*/i);
+      if (match) frameAncestors = match[0].trim();
+    }
+  }
+  return JSON.stringify({
+    hasXFrameOptions: xFrameOptions !== null,
+    xFrameOptionsValue: xFrameOptions,
+    hasFrameAncestors: frameAncestors !== null,
+    frameAncestorsValue: frameAncestors,
+    protected: xFrameOptions !== null || frameAncestors !== null,
+  });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// List scripts/links with integrity attribute: tag, src/href, integrity value.
+export async function getSubresourceIntegrity(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const items = [];
+  const scriptEls = document.querySelectorAll('script[integrity]');
+  for (const el of scriptEls) {
+    items.push({ tag: 'script', src: el.getAttribute('src'), integrity: el.getAttribute('integrity') });
+  }
+  const linkEls = document.querySelectorAll('link[integrity]');
+  for (const el of linkEls) {
+    items.push({ tag: 'link', href: el.getAttribute('href'), integrity: el.getAttribute('integrity'), rel: el.getAttribute('rel') });
+  }
+  return JSON.stringify({ items, count: items.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// Check if window has message event listeners (via window.__messageListeners or inline handler).
+export async function getPostMessageListeners(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const hasOnMessage = typeof window.onmessage === 'function';
+  const customListeners = Array.isArray(window.__messageListeners)
+    ? window.__messageListeners.length
+    : null;
+  const iframes = document.querySelectorAll('iframe');
+  const iframeCount = iframes.length;
+  const iframeOrigins = Array.from(iframes).map(f => {
+    try { return new URL(f.src || '', location.href).origin; } catch (_) { return f.src || ''; }
+  });
+  return JSON.stringify({
+    hasOnMessageHandler: hasOnMessage,
+    customListenerCount: customListeners,
+    iframeCount,
+    iframeOrigins,
+    note: 'addEventListener listeners cannot be enumerated without instrumentation; only onmessage and window.__messageListeners are detectable here',
+  });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
+
+// Find links/forms where action/href contains redirect parameters: ?redirect=, ?next=, ?url=, ?return=
+export async function getOpenRedirects(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const redirectParams = ['redirect', 'next', 'url', 'return', 'returnUrl', 'return_url', 'goto', 'continue', 'dest', 'destination'];
+  const pattern = new RegExp('[?&](' + redirectParams.join('|') + ')=', 'i');
+  const found = [];
+  const links = document.querySelectorAll('a[href]');
+  for (const el of links) {
+    const href = el.getAttribute('href') || '';
+    if (pattern.test(href)) {
+      found.push({ type: 'link', href, text: el.textContent ? el.textContent.trim().slice(0, 80) : '' });
+    }
+  }
+  const forms = document.querySelectorAll('form[action]');
+  for (const el of forms) {
+    const action = el.getAttribute('action') || '';
+    if (pattern.test(action)) {
+      found.push({ type: 'form', action, method: el.getAttribute('method') || 'get' });
+    }
+  }
+  return JSON.stringify({ redirectParams, found, count: found.length });
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) {
+    return err(`JS error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+  return ok(JSON.parse(result.value as string));
+}
