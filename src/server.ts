@@ -70,7 +70,7 @@ import { printToPdfBuffer, getPageCount, getPrintableArea, setPageTitle, injectP
 import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElementVisibilityRatio, getOffScreenElements, getScrollableElements, getElementScrollPosition, getScrollPosition as getScrollPosition2, getViewportSize as getViewportSize2, getDocumentSize, scrollTo as scrollToWindow, scrollBy as scrollByWindow, scrollToElement as scrollToElement2, isElementInViewport } from './cdp/viewport2';
 import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceEvaluate, retryEvaluate, getHighResolutionTime, measureExpressionTime } from './cdp/timing';
 import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
-import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml } from './cdp/clipboard2';
+import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml, getClipboardPermission, getSelectionText2, getCopyButtons, getUserSelectNone, getContentEditable2, getSpellcheck, getAutocomplete3, getInputPatterns } from './cdp/clipboard2';
 import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays, highlightElement2, clearHighlights2, flashElement2, highlightAllLinks, clearLinkHighlights, highlightForms, labelElement, clearAllOverlays2 } from './cdp/highlight2';
 import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input3';
 import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
@@ -165,6 +165,8 @@ import { getTableCount5, getTableHeaders5, getTableRowCount5, getTableCaption2, 
 import { getBreadcrumbs2, getNavMenus, getMenuItems3, getMenuBars, getTreeItems, getTabList, getSiteLinks, getSkipLinks2 } from './cdp/breadcrumb2';
 import { getSearchInputs2, getSearchForms2, getHighlightedText, getTextBySelector2, getWordCount, getLinkTexts, getButtonTexts, getLabelTexts } from './cdp/search3';
 import { getDarkModeSupport, getColorScheme3, getBackgroundColors, getTextColors, getBorderColors, getContrastRatios, getThemeClasses, getColorDataAttrs } from './cdp/theme2';
+import { getStarRatings, getReviewBlocks, getProductPrices, getLikeButtons, getShareButtons, getCommentSections, getUserAvatars, getBadgeElements } from './cdp/rating2';
+import { getLazyImages3, getInfiniteScrollContainers, getLoadMoreButtons, getSkeletonElements, getSpinners, getProgressBars2, getDeferredImages, getVirtualLists } from './cdp/lazy2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1866,6 +1868,33 @@ const TOOLS = [
   { name: 'browser_contrast_ratios', description: 'Text/bg color pairs for key elements: [{tag, id, text_color, bg_color}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_theme_classes', description: 'Elements with dark/light/theme class names: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_color_data_attrs', description: 'Elements with data-theme or data-color-scheme: [{tag, id, dataTheme, dataColorScheme}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Clipboard2 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_clipboard_permission', description: 'Clipboard read/write permission: {clipboardRead, clipboardWrite, supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selection_text2', description: 'Current text selection: {selectedText_preview, rangeCount, isCollapsed}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_copy_buttons', description: 'Elements with copy patterns: [{tag, id, class_preview, text_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_user_select_none', description: 'Elements with user-select:none: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_content_editable2', description: 'Elements with contenteditable: [{tag, id, class_preview, text_preview, isTrue}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_spellcheck', description: 'Inputs with spellcheck attribute: [{tag, id, name, spellcheck}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_autocomplete3', description: 'Inputs with autocomplete attribute: [{id, name, type, autocomplete}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_input_patterns', description: 'Inputs with pattern attribute: [{id, name, type, pattern_preview, title_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Rating2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_star_ratings', description: 'Star/rating elements: [{tag, id, class_preview, ariaLabel_preview, value}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_review_blocks', description: 'Review/testimonial blocks: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_prices', description: 'Price elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_like_buttons', description: 'Like/upvote/heart buttons: [{tag, id, class_preview, text_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_buttons', description: 'Share buttons: [{tag, id, class_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_sections', description: 'Comment/discussion sections: [{tag, id, class_preview, commentCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_user_avatars', description: 'Avatar images: [{src_preview, alt_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_badge_elements', description: 'Badge/tag/chip elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Lazy2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_lazy_images3', description: 'Images with loading=lazy or data-src: [{src_preview, dataSrc_preview, alt_preview, loading}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_infinite_scroll_containers', description: 'Elements with infinite scroll patterns: [{tag, id, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_load_more_buttons', description: '"Load more" / "Show more" buttons: [{tag, id, text_preview, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_skeleton_elements', description: 'Skeleton loading placeholders: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_spinners', description: 'Loading spinners: [{tag, id, class_preview, ariaLabel_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_progress_bars2', description: 'Progress bar elements: [{tag, id, value, max, ariaValueNow, ariaValueMax}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_deferred_images', description: 'Images with empty src but data-src set: [{dataSrc_preview, alt_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_lists', description: 'Virtual/windowed list elements: [{tag, id, class_preview, style_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3650,6 +3679,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_contrast_ratios':         return await getContrastRatios(cdp);
         case 'browser_theme_classes':           return await getThemeClasses(cdp);
         case 'browser_color_data_attrs':        return await getColorDataAttrs(cdp);
+                // clipboard2 new
+        case 'browser_clipboard_permission':        return await getClipboardPermission(cdp);
+        case 'browser_selection_text2':             return await getSelectionText2(cdp);
+        case 'browser_copy_buttons':                return await getCopyButtons(cdp);
+        case 'browser_user_select_none':            return await getUserSelectNone(cdp);
+        case 'browser_content_editable2':           return await getContentEditable2(cdp);
+        case 'browser_spellcheck':                  return await getSpellcheck(cdp);
+        case 'browser_autocomplete3':               return await getAutocomplete3(cdp);
+        case 'browser_input_patterns':              return await getInputPatterns(cdp);
+        // rating2
+        case 'browser_star_ratings':                return await getStarRatings(cdp);
+        case 'browser_review_blocks':               return await getReviewBlocks(cdp);
+        case 'browser_product_prices':              return await getProductPrices(cdp);
+        case 'browser_like_buttons':                return await getLikeButtons(cdp);
+        case 'browser_share_buttons':               return await getShareButtons(cdp);
+        case 'browser_comment_sections':            return await getCommentSections(cdp);
+        case 'browser_user_avatars':                return await getUserAvatars(cdp);
+        case 'browser_badge_elements':              return await getBadgeElements(cdp);
+        // lazy2
+        case 'browser_lazy_images3':                return await getLazyImages3(cdp);
+        case 'browser_infinite_scroll_containers':  return await getInfiniteScrollContainers(cdp);
+        case 'browser_load_more_buttons':           return await getLoadMoreButtons(cdp);
+        case 'browser_skeleton_elements':           return await getSkeletonElements(cdp);
+        case 'browser_spinners':                    return await getSpinners(cdp);
+        case 'browser_progress_bars2':              return await getProgressBars2(cdp);
+        case 'browser_deferred_images':             return await getDeferredImages(cdp);
+        case 'browser_virtual_lists':               return await getVirtualLists(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
