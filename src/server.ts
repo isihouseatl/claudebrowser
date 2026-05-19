@@ -96,14 +96,14 @@ import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, get
 import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange, injectMutationMonitor, getMutationLog, clearMutationLog, waitForMutation2, injectIntersectionMonitor, getIntersectionLog, clearIntersectionLog, isElementVisible } from './cdp/observer';
-import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
+import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable, getDraggableElements3, getDropTargets2, getSortableLists, getTouchActionElements2, getPointerEvents3, getResizableElements, getCursorStyles2, getDragHandles } from './cdp/drag2';
 import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton, getOpenDialogs2, getDialogCount, getAlertElements, getTooltips, getPopupMenus, getNotifications, getFocusTrap, getDrawers, getDialogElements2, getOpenDialogs3, getModalRoles, getTooltips3, getAlerts, getPopoverElements2, getOverlays2, getAriaExpanded3 } from './cdp/dialog2';
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount, isCanvasBlank, getWebGLInfo, captureCanvasDataUrl, getCanvasTransform, getVideoElements } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2, getNavigationTiming4, getPaintTimings, getLargestContentfulPaint, getFirstInputDelay, getCumulativeLayoutShift, getResourceCount2, getTimeToFirstByte2, getLongTasks2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
 import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
-import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState } from './cdp/history';
+import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState, getHistoryLength3, getSessionHistory, getReferrer, getVisibilityState, getPageLifecycle, getBfcacheEligibility, getHashNavigation, getPushStateUsage } from './cdp/history';
 import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent, injectEventMonitor, getEventLog, clearEventLog, getClickListeners, getKeyboardListeners, getScrollListeners, getSubmitListeners, getResizeListeners, getClickableElements, getKeyboardHandlers, getFormSubmitHandlers, getEventListenerCount2, getMutationObservers, getResizeObservers, getIntersectionObservers, getCustomEvents } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
@@ -135,7 +135,7 @@ import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecently
 import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
 import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
 import { getScrollPositionFull, getViewportDimensions, getElementsInViewport, getAboveTheFold, getOffscreenElements, getStickyElements, getOverflowContainers, getZIndexStack } from './cdp/viewport2';
-import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, getLinkRelTags, getHreflangTags2, getPageLanguage2, getStructuredDataCount } from './cdp/print2';
+import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, getLinkRelTags, getHreflangTags2, getPageLanguage2, getStructuredDataCount, getPrintMediaRules, getPageBreakElements, getPrintHiddenElements, getPrintVisibleElements, getPrintStylesheets, getPaperSizeHints, getPrintFontSizes, getOrphanWidowSettings } from './cdp/print2';
 import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getGridCount, getGridGaps, getAbsoluteElements, getLayoutShift2 } from './cdp/grid2';
 import { getTouchSupport3, getViewportMeta, getOrientationInfo, getVirtualKeyboardElements, getTouchActionElements, getScrollSnapElements, getAppleMobileMetaTags, getPWAManifest } from './cdp/touch2';
 import { getJsHeapSize2, getPerformanceMarks3, getPerformanceMeasures, getScriptCount, getConsoleErrors2, getResourceTiming, getNavigationEntries, getStylesheetCount2 } from './cdp/perf3';
@@ -1955,6 +1955,33 @@ const TOOLS = [
   { name: 'browser_product_variants', description: 'Color/size variant selects: [{tag, id, class_preview, optionCount, selectedValue}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_shipping_info', description: 'Shipping/delivery text blocks: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_promo_elements', description: 'Promo/discount/coupon elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Drag2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_draggable_elements3', description: 'Elements with draggable=true: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_targets2', description: 'Elements with drop patterns: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sortable_lists', description: 'Lists with sortable indicators: [{tag, id, class_preview, itemCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_touch_action_elements2', description: 'Elements with non-auto touch-action: [{tag, id, class_preview, touchAction}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pointer_events3', description: 'Elements with pointer-events:none: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resizable_elements', description: 'Elements with resize CSS: [{tag, id, class_preview, resize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cursor_styles2', description: 'Cursor values on interactive elements: [{cursor, count, example_tag}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_handles', description: 'Drag handle elements: [{tag, id, class_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── History new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_history_length3', description: 'History length and state: {length, state_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_session_history', description: 'Session navigation: {length, scrollRestoration, stateExists}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_referrer', description: 'Page referrer: {referrer, hasReferrer}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_visibility_state', description: 'Page visibility: {visibilityState, hidden}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_lifecycle', description: 'Page lifecycle state: {readyState, loading, interactive, complete, navigationType}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_bfcache_eligibility', description: 'Back/forward cache hints: {hasUnloadListener, hasBeforeUnloadListener, bfcacheBlocked}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hash_navigation', description: 'Hash navigation info: {currentHash, hashLinks_count, currentHashTarget}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_push_state_usage', description: 'History API usage: {historyApiUsed, hasPopstateListener, stateType}', inputSchema: { type: 'object', properties: {} } },
+  // ── Print2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_print_media_rules', description: '@media print CSS rules: [{selector, property, value}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_break_elements', description: 'Elements with page-break CSS: [{tag, id, pageBreakBefore, pageBreakAfter, breakBefore, breakAfter}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_hidden_elements', description: 'Elements with no-print/hide-print classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_visible_elements', description: 'Elements with print-only/show-print classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_stylesheets', description: 'Stylesheets with media=print: [{href_preview, media}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paper_size_hints', description: '@page CSS rules: [{size, margin, orientation}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_font_sizes', description: 'Elements with font-size <12px: [{tag, id, fontSize}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_orphan_widow_settings', description: 'Elements with non-default orphans/widows: [{tag, id, orphans, widows}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3820,6 +3847,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_product_variants':         return await getProductVariants(cdp);
         case 'browser_shipping_info':            return await getShippingInfo(cdp);
         case 'browser_promo_elements':           return await getPromoElements(cdp);
+                // drag2 new
+        case 'browser_draggable_elements3':      return await getDraggableElements3(cdp);
+        case 'browser_drop_targets2':            return await getDropTargets2(cdp);
+        case 'browser_sortable_lists':           return await getSortableLists(cdp);
+        case 'browser_touch_action_elements2':   return await getTouchActionElements2(cdp);
+        case 'browser_pointer_events3':          return await getPointerEvents3(cdp);
+        case 'browser_resizable_elements':       return await getResizableElements(cdp);
+        case 'browser_cursor_styles2':           return await getCursorStyles2(cdp);
+        case 'browser_drag_handles':             return await getDragHandles(cdp);
+        // history new
+        case 'browser_history_length3':          return await getHistoryLength3(cdp);
+        case 'browser_session_history':          return await getSessionHistory(cdp);
+        case 'browser_referrer':                 return await getReferrer(cdp);
+        case 'browser_visibility_state':         return await getVisibilityState(cdp);
+        case 'browser_page_lifecycle':           return await getPageLifecycle(cdp);
+        case 'browser_bfcache_eligibility':      return await getBfcacheEligibility(cdp);
+        case 'browser_hash_navigation':          return await getHashNavigation(cdp);
+        case 'browser_push_state_usage':         return await getPushStateUsage(cdp);
+        // print2 new
+        case 'browser_print_media_rules':        return await getPrintMediaRules(cdp);
+        case 'browser_page_break_elements':      return await getPageBreakElements(cdp);
+        case 'browser_print_hidden_elements':    return await getPrintHiddenElements(cdp);
+        case 'browser_print_visible_elements':   return await getPrintVisibleElements(cdp);
+        case 'browser_print_stylesheets':        return await getPrintStylesheets(cdp);
+        case 'browser_paper_size_hints':         return await getPaperSizeHints(cdp);
+        case 'browser_print_font_sizes':         return await getPrintFontSizes(cdp);
+        case 'browser_orphan_widow_settings':    return await getOrphanWidowSettings(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

@@ -240,3 +240,341 @@ export async function getStructuredDataCount(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+/**
+ * getPrintMediaRules — @media print rules from stylesheets: [{selector, property, value}] (max 30).
+ * Iterates all stylesheets, finds CSSMediaRule where conditionText includes "print",
+ * then collects inner style rules.
+ */
+export async function getPrintMediaRules(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var rules = [];
+  var sheets = Array.from(document.styleSheets);
+  for (var si = 0; si < sheets.length && rules.length < 30; si++) {
+    var sheet = sheets[si];
+    var cssRules;
+    try { cssRules = sheet.cssRules; } catch(e) { continue; }
+    if (!cssRules) continue;
+    for (var ri = 0; ri < cssRules.length && rules.length < 30; ri++) {
+      var rule = cssRules[ri];
+      if (rule.type === 4 && rule.conditionText && rule.conditionText.indexOf('print') !== -1) {
+        var innerRules = rule.cssRules;
+        if (!innerRules) continue;
+        for (var ii = 0; ii < innerRules.length && rules.length < 30; ii++) {
+          var inner = innerRules[ii];
+          if (inner.type === 1 && inner.style) {
+            var selector = inner.selectorText || '';
+            for (var pi = 0; pi < inner.style.length; pi++) {
+              var prop = inner.style[pi];
+              rules.push({ selector: selector.slice(0, 80), property: prop, value: (inner.style.getPropertyValue(prop) || '').slice(0, 80) });
+              if (rules.length >= 30) break;
+            }
+          }
+        }
+      }
+    }
+  }
+  return JSON.stringify(rules);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPageBreakElements — Elements with page-break or break-before/after CSS: (max 20)
+ * [{tag, id, pageBreakBefore, pageBreakAfter, breakBefore, breakAfter}]
+ * Checks computed styles for non-auto page-break values.
+ */
+export async function getPageBreakElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var results = [];
+  var els = Array.from(document.querySelectorAll('*'));
+  for (var i = 0; i < els.length && results.length < 20; i++) {
+    var el = els[i];
+    var cs = window.getComputedStyle(el);
+    var pbb = cs.pageBreakBefore;
+    var pba = cs.pageBreakAfter;
+    var bb = cs.breakBefore;
+    var ba = cs.breakAfter;
+    if (pbb !== 'auto' || pba !== 'auto' || (bb && bb !== 'auto') || (ba && ba !== 'auto')) {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: (el.id || '').slice(0, 40),
+        pageBreakBefore: pbb,
+        pageBreakAfter: pba,
+        breakBefore: bb || '',
+        breakAfter: ba || ''
+      });
+    }
+  }
+  return JSON.stringify(results);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPrintHiddenElements — Elements with @media print display:none (heuristic): (max 20)
+ * [{tag, id, class_preview}]
+ * Looks for class patterns: no-print, hide-print, print-hidden, screen-only.
+ */
+export async function getPrintHiddenElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var sel = '[class*="no-print"], [class*="hide-print"], [class*="print-hidden"], [class*="screen-only"]';
+  var els = Array.from(document.querySelectorAll(sel)).slice(0, 20);
+  return JSON.stringify(els.map(function(el) {
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: (el.id || '').slice(0, 40),
+      class_preview: (el.className || '').toString().slice(0, 80)
+    };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPrintVisibleElements — Elements visible only in print: (max 20)
+ * [{tag, id, class_preview}]
+ * Looks for class patterns: print-only, print-visible, show-print.
+ */
+export async function getPrintVisibleElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var sel = '[class*="print-only"], [class*="print-visible"], [class*="show-print"]';
+  var els = Array.from(document.querySelectorAll(sel)).slice(0, 20);
+  return JSON.stringify(els.map(function(el) {
+    return {
+      tag: el.tagName.toLowerCase(),
+      id: (el.id || '').slice(0, 40),
+      class_preview: (el.className || '').toString().slice(0, 80)
+    };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPrintStylesheets — Stylesheets with media="print": [{href_preview, media}] (max 10).
+ * Queries link[rel="stylesheet"] elements with media containing "print".
+ */
+export async function getPrintStylesheets(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var els = Array.from(document.querySelectorAll('link[rel="stylesheet"][media="print"], link[rel="stylesheet"][media*="print"]')).slice(0, 10);
+  return JSON.stringify(els.map(function(el) {
+    return {
+      href_preview: (el.getAttribute('href') || '').slice(0, 80),
+      media: el.getAttribute('media') || ''
+    };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPaperSizeHints — @page rules from stylesheets: [{size, margin, orientation}] (max 5).
+ * Looks for CSSPageRule in all accessible stylesheets.
+ */
+export async function getPaperSizeHints(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var results = [];
+  var sheets = Array.from(document.styleSheets);
+  for (var si = 0; si < sheets.length && results.length < 5; si++) {
+    var sheet = sheets[si];
+    var cssRules;
+    try { cssRules = sheet.cssRules; } catch(e) { continue; }
+    if (!cssRules) continue;
+    for (var ri = 0; ri < cssRules.length && results.length < 5; ri++) {
+      var rule = cssRules[ri];
+      if (rule.type === 6 && rule.style) {
+        var size = rule.style.getPropertyValue('size') || rule.style.size || '';
+        var margin = rule.style.getPropertyValue('margin') || rule.style.margin || '';
+        var orientation = size.indexOf('landscape') !== -1 ? 'landscape' : size.indexOf('portrait') !== -1 ? 'portrait' : '';
+        results.push({ size: size.slice(0, 80), margin: margin.slice(0, 80), orientation: orientation });
+      }
+    }
+  }
+  return JSON.stringify(results);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPrintFontSizes — Elements with font-size < 12px (print small-font heuristic):
+ * [{tag, id, fontSize}] (max 20).
+ */
+export async function getPrintFontSizes(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var results = [];
+  var els = Array.from(document.querySelectorAll('*'));
+  for (var i = 0; i < els.length && results.length < 20; i++) {
+    var el = els[i];
+    var fs = window.getComputedStyle(el).fontSize;
+    if (fs) {
+      var px = parseFloat(fs);
+      if (!isNaN(px) && px < 12) {
+        results.push({
+          tag: el.tagName.toLowerCase(),
+          id: (el.id || '').slice(0, 40),
+          fontSize: fs
+        });
+      }
+    }
+  }
+  return JSON.stringify(results);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getOrphanWidowSettings — Elements with non-default orphans/widows CSS: (max 20)
+ * [{tag, id, orphans, widows}]
+ * Filters elements where orphans or widows differ from browser default of '2'.
+ */
+export async function getOrphanWidowSettings(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var results = [];
+  var els = Array.from(document.querySelectorAll('*'));
+  for (var i = 0; i < els.length && results.length < 20; i++) {
+    var el = els[i];
+    var cs = window.getComputedStyle(el);
+    var orphans = cs.orphans;
+    var widows = cs.widows;
+    if (orphans !== '2' || widows !== '2') {
+      results.push({
+        tag: el.tagName.toLowerCase(),
+        id: (el.id || '').slice(0, 40),
+        orphans: orphans || '',
+        widows: widows || ''
+      });
+    }
+  }
+  return JSON.stringify(results);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
