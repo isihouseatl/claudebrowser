@@ -170,6 +170,9 @@ import { getLazyImages3, getInfiniteScrollContainers, getLoadMoreButtons, getSke
 import { getNotificationPermission3, getToastElements, getBannerElements2, getAlertBanners, getCookieBanners, getAriaLiveRegions, getStatusMessages, getDismissButtons } from './cdp/notification2';
 import { getVideoElements3, getAudioElements2, getEmbedElements, getObjectElements, getYouTubeEmbeds, getVideoSources, getMediaTracks, getPictureElements2 } from './cdp/embed2';
 import { getDocumentLanguage, getLangAttributes, getDirAttributes, getHreflangLinks, getTranslationMeta, getDateTimeElements, getCurrencySymbols, getRtlElements } from './cdp/i18n2';
+import { getWebAppManifest, getThemeColorMeta, getAppleTouchIcons, getPwaInstallPrompt, getAppIcons, getPwaDisplayMode, getOfflineReadiness, getWebShareSupport } from './cdp/pwa2';
+import { getTextOverflow, getWhitespace, getLetterSpacing, getTextTransform, getTextDecoration, getTextShadow, getTextAlign, getVerticalAlign } from './cdp/typography2';
+import { getAddToCartButtons, getProductImages, getCartIndicator, getWishlistButtons, getQuantityInputs, getProductVariants, getShippingInfo, getPromoElements } from './cdp/ecommerce2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1925,6 +1928,33 @@ const TOOLS = [
   { name: 'browser_date_time_elements', description: 'All <time> elements: [{id, datetime, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_currency_symbols', description: 'Elements containing currency symbols: [{tag, id, symbol, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_rtl_elements', description: 'Elements with dir=rtl or computed RTL direction: [{tag, id, class_preview, dir}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── PWA2 ──────────────────────────────────────────────────────────────────────────
+  { name: 'browser_web_app_manifest', description: 'link[rel="manifest"]: {exists, href}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_color_meta', description: 'meta[name="theme-color"]: {color, exists}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_apple_touch_icons', description: 'Apple touch icon links: [{rel, href_preview, sizes}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pwa_install_prompt', description: 'PWA install prompt state: {promptDeferred, standalone}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_app_icons', description: 'All icon link elements: [{rel, href_preview, sizes, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pwa_display_mode', description: 'Display mode checks: {standalone, fullscreen, minimalUi, browser}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_offline_readiness', description: 'Service worker + cache API: {hasServiceWorker, hasCacheAPI, registrationCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_share_support', description: 'Web Share API support: {shareSupported, shareFilesSupported, shareTargetSupported}', inputSchema: { type: 'object', properties: {} } },
+  // ── Typography2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_text_overflow', description: 'Elements with text-overflow:ellipsis: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_whitespace', description: 'Elements with white-space:nowrap: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_letter_spacing', description: 'Elements with non-normal letter-spacing: [{tag, id, class_preview, letterSpacing}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_transform', description: 'Elements with text-transform (not none): [{tag, id, class_preview, textTransform}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_decoration', description: 'Elements with text-decoration (not none): [{tag, id, class_preview, textDecoration_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_shadow', description: 'Elements with text-shadow: [{tag, id, class_preview, textShadow_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_align', description: 'text-align distribution: [{textAlign, count, example_tag}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_vertical_align', description: 'Elements with vertical-align (not baseline): [{tag, id, class_preview, verticalAlign}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Ecommerce2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_add_to_cart_buttons', description: 'Add-to-cart/buy buttons: [{tag, id, class_preview, text_preview, disabled}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_images', description: 'Product/gallery images: [{src_preview, alt_preview, class_preview, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cart_indicator', description: 'Cart count badges: [{tag, id, class_preview, text_preview, ariaLabel_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wishlist_buttons', description: 'Wishlist/favorite buttons: [{tag, id, class_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_quantity_inputs', description: 'Quantity input fields: [{tag, id, name, value, min, max, type}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_variants', description: 'Color/size variant selects: [{tag, id, class_preview, optionCount, selectedValue}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shipping_info', description: 'Shipping/delivery text blocks: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_promo_elements', description: 'Promo/discount/coupon elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3763,6 +3793,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_date_time_elements':       return await getDateTimeElements(cdp);
         case 'browser_currency_symbols':         return await getCurrencySymbols(cdp);
         case 'browser_rtl_elements':             return await getRtlElements(cdp);
+                // pwa2
+        case 'browser_web_app_manifest':         return await getWebAppManifest(cdp);
+        case 'browser_theme_color_meta':         return await getThemeColorMeta(cdp);
+        case 'browser_apple_touch_icons':        return await getAppleTouchIcons(cdp);
+        case 'browser_pwa_install_prompt':       return await getPwaInstallPrompt(cdp);
+        case 'browser_app_icons':                return await getAppIcons(cdp);
+        case 'browser_pwa_display_mode':         return await getPwaDisplayMode(cdp);
+        case 'browser_offline_readiness':        return await getOfflineReadiness(cdp);
+        case 'browser_web_share_support':        return await getWebShareSupport(cdp);
+        // typography2
+        case 'browser_text_overflow':            return await getTextOverflow(cdp);
+        case 'browser_whitespace':               return await getWhitespace(cdp);
+        case 'browser_letter_spacing':           return await getLetterSpacing(cdp);
+        case 'browser_text_transform':           return await getTextTransform(cdp);
+        case 'browser_text_decoration':          return await getTextDecoration(cdp);
+        case 'browser_text_shadow':              return await getTextShadow(cdp);
+        case 'browser_text_align':               return await getTextAlign(cdp);
+        case 'browser_vertical_align':           return await getVerticalAlign(cdp);
+        // ecommerce2
+        case 'browser_add_to_cart_buttons':      return await getAddToCartButtons(cdp);
+        case 'browser_product_images':           return await getProductImages(cdp);
+        case 'browser_cart_indicator':           return await getCartIndicator(cdp);
+        case 'browser_wishlist_buttons':         return await getWishlistButtons(cdp);
+        case 'browser_quantity_inputs':          return await getQuantityInputs(cdp);
+        case 'browser_product_variants':         return await getProductVariants(cdp);
+        case 'browser_shipping_info':            return await getShippingInfo(cdp);
+        case 'browser_promo_elements':           return await getPromoElements(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
