@@ -212,6 +212,9 @@ import { getResizableElements2, getResizeHandles, getSplitPanels, getResizeObser
 import { getContextMenuItems, getContextMenuTriggers, getRightClickTargets, getContextMenuState, getMenuItemElements, getContextMenuPopup, getContextActions, getContextApiUsage } from './cdp/context2';
 import { getNetworkStatus, getConnectionType2, getOnlineState, getNetworkInfo2, getServiceWorkers, getFetchState, getXhrState, getNetworkApiUsage } from './cdp/network4';
 import { getShadowRoots3, getShadowHosts3, getWebComponents3, getCustomElements3, getShadowState, getShadowStyles3, getShadowSlots3, getShadowApiUsage } from './cdp/shadow3';
+import { getVirtualScrollContainers, getVirtualListItems, getVirtualGridItems, getVirtualState, getRecyclerViewElements, getVirtualItemCount, getVirtualApiUsage, getWindowedListElements } from './cdp/virtual2';
+import { getIntersectionObservers3, getLazyLoadImages, getLazyLoadElements, getIntersectionState, getStickyHeaders2, getInViewElements, getObservedElements, getIntersectionApiUsage } from './cdp/intersection2';
+import { getMutationObservers3, getDynamicContent, getLoadingSpinners, getSkeletonScreens, getMutationState, getLiveRegions2, getPollingElements, getMutationApiUsage } from './cdp/mutation3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2423,6 +2426,33 @@ const TOOLS = [
   { name: 'browser_shadow_styles3', description: 'adoptedStyleSheets in shadow roots: {count, totalRules}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_shadow_slots3', description: 'Slot elements in shadow roots: [{name, assignedCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_shadow_api_usage', description: 'Web Components usage: {hasCustomElements, hasShadowDom, hasTemplateElement, hasSlots}', inputSchema: { type: 'object', properties: {} } },
+  // ── Virtual2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_virtual_scroll_containers', description: 'Virtual scroll containers: [{tag, id, class_preview, height, overflow}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_list_items', description: 'Visible items in virtual lists: [{tag, id, class_preview, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_grid_items', description: 'Visible items in virtual grids: [{tag, id, class_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_state', description: 'Virtual list summary: {hasVirtualScroll, containerCount, visibleItemCount, totalHeight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_recycler_view_elements', description: 'Recycler/windowing containers: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_item_count', description: 'Virtual container item estimates: {totalItems, visibleItems, estimatedHeight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_virtual_api_usage', description: 'Detected virtual scroll libraries: {hasReactVirtual, hasVirtual, hasTanstackVirtual, hasRecyclerView, hasClipperList}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_windowed_list_elements', description: 'Elements with windowing attributes: [{tag, id, index_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Intersection2 new ─────────────────────────────────────────────────────────────
+  { name: 'browser_intersection_observers3', description: 'IntersectionObserver usage: {hasIntersectionObserver, observerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lazy_load_images', description: 'Images with loading=lazy: [{id, src_preview, class_preview, loaded}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lazy_load_elements', description: 'Elements with data-src/data-lazy: [{tag, id, dataSrc_preview, class_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_intersection_state', description: 'Lazy load summary: {hasLazyImages, lazyCount, loadedCount, pendingCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sticky_headers2', description: 'Sticky headers (position:sticky top:0): [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_in_view_elements', description: 'Elements currently in viewport: {count, aboveCount, belowCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_observed_elements', description: 'Elements likely watched by IntersectionObserver: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_intersection_api_usage', description: 'Detected lazy-load patterns: {hasNativeLazy, hasIntersectionObserver, hasLazyLib, hasDataSrc}', inputSchema: { type: 'object', properties: {} } },
+  // ── Mutation3 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_mutation_observers3', description: 'MutationObserver usage: {hasObserver, observerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dynamic_content', description: 'Dynamically updated elements: [{tag, id, class_preview, ariaLive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_loading_spinners', description: 'Spinner/loader elements: [{tag, id, class_preview, visible}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_skeleton_screens', description: 'Skeleton loading placeholders: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mutation_state', description: 'Dynamic DOM summary: {hasMutationObserver, hasLiveRegions, hasSpinners, hasSkeletons}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_live_regions2', description: 'aria-live regions: [{tag, id, class_preview, ariaLive, ariaAtomic, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_polling_elements', description: 'Elements with data-poll/data-refresh: [{tag, id, interval_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mutation_api_usage', description: 'Detected dynamic patterns: {hasMutationObserver, hasAriaLive, hasPolling, hasWebSocket, hasSse}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4720,6 +4750,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_shadow_styles3':           return await getShadowStyles3(cdp);
         case 'browser_shadow_slots3':            return await getShadowSlots3(cdp);
         case 'browser_shadow_api_usage':         return await getShadowApiUsage(cdp);
+                // virtual2 new
+        case 'browser_virtual_scroll_containers': return await getVirtualScrollContainers(cdp);
+        case 'browser_virtual_list_items':        return await getVirtualListItems(cdp);
+        case 'browser_virtual_grid_items':        return await getVirtualGridItems(cdp);
+        case 'browser_virtual_state':             return await getVirtualState(cdp);
+        case 'browser_recycler_view_elements':    return await getRecyclerViewElements(cdp);
+        case 'browser_virtual_item_count':        return await getVirtualItemCount(cdp);
+        case 'browser_virtual_api_usage':         return await getVirtualApiUsage(cdp);
+        case 'browser_windowed_list_elements':    return await getWindowedListElements(cdp);
+        // intersection2 new
+        case 'browser_intersection_observers3':  return await getIntersectionObservers3(cdp);
+        case 'browser_lazy_load_images':         return await getLazyLoadImages(cdp);
+        case 'browser_lazy_load_elements':       return await getLazyLoadElements(cdp);
+        case 'browser_intersection_state':       return await getIntersectionState(cdp);
+        case 'browser_sticky_headers2':          return await getStickyHeaders2(cdp);
+        case 'browser_in_view_elements':         return await getInViewElements(cdp);
+        case 'browser_observed_elements':        return await getObservedElements(cdp);
+        case 'browser_intersection_api_usage':   return await getIntersectionApiUsage(cdp);
+        // mutation3 new
+        case 'browser_mutation_observers3':      return await getMutationObservers3(cdp);
+        case 'browser_dynamic_content':          return await getDynamicContent(cdp);
+        case 'browser_loading_spinners':         return await getLoadingSpinners(cdp);
+        case 'browser_skeleton_screens':         return await getSkeletonScreens(cdp);
+        case 'browser_mutation_state':           return await getMutationState(cdp);
+        case 'browser_live_regions2':            return await getLiveRegions2(cdp);
+        case 'browser_polling_elements':         return await getPollingElements(cdp);
+        case 'browser_mutation_api_usage':       return await getMutationApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
