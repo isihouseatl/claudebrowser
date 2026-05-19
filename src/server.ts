@@ -96,6 +96,9 @@ import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, get
 import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
 import { getComputedColor, getCssVariables as getCssVariables2, setCssVariable as setCssVariable2, getElementClasses, toggleClass, getComputedProperty, setInlineStyle as setInlineStyle2, getStylesheetCount } from './cdp/css2';
 import { waitForElementAdded, waitForElementRemoved as waitForElementRemoved2, waitForTextChange, waitForClassChange, getIntersectionRatio, waitForValueChange as waitForValueChange2, getResizeInfo, waitForAttributeChange } from './cdp/observer';
+import { getDraggableElements, getDropZones, simulateDragStart, simulateDragEnd, simulateDragEnter, simulateDragOver, simulateDrop, isDraggable } from './cdp/drag2';
+import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogReturnValue, isDialogOpen as isDialogOpenEl, getActiveModals, clickDialogButton } from './cdp/dialog2';
+import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount } from './cdp/canvas2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -904,6 +907,33 @@ const TOOLS = [
   { name: 'browser_service_worker_registrations', description: 'List all service worker registrations: scope and state', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_beacon_support', description: 'Check if navigator.sendBeacon is supported', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_page_referrer', description: 'Get document.referrer for the current page', inputSchema: { type: 'object', properties: {} } },
+  // ── Drag2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_draggable_elements', description: 'List all draggable elements on page (draggable attr or role)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drop_zones', description: 'List all drop-zone elements on page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_simulate_drag_start', description: 'Dispatch dragstart event on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_simulate_drag_end', description: 'Dispatch dragend event on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_simulate_drag_enter', description: 'Dispatch dragenter event on target element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_simulate_drag_over', description: 'Dispatch dragover event on target element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_simulate_drop', description: 'Dispatch drop event on target element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_draggable', description: 'Check if element has draggable attribute set to true', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Dialog2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_dialog_elements', description: 'List all <dialog> elements on page with open state and id', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_dialogs', description: 'List only open <dialog> elements', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_dialog', description: 'Open a <dialog> element by selector (calls showModal or show)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, modal: { type: 'boolean' } }, required: ['selector'] } },
+  { name: 'browser_close_dialog', description: 'Close a <dialog> element by selector', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, return_value: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_dialog_return_value', description: 'Get returnValue of a <dialog> element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_is_dialog_open_el', description: 'Check if a <dialog> element is currently open', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_active_modals', description: 'List elements in the top layer (modal dialogs, popovers)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_click_dialog_button', description: 'Click a button inside a dialog by its text', inputSchema: { type: 'object', properties: { dialog_selector: { type: 'string' }, button_text: { type: 'string' } }, required: ['dialog_selector', 'button_text'] } },
+  // ── Canvas2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_canvas_elements2', description: 'List all canvas elements: id, class, width, height, webgl status', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canvas_size', description: 'Get width and height of a canvas element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_clear_canvas2', description: 'Clear all pixels on a canvas element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_canvas_data_url', description: 'Export canvas as base64 PNG data URL', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_draw_rect_canvas2', description: 'Draw a filled rectangle on a canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, color: { type: 'string' } }, required: ['selector', 'x', 'y', 'width', 'height'] } },
+  { name: 'browser_canvas_pixel_color2', description: 'Get RGBA color of a pixel at (x,y) on canvas', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
+  { name: 'browser_is_webgl_canvas', description: 'Check if canvas uses WebGL context', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_canvas_count', description: 'Count all canvas elements on the page', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1794,6 +1824,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_service_worker_registrations': return await getServiceWorkerRegistrations(cdp);
         case 'browser_beacon_support':           return await getBeaconSupport(cdp);
         case 'browser_page_referrer':            return await getPageReferrer(cdp);
+                // drag2
+        case 'browser_draggable_elements':       return await getDraggableElements(cdp);
+        case 'browser_drop_zones':               return await getDropZones(cdp);
+        case 'browser_simulate_drag_start':      return await simulateDragStart(cdp, a.selector as string);
+        case 'browser_simulate_drag_end':        return await simulateDragEnd(cdp, a.selector as string);
+        case 'browser_simulate_drag_enter':      return await simulateDragEnter(cdp, a.selector as string);
+        case 'browser_simulate_drag_over':       return await simulateDragOver(cdp, a.selector as string);
+        case 'browser_simulate_drop':            return await simulateDrop(cdp, a.selector as string);
+        case 'browser_is_draggable':             return await isDraggable(cdp, a.selector as string);
+        // dialog2
+        case 'browser_dialog_elements':          return await getDialogElements(cdp);
+        case 'browser_open_dialogs':             return await getOpenDialogs(cdp);
+        case 'browser_open_dialog':              return await openDialog(cdp, a.selector as string);
+        case 'browser_close_dialog':             return await closeDialog(cdp, a.selector as string);
+        case 'browser_dialog_return_value':      return await getDialogReturnValue(cdp, a.selector as string);
+        case 'browser_is_dialog_open_el':        return await isDialogOpenEl(cdp, a.selector as string);
+        case 'browser_active_modals':            return await getActiveModals(cdp);
+        case 'browser_click_dialog_button':      return await clickDialogButton(cdp, a.dialog_selector as string);
+        // canvas2
+        case 'browser_canvas_elements2':         return await getCanvasElements2(cdp);
+        case 'browser_canvas_size':              return await getCanvasSize(cdp, a.selector as string);
+        case 'browser_clear_canvas2':            return await clearCanvas2(cdp, a.selector as string);
+        case 'browser_canvas_data_url':          return await getCanvasDataUrl(cdp, a.selector as string);
+        case 'browser_draw_rect_canvas2':        return await drawRectOnCanvas2(cdp, a.selector as string, a.x as number, a.y as number, a.width as number, a.height as number);
+        case 'browser_canvas_pixel_color2':      return await getCanvasPixelColor2(cdp, a.selector as string, a.x as number, a.y as number);
+        case 'browser_is_webgl_canvas':          return await isWebGLCanvas(cdp, a.selector as string);
+        case 'browser_canvas_count':             return await getCanvasCount(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
