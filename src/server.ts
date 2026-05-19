@@ -88,7 +88,7 @@ import { findElementsByText, getPageTextBlocks, findByRegex, getHeadings, getPar
 import { getBrowserInfo, getScreenInfo, isMobileDevice, isTouchDevice, getMediaCapabilities, getFeatureSupport, getNetworkType, getTimeInfo } from './cdp/device';
 import { startWatchdog, stopWatchdog } from './chrome';
 import { getFormFields, getFormValidationErrors, isFormValid, getRequiredFields, getEmptyRequiredFields, listSelectOptions, setMultipleSelectValues, getCheckedCheckboxes } from './cdp/form2';
-import { getVideoState, muteMedia, unmuteMedia } from './cdp/media2';
+import { getVideoState, muteMedia, unmuteMedia, getAllMediaElements, playMedia as playMedia2, pauseMedia as pauseMedia2, setMediaVolume as setMediaVolume2, seekMedia as seekMedia2, getMediaState } from './cdp/media2';
 import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, setAnimationPlaybackRate, getPageAnimationCount, cancelAnimations } from './cdp/animation';
 import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
 import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyEvent, triggerInputEvent, triggerFocusEvent, waitForDomMutation, getFormSubmitUrl } from './cdp/events2';
@@ -101,6 +101,8 @@ import { getDialogElements, getOpenDialogs, openDialog, closeDialog, getDialogRe
 import { getCanvasElements as getCanvasElements2, getCanvasSize, clearCanvas as clearCanvas2, getCanvasDataUrl, drawRectOnCanvas as drawRectOnCanvas2, getCanvasPixelColor as getCanvasPixelColor2, isWebGLCanvas, getCanvasCount } from './cdp/canvas2';
 import { getDomContentLoadedTime, getLoadEventTime, getTimeToFirstByte, getPageTimingSummary, getFirstPaint, getFirstContentfulPaint, getResourceCount, getSlowResources as getSlowResources2 } from './cdp/timing2';
 import { setGeolocation as setGeolocationNew, clearGeolocation as clearGeolocationNew, getGeolocationPermission, isGeolocationSupported, setDeviceOrientation, getTimezone as getTimezoneInfo, setTimezoneOverride, getLocale as getLocaleInfo } from './cdp/geolocation';
+import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorkerCountStatus, injectWorkerRegistry, postMessageToSharedWorker, isBroadcastChannelSupported, getWorkerRegistryEntries, clearWorkerRegistry } from './cdp/worker';
+import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -963,6 +965,31 @@ const TOOLS = [
   { name: 'browser_timezone_info', description: 'Get browser timezone from Intl.DateTimeFormat', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_set_timezone', description: 'Override browser timezone via CDP Emulation', inputSchema: { type: 'object', properties: { timezone_id: { type: 'string' } }, required: ['timezone_id'] } },
   { name: 'browser_locale_info', description: 'Get navigator.language and navigator.languages', inputSchema: { type: 'object', properties: {} } },
+  // ── Worker ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_worker_supported', description: 'Check if Web Workers are supported', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shared_worker_supported', description: 'Check if SharedWorker is supported', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_count_status', description: 'Get count of workers tracked in injected registry', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_inject_worker_registry', description: 'Inject a Worker constructor patch that tracks created workers', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_post_shared_worker_message', description: 'Post a message to a named BroadcastChannel', inputSchema: { type: 'object', properties: { name: { type: 'string' }, message: { type: 'string' } }, required: ['name', 'message'] } },
+  { name: 'browser_broadcast_channel_supported', description: 'Check if BroadcastChannel API is supported', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_worker_registry', description: 'Get all entries in the injected worker registry', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_worker_registry', description: 'Clear the injected worker registry', inputSchema: { type: 'object', properties: {} } },
+  // ── Accessibility2 ───────────────────────────────────────────────────────────────
+  { name: 'browser_aria_roles', description: 'List all elements with explicit role attributes', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_labels', description: 'List elements with aria-label or aria-labelledby', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_descriptions', description: 'List elements with aria-describedby or aria-description', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_landmarks', description: 'List ARIA landmark elements on the page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_order', description: 'Get elements in tab order (positive tabindex first, then DOM order)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focusable2', description: 'List all focusable elements excluding tabindex=-1', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_expanded', description: 'List elements with aria-expanded attribute and current value', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_hidden', description: 'List elements with aria-hidden="true"', inputSchema: { type: 'object', properties: {} } },
+  // ── Media2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_all_media', description: 'List all audio and video elements: src, paused, muted, duration, currentTime', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_play2', description: 'Call .play() on a media element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_pause2', description: 'Call .pause() on a media element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_volume', description: 'Set media element volume (0.0–1.0)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, volume: { type: 'number' } }, required: ['selector', 'volume'] } },
+  { name: 'browser_seek2', description: 'Seek media element to time in seconds', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, time: { type: 'number' } }, required: ['selector', 'time'] } },
+  { name: 'browser_media_state', description: 'Get full state of media element: paused, muted, volume, currentTime, duration, src, etc.', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1907,6 +1934,31 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_timezone_info':            return await getTimezoneInfo(cdp);
         case 'browser_set_timezone':             return await setTimezoneOverride(cdp, a.timezone_id as string);
         case 'browser_locale_info':              return await getLocaleInfo(cdp);
+                // worker
+        case 'browser_worker_supported':         return await isWorkerSupported(cdp);
+        case 'browser_shared_worker_supported':  return await isSharedWorkerSupported(cdp);
+        case 'browser_worker_count_status':      return await getWorkerCountStatus(cdp);
+        case 'browser_inject_worker_registry':   return await injectWorkerRegistry(cdp);
+        case 'browser_post_shared_worker_message': return await postMessageToSharedWorker(cdp, a.name as string, a.message as string);
+        case 'browser_broadcast_channel_supported': return await isBroadcastChannelSupported(cdp);
+        case 'browser_worker_registry':          return await getWorkerRegistryEntries(cdp);
+        case 'browser_clear_worker_registry':    return await clearWorkerRegistry(cdp);
+        // a11y2
+        case 'browser_aria_roles':               return await getAriaRoles(cdp);
+        case 'browser_aria_labels':              return await getAriaLabels(cdp);
+        case 'browser_aria_descriptions':        return await getAriaDescriptions(cdp);
+        case 'browser_landmarks':                return await getLandmarkElements(cdp);
+        case 'browser_tab_order':                return await getTabOrder(cdp);
+        case 'browser_focusable2':               return await getFocusableElements2(cdp);
+        case 'browser_aria_expanded':            return await getAriaExpanded(cdp);
+        case 'browser_aria_hidden':              return await getAriaHidden(cdp);
+        // media2 new
+        case 'browser_all_media':                return await getAllMediaElements(cdp);
+        case 'browser_play2':                    return await playMedia2(cdp, a.selector as string);
+        case 'browser_pause2':                   return await pauseMedia2(cdp, a.selector as string);
+        case 'browser_volume':                   return await setMediaVolume2(cdp, a.selector as string, a.volume as number);
+        case 'browser_seek2':                    return await seekMedia2(cdp, a.selector as string, a.time as number);
+        case 'browser_media_state':              return await getMediaState(cdp, a.selector as string);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
