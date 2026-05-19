@@ -218,3 +218,277 @@ export async function navigateTo(
   if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'Unknown error');
   return ok('Navigating to ' + url);
 }
+
+// --- New functions: URL inspection, history state, and navigation ---
+
+/**
+ * getCurrentUrl2 — Get full current URL breakdown:
+ * { href, protocol, hostname, pathname, search, hash, port, origin }
+ * (Renamed from getCurrentUrl to avoid collision with history.ts export.)
+ */
+export async function getCurrentUrl2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify({
+    href: location.href,
+    protocol: location.protocol,
+    hostname: location.hostname,
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+    port: location.port,
+    origin: location.origin
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getQueryParams3 — Parse URL query string into key-value pairs:
+ * { params: [{key, value}], count }
+ * (Renamed from getQueryParams to avoid collision with url.ts, and from
+ *  getQueryParams2 to avoid collision with existing export above.)
+ */
+export async function getQueryParams3(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var params = new URLSearchParams(location.search);
+  var result = [];
+  params.forEach(function(value, key) { result.push({ key: key, value: value.slice(0, 100) }); });
+  return JSON.stringify({ params: result, count: result.length });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getHashContent — Get URL hash without #, and whether it matches an element ID:
+ * { hash, hasTarget, targetTag }
+ */
+export async function getHashContent(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var hash = location.hash.replace(/^#/, '');
+  var target = hash ? document.getElementById(hash) : null;
+  return JSON.stringify({ hash: hash, hasTarget: !!target, targetTag: target ? target.tagName.toLowerCase() : null });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getHistoryLength2 — Get window.history.length and current state preview:
+ * { length, state }
+ * (Renamed from getHistoryLength to avoid collision with history.ts export.)
+ */
+export async function getHistoryLength2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify({ length: history.length, state: history.state ? JSON.stringify(history.state).slice(0, 100) : null });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getInternalLinks2 — Find all <a> links that go to the same origin:
+ * href, text (max 30).
+ * (Renamed from getInternalLinks to avoid collision with link.ts export.)
+ */
+export async function getInternalLinks2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var origin = location.origin;
+  var links = Array.from(document.querySelectorAll('a[href]')).filter(function(a) {
+    var href = a.href;
+    return href && (href.startsWith(origin) || href.startsWith('/') || href.startsWith('#') || !href.includes('://'));
+  });
+  return JSON.stringify(links.slice(0, 30).map(function(a) {
+    return { href: a.getAttribute('href').slice(0, 80), text: a.textContent.trim().slice(0, 50) };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getExternalLinks2 — Find all <a> links that go to a different origin:
+ * href, text, domain (max 30).
+ * (Renamed from getExternalLinks to avoid collision with link.ts and pageinfo.ts exports.)
+ */
+export async function getExternalLinks2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var origin = location.origin;
+  var links = Array.from(document.querySelectorAll('a[href]')).filter(function(a) {
+    return a.href && a.href.includes('://') && !a.href.startsWith(origin);
+  });
+  return JSON.stringify(links.slice(0, 30).map(function(a) {
+    try {
+      var u = new URL(a.href);
+      return { href: a.href.slice(0, 80), text: a.textContent.trim().slice(0, 40), domain: u.hostname };
+    } catch(e) {
+      return { href: a.href.slice(0, 80), text: '', domain: '' };
+    }
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getAnchors — Find all <a name="..."> anchor targets and elements with [id]
+ * that can be deep-linked: { anchors: [{id, tag, text}], count } (max 30).
+ */
+export async function getAnchors(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var named = Array.from(document.querySelectorAll('a[name],[id]')).filter(function(el) {
+    return el.id || el.getAttribute('name');
+  });
+  return JSON.stringify({
+    anchors: named.slice(0, 30).map(function(el) {
+      return {
+        id: el.id || el.getAttribute('name'),
+        tag: el.tagName.toLowerCase(),
+        text: el.textContent.trim().slice(0, 50)
+      };
+    }),
+    count: named.length
+  });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getRedirectMeta — Check for <meta http-equiv="refresh"> redirect:
+ * { hasRefresh, delay, targetUrl }
+ */
+export async function getRedirectMeta(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var meta = document.querySelector('meta[http-equiv="refresh"]');
+  if (!meta) return JSON.stringify({ hasRefresh: false });
+  var content = meta.getAttribute('content') || '';
+  var parts = content.split(';');
+  var delay = parseInt(parts[0]) || 0;
+  var url = parts[1] ? parts[1].replace(/^\s*url=/i, '').trim() : null;
+  return JSON.stringify({ hasRefresh: true, delay: delay, targetUrl: url });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}

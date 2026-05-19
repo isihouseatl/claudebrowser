@@ -2,7 +2,18 @@
 // Advanced HTML table interaction module — structural extraction, CSV export,
 // row selection detection, sort triggering, and visual highlighting.
 // Complements table2.ts (row/column/filter ops) and extract.ts (getTableData).
+//
+// Deep table and data grid inspection functions (getTableSummary3, getTableFirstRow,
+// getTableRowCount3, getSortableColumns, getTableCellByPosition, getColumnValues,
+// getPaginationElements, getDataAttributes3) appended below existing exports.
 import { CdpClient } from './client';
+
+function _ok3(value: unknown): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] };
+}
+function _err3(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: `Error: ${msg}` }] };
+}
 
 /**
  * Extract the full table as an array of row objects keyed by header text.
@@ -405,5 +416,264 @@ export async function highlightTableRow(
   }
   if (result.value === null || result.value === undefined) {
     throw new Error(`Table not found: ${selector}`);
+  }
+}
+
+/**
+ * getTableSummary3 — Get summary of all tables: id, caption, rows, cols,
+ * hasHeader, hasFoot (max 10 tables).
+ * Named getTableSummary3 to avoid collision with getTableSummary in table.ts.
+ */
+export async function getTableSummary3(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('table')).slice(0,10).map(function(t) {
+    return { id: t.id, caption: t.caption ? t.caption.textContent.trim().slice(0,50) : null, rows: t.rows.length, cols: t.rows[0] ? t.rows[0].cells.length : 0, hasHeader: !!t.querySelector('thead'), hasFoot: !!t.querySelector('tfoot') };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getTableFirstRow — Get text content of first row cells for each table:
+ * { tableIndex, cells }[] (max 5 tables, 20 cells each).
+ */
+export async function getTableFirstRow(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('table')).slice(0,5).map(function(t, i) {
+    var row = t.rows[0];
+    return { tableIndex: i, cells: row ? Array.from(row.cells).slice(0,20).map(function(c) { return c.textContent.trim().slice(0,50); }) : [] };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getTableRowCount3 — Count rows per table including thead/tbody/tfoot:
+ * tableIndex, totalRows, headerRows, bodyRows, footerRows (max 10 tables).
+ * Named getTableRowCount3 to avoid collision with getTableRowCount in table.ts/table2.ts.
+ */
+export async function getTableRowCount3(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  return JSON.stringify(Array.from(document.querySelectorAll('table')).slice(0,10).map(function(t, i) {
+    return { tableIndex: i, id: t.id, totalRows: t.rows.length, headerRows: t.querySelectorAll('thead tr').length, bodyRows: t.querySelectorAll('tbody tr').length, footerRows: t.querySelectorAll('tfoot tr').length };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getSortableColumns — Find th elements with role="columnheader" or aria-sort:
+ * text, ariasort, tableIndex (max 20 results).
+ */
+export async function getSortableColumns(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var result = [];
+  document.querySelectorAll('table').forEach(function(t, ti) {
+    t.querySelectorAll('th[aria-sort],th[role="columnheader"]').forEach(function(th) {
+      result.push({ text: th.textContent.trim().slice(0,40), ariasort: th.getAttribute('aria-sort'), tableIndex: ti });
+    });
+  });
+  return JSON.stringify(result.slice(0,20));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getTableCellByPosition — Get cell text at row/col position in the first
+ * table matching selector.
+ */
+export async function getTableCellByPosition(
+  client: CdpClient,
+  selector: string,
+  row: number,
+  col: number,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var t = document.querySelector(${JSON.stringify(selector)});
+  if (!t || t.tagName !== 'TABLE') return JSON.stringify({ found: false });
+  var r = t.rows[${Number(row)}]; if (!r) return JSON.stringify({ found: false, reason: 'row out of bounds', rows: t.rows.length });
+  var c = r.cells[${Number(col)}]; if (!c) return JSON.stringify({ found: false, reason: 'col out of bounds', cols: r.cells.length });
+  return JSON.stringify({ found: true, text: c.textContent.trim(), html: c.innerHTML.slice(0,100), rowSpan: c.rowSpan, colSpan: c.colSpan });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getColumnValues — Extract all values from a specific column index in a
+ * table (tbody rows only): { values, count } (max 50 values, 80 chars each).
+ */
+export async function getColumnValues(
+  client: CdpClient,
+  selector: string,
+  colIndex: number,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var t = document.querySelector(${JSON.stringify(selector)});
+  if (!t || t.tagName !== 'TABLE') return JSON.stringify({ found: false });
+  var values = [];
+  Array.from(t.querySelectorAll('tbody tr')).forEach(function(r) {
+    var cell = r.cells[${Number(colIndex)}];
+    if (cell) values.push(cell.textContent.trim().slice(0,80));
+  });
+  return JSON.stringify({ values: values.slice(0,50), count: values.length });
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getPaginationElements — Find pagination controls (aria-label containing
+ * "page", or class containing "pagination"/"pager"): tag, id, class, links
+ * (max 5 results).
+ */
+export async function getPaginationElements(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var result = [];
+  document.querySelectorAll('[aria-label*="page" i],[class*="pagination" i],[class*="pager" i]').forEach(function(el) {
+    if (result.length < 5) result.push({ tag: el.tagName.toLowerCase(), id: el.id, class: (el.className||'').slice(0,40), links: el.querySelectorAll('a,button').length });
+  });
+  return JSON.stringify(result);
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getDataAttributes3 — Get all data-* attributes across matching elements for
+ * a selector (max 20 elements). Named getDataAttributes3 to avoid collision
+ * with getDataAttributes in json2.ts.
+ */
+export async function getDataAttributes3(
+  client: CdpClient,
+  selector: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression: `
+(function() {
+  var els = document.querySelectorAll(${JSON.stringify(selector)});
+  return JSON.stringify(Array.from(els).slice(0,20).map(function(el) {
+    var data = {};
+    Array.from(el.attributes).forEach(function(a) { if (a.name.startsWith('data-')) data[a.name] = a.value.slice(0,50); });
+    return { tag: el.tagName.toLowerCase(), id: el.id, data: data };
+  }));
+})()
+`.trim(),
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return _err3(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return _err3(e instanceof Error ? e.message : String(e));
   }
 }

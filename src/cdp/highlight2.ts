@@ -1,5 +1,17 @@
 // src/cdp/highlight2.ts
-import { CdpClient } from './client';
+// Visual overlay and highlighting functions (div/label injection, bounding boxes).
+//
+// Naming notes (new functions added below):
+//   highlightElement2  — highlightElement already in server.ts (browser_highlight_element)
+//   clearHighlights2   — clearHighlights already in server.ts (browser_clear_highlights)
+//   flashElement2      — flashElement already in highlight2.ts (original) + server.ts
+//   clearAllOverlays2  — clearAllOverlays already exported below (original)
+
+import type { CdpClient } from './client';
+
+// ---------------------------------------------------------------------------
+// Original exports (imported by server.ts — do not remove)
+// ---------------------------------------------------------------------------
 
 // Inject a <style> tag with a unique class that adds a colored outline to all
 // elements matching selector. Returns the count of matched elements.
@@ -32,8 +44,8 @@ export async function highlightElements(
   return result.value as number;
 }
 
-// Remove all <style> tags injected by highlightElements (identified by the
-// class "highlight-injected") and strip the associated class from all elements.
+// Remove all <style> tags injected by highlightElements and strip the
+// associated class from all elements.
 export async function removeHighlights(client: CdpClient): Promise<void> {
   const expression = `(() => {
   const styles = Array.from(document.querySelectorAll('style.highlight-injected'));
@@ -56,7 +68,7 @@ export async function removeHighlights(client: CdpClient): Promise<void> {
 }
 
 // Highlight the first element matching selector and inject a floating label
-// badge positioned near it showing the label text.
+// badge positioned near it.
 export async function highlightWithLabel(
   client: CdpClient,
   selector: string,
@@ -96,7 +108,6 @@ export async function highlightWithLabel(
 }
 
 // Flash the border of the first element matching selector on/off N times.
-// Uses a CSS @keyframes animation injected into a <style> tag.
 export async function flashElement(
   client: CdpClient,
   selector: string,
@@ -109,7 +120,6 @@ export async function flashElement(
   if (!el) throw new Error('flashElement: no element matched ' + selector);
   const animName = 'cdp-flash-' + Math.random().toString(36).slice(2, 9);
   const duration = 0.25;
-  const totalDuration = times * duration * 2;
   const style = document.createElement('style');
   style.setAttribute('class', 'highlight-injected');
   style.textContent =
@@ -133,7 +143,7 @@ export async function flashElement(
 }
 
 // Return bounding boxes (relative to the viewport) for all elements matching
-// selector. Uses getBoundingClientRect on each matched element.
+// selector.
 export async function getBoundingBoxes(
   client: CdpClient,
   selector: string,
@@ -232,5 +242,293 @@ export async function clearAllOverlays(client: CdpClient): Promise<void> {
   });
   if (exceptionDetails) {
     throw new Error(`clearAllOverlays error: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// New functions (2-suffix where name conflicts with originals above)
+// ---------------------------------------------------------------------------
+
+function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] };
+}
+function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: `Error: ${msg}` }] };
+}
+
+/**
+ * highlightElement2 — Draw a colored border overlay div over an element
+ * matching selector. Returns { highlighted, selector, rect, overlayId }.
+ * (Renamed from highlightElement — already used in server.ts.)
+ */
+export async function highlightElement2(
+  client: CdpClient,
+  selector: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const jsBody = `
+  var el = document.querySelector(SELECTOR);
+  if (!el) return { highlighted: false, reason: 'not found' };
+  var r = el.getBoundingClientRect();
+  var overlay = document.createElement('div');
+  overlay.id = '__cb_highlight_' + Date.now();
+  overlay.style.cssText = 'position:fixed;pointer-events:none;z-index:999999;border:3px solid #ff4444;background:rgba(255,68,68,0.1);box-sizing:border-box;transition:none;top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px;height:' + r.height + 'px;';
+  document.body.appendChild(overlay);
+  return { highlighted: true, selector: SELECTOR, rect: { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) }, overlayId: overlay.id };
+`.trim();
+    const expression = `(function() { var SELECTOR = ${JSON.stringify(selector)}; ${jsBody} })()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * clearHighlights2 — Remove all overlay divs with id starting with
+ * `__cb_highlight_`. Returns { removed }.
+ * (Renamed from clearHighlights — already used in server.ts.)
+ */
+export async function clearHighlights2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const expression = `(function() {
+  var overlays = document.querySelectorAll('[id^="__cb_highlight_"]');
+  overlays.forEach(function(el) { el.remove(); });
+  return { removed: overlays.length };
+})()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * flashElement2 — Flash an element 3 times by toggling outline style.
+ * Returns { flashed, selector }.
+ * (Renamed from flashElement — already in highlight2.ts + server.ts.)
+ */
+export async function flashElement2(
+  client: CdpClient,
+  selector: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const jsBody = `
+  var el = document.querySelector(SELECTOR);
+  if (!el) return { flashed: false };
+  var orig = el.style.outline;
+  var count = 0;
+  var iv = setInterval(function() {
+    el.style.outline = (count % 2 === 0) ? '4px solid #ff4444' : orig;
+    count++;
+    if (count > 6) { clearInterval(iv); el.style.outline = orig; }
+  }, 150);
+  return { flashed: true, selector: SELECTOR };
+`.trim();
+    const expression = `(function() { var SELECTOR = ${JSON.stringify(selector)}; ${jsBody} })()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * highlightAllLinks — Draw blue overlays on all visible <a href> elements.
+ * Returns { count }.
+ */
+export async function highlightAllLinks(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const expression = `(function() {
+  var links = document.querySelectorAll('a[href]');
+  var count = 0;
+  Array.from(links).forEach(function(el) {
+    var r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      var o = document.createElement('div');
+      o.className = '__cb_link_highlight';
+      o.style.cssText = 'position:fixed;pointer-events:none;z-index:999998;border:2px solid #4488ff;background:rgba(68,136,255,0.1);box-sizing:border-box;top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px;height:' + r.height + 'px;';
+      document.body.appendChild(o);
+      count++;
+    }
+  });
+  return { count: count };
+})()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * clearLinkHighlights — Remove all `.__cb_link_highlight` overlay divs.
+ * Returns { removed }.
+ */
+export async function clearLinkHighlights(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const expression = `(function() {
+  var els = document.querySelectorAll('.__cb_link_highlight');
+  var count = els.length;
+  els.forEach(function(e) { e.remove(); });
+  return { removed: count };
+})()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * highlightForms — Draw green overlays on all visible <form> elements.
+ * Returns { count }.
+ */
+export async function highlightForms(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const expression = `(function() {
+  var forms = document.querySelectorAll('form');
+  var count = 0;
+  Array.from(forms).forEach(function(el) {
+    var r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      var o = document.createElement('div');
+      o.className = '__cb_form_highlight';
+      o.style.cssText = 'position:fixed;pointer-events:none;z-index:999998;border:2px solid #44bb44;background:rgba(68,187,68,0.1);box-sizing:border-box;top:' + r.top + 'px;left:' + r.left + 'px;width:' + r.width + 'px;height:' + r.height + 'px;';
+      document.body.appendChild(o);
+      count++;
+    }
+  });
+  return { count: count };
+})()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * labelElement — Add a floating label div near an element matching selector.
+ * Returns { labeled, selector }.
+ */
+export async function labelElement(
+  client: CdpClient,
+  selector: string,
+  label: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const jsBody = `
+  var el = document.querySelector(SELECTOR);
+  if (!el) return { labeled: false };
+  var r = el.getBoundingClientRect();
+  var lbl = document.createElement('div');
+  lbl.className = '__cb_label';
+  lbl.textContent = LABEL;
+  lbl.style.cssText = 'position:fixed;pointer-events:none;z-index:9999999;background:#ff4444;color:#fff;font-size:11px;font-family:monospace;padding:2px 5px;border-radius:3px;top:' + Math.max(0, r.top - 20) + 'px;left:' + r.left + 'px;';
+  document.body.appendChild(lbl);
+  return { labeled: true, selector: SELECTOR };
+`.trim();
+    const expression = `(function() { var SELECTOR = ${JSON.stringify(selector)}; var LABEL = ${JSON.stringify(label)}; ${jsBody} })()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * clearAllOverlays2 — Remove ALL claudebrowser overlays and labels:
+ * __cb_highlight_*, .__cb_link_highlight, .__cb_form_highlight, .__cb_label.
+ * Returns { removed }.
+ * (Renamed from clearAllOverlays — already exported from highlight2.ts.)
+ */
+export async function clearAllOverlays2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const expression = `(function() {
+  var sel = '[id^="__cb_highlight_"],.__cb_link_highlight,.__cb_form_highlight,.__cb_label';
+  var all = document.querySelectorAll(sel);
+  var count = all.length;
+  all.forEach(function(e) { e.remove(); });
+  return { removed: count };
+})()`;
+    const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+      expression,
+      returnByValue: true,
+      awaitPromise: false,
+    });
+    if (exceptionDetails) {
+      return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    }
+    const data = result.value as unknown;
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
   }
 }

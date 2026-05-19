@@ -71,7 +71,7 @@ import { getFullPageDimensions, getVisibleRect, isElementFullyVisible, getElemen
 import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceEvaluate, retryEvaluate, getHighResolutionTime, measureExpressionTime } from './cdp/timing';
 import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
 import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml } from './cdp/clipboard2';
-import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays } from './cdp/highlight2';
+import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays, highlightElement2, clearHighlights2, flashElement2, highlightAllLinks, clearLinkHighlights, highlightForms, labelElement, clearAllOverlays2 } from './cdp/highlight2';
 import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input3';
 import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
 import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests, getResourceTimings as getResourceTimings2, getResourcesByType, getLargestResources, getCachedResources, getTotalTransferSize, getFailedResources as getFailedResources2, clearResourceTimings, getNavigationTimingBasic } from './cdp/network2';
@@ -79,7 +79,7 @@ import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAll
 import { createElement, removeElement, wrapElement, unwrapElement, cloneElement, moveElement, setElementText, getElementCount } from './cdp/dom2';
 import { isModalOpen, getModalContent, closeModal, waitForModal, getModalButtons, clickModalButton, isOverlayBlocking, dismissOverlay, detectModals, getOverlayElements, hasBackdrop, closeModalByEscape, clickModalCloseButton, getPopoverElements, countZIndexLayers } from './cdp/modal';
 import { getUrlParts, getQueryParams, setQueryParam, removeQueryParam, getHashFragment, setHashFragment, navigateToHash, getNavigationHistory } from './cdp/url2';
-import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow } from './cdp/table3';
+import { getFullTableData, getTableRowData, getTableCellText, sortTableByColumn, getTablePageInfo, exportTableAsCsv, getSelectedTableRows, highlightTableRow, getTableSummary3, getTableFirstRow, getTableRowCount3, getSortableColumns, getTableCellByPosition, getColumnValues, getPaginationElements, getDataAttributes3 } from './cdp/table3';
 import { setGeolocationAccuracy, simulateMovement, setHighAccuracyMode, setLowAccuracyMode, setBatteryLevel, clearBatteryOverride, setScreenOrientation, clearScreenOrientation } from './cdp/geolocation3';
 import { takeFullPageScreenshot, takeViewportScreenshot, takeRegionScreenshot, takeJpegScreenshot, compareScreenshots, getFullPageDimensions2, takeScreenshotAfterDelay, screenshotSelector } from './cdp/capture2';
 import { getScrollDepth, isScrolledToBottom, isScrolledToTop, getScrollableParent, scrollByAmount, scrollElementBy, getScrollbarWidth, scrollToPercent } from './cdp/scroll3';
@@ -140,6 +140,7 @@ import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getG
 import { getTouchSupport3, getViewportMeta, getOrientationInfo, getVirtualKeyboardElements, getTouchActionElements, getScrollSnapElements, getAppleMobileMetaTags, getPWAManifest } from './cdp/touch2';
 import { getJsHeapSize2, getPerformanceMarks3, getPerformanceMeasures, getScriptCount, getConsoleErrors2, getResourceTiming, getNavigationEntries, getStylesheetCount2 } from './cdp/perf3';
 import { getFontFaces2, getUsedFontFamilies, getWebFontLinks, getFontSizeDistribution, getTextRenderingMode, getLineHeightDistribution, getFontWeightDistribution, getDocumentFontAPI } from './cdp/font2';
+import { getCurrentUrl2, getQueryParams3, getHashContent, getHistoryLength2 as getHistoryLengthFull, getInternalLinks2 as getInternalLinksFull, getExternalLinks2 as getExternalLinksFull, getAnchors, getRedirectMeta } from './cdp/url2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1523,6 +1524,33 @@ const TOOLS = [
   { name: 'browser_line_height_distribution', description: 'Sample computed line-height frequencies: { lineHeights: [{value, count}] } (top 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_font_weight_distribution', description: 'Sample computed font-weight frequencies: { weights: [{weight, count}] } (top 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_document_font_api', description: 'Check document.fonts FontFaceSet: { supported, size, status, loadingCount }', inputSchema: { type: 'object', properties: {} } },
+  // ── Highlight2 new ──────────────────────────────────────────────────────────────
+  { name: 'browser_highlight_element2', description: 'Draw red border overlay div over element matching selector: { highlighted, selector, rect, overlayId }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_clear_highlights2', description: 'Remove all [id^="__cb_highlight_"] overlay divs: { removed }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_flash_element2', description: 'Flash element outline 3 times: { flashed, selector }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_highlight_all_links', description: 'Draw blue overlays on all visible <a href> elements: { count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_link_highlights', description: 'Remove all .__cb_link_highlight overlay divs: { removed }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_highlight_forms', description: 'Draw green overlays on all visible <form> elements: { count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_label_element', description: 'Add floating label div near element: { labeled, selector }', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, label: { type: 'string' } }, required: ['selector', 'label'] } },
+  { name: 'browser_clear_all_overlays2', description: 'Remove ALL claudebrowser overlays and labels: { removed }', inputSchema: { type: 'object', properties: {} } },
+  // ── Table3 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_table_summary', description: 'Summary of all tables: id, caption, rows, cols, hasHeader, hasFoot (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_first_row', description: 'Text of first row cells for each table: { tableIndex, cells }[] (max 5 tables)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_row_count', description: 'Row counts per table: tableIndex, totalRows, headerRows, bodyRows, footerRows (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sortable_columns', description: 'Find th elements with aria-sort or role="columnheader": text, ariasort, tableIndex (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_cell', description: 'Get cell text at row/col in table matching selector: { text, html, rowSpan, colSpan }', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row: { type: 'number' }, col: { type: 'number' } }, required: ['selector', 'row', 'col'] } },
+  { name: 'browser_column_values', description: 'Extract all tbody values from a column index: { values, count }', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, colIndex: { type: 'number' } }, required: ['selector', 'colIndex'] } },
+  { name: 'browser_pagination_elements', description: 'Find pagination controls by aria-label or class: tag, id, class, links (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_attributes3', description: 'Get all data-* attributes on elements matching selector: tag, id, data object (max 20)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── URL2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_current_url', description: 'Full URL breakdown: { href, protocol, hostname, pathname, search, hash, port, origin }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_query_params', description: 'Parse URL query string: { params: [{key, value}], count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hash_content', description: 'Get URL hash without # and target element: { hash, hasTarget, targetTag }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_history_length', description: 'Get window.history.length and state preview: { length, state }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_internal_links', description: 'Find all <a> links going to same origin: href, text (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_external_links', description: 'Find all <a> links going to different origin: href, text, domain (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_anchors', description: 'Find all anchor targets and ID elements for deep-linking: { anchors: [{id, tag, text}], count } (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_redirect_meta', description: 'Check for <meta http-equiv="refresh"> redirect: { hasRefresh, delay, targetUrl }', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2984,6 +3012,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_line_height_distribution': return await getLineHeightDistribution(cdp);
         case 'browser_font_weight_distribution': return await getFontWeightDistribution(cdp);
         case 'browser_document_font_api':        return await getDocumentFontAPI(cdp);
+                // highlight2 new
+        case 'browser_highlight_element2':       return await highlightElement2(cdp, a.selector as string);
+        case 'browser_clear_highlights2':        return await clearHighlights2(cdp);
+        case 'browser_flash_element2':           return await flashElement2(cdp, a.selector as string);
+        case 'browser_highlight_all_links':      return await highlightAllLinks(cdp);
+        case 'browser_clear_link_highlights':    return await clearLinkHighlights(cdp);
+        case 'browser_highlight_forms':          return await highlightForms(cdp);
+        case 'browser_label_element':            return await labelElement(cdp, a.selector as string, a.label as string);
+        case 'browser_clear_all_overlays2':      return await clearAllOverlays2(cdp);
+        // table3 new
+        case 'browser_table_summary':            return await getTableSummary3(cdp);
+        case 'browser_table_first_row':          return await getTableFirstRow(cdp);
+        case 'browser_table_row_count':          return await getTableRowCount3(cdp);
+        case 'browser_sortable_columns':         return await getSortableColumns(cdp);
+        case 'browser_table_cell':               return await getTableCellByPosition(cdp, a.selector as string, a.row as number, a.col as number);
+        case 'browser_column_values':            return await getColumnValues(cdp, a.selector as string, a.colIndex as number);
+        case 'browser_pagination_elements':      return await getPaginationElements(cdp);
+        case 'browser_data_attributes3':         return await getDataAttributes3(cdp, a.selector as string);
+        // url2 new
+        case 'browser_current_url':              return await getCurrentUrl2(cdp);
+        case 'browser_query_params':             return await getQueryParams3(cdp);
+        case 'browser_hash_content':             return await getHashContent(cdp);
+        case 'browser_history_length':           return await getHistoryLengthFull(cdp);
+        case 'browser_internal_links':           return await getInternalLinksFull(cdp);
+        case 'browser_external_links':           return await getExternalLinksFull(cdp);
+        case 'browser_anchors':                  return await getAnchors(cdp);
+        case 'browser_redirect_meta':            return await getRedirectMeta(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
