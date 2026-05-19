@@ -191,6 +191,9 @@ import { getPerformanceTiming, getResourceTimings4, getLargestContentfulPaint3, 
 import { getVideoElements4, getAudioElements3, getMediaPlayers, getVideoSources2, getAudioSources, getMediaControls, getStreamElements, getMediaState2 } from './cdp/media3';
 import { getCssAnimations4, getCssTransitions4, getAnimatedElements, getKeyframeRules, getTransitionProperties, getRunningAnimations, getAnimationTiming, getWapiAnimations } from './cdp/animation3';
 import { getSearchInputs3, getSearchForms3, getSearchResults2, getFilterElements2, getSortControls, getAutocompleteInputs, getSearchSuggestions2, getActiveFilters } from './cdp/search4';
+import { getPaginationLinks2, getPageNumbers, getNextPageButton, getPrevPageButton, getInfiniteScrollContainer, getLoadMoreButtons2, getCurrentPage2, getTotalPages } from './cdp/pagination2';
+import { getDarkMode, getCssCustomProperties, getColorScheme4, getThemeVariables, getDarkModePreference, getCssVariables6, getThemeElements, getRootStyles } from './cdp/theme3';
+import { getErrorMessages2, getFormValidationErrors2, getAlertElements2, getErrorBanners, getInvalidInputs, getValidationMessages, getToastMessages2, getErrorState } from './cdp/error2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2213,6 +2216,33 @@ const TOOLS = [
   { name: 'browser_autocomplete_inputs', description: 'Inputs with autocomplete/datalist: [{id, autocomplete, listId, optionCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_search_suggestions2', description: 'Visible autocomplete options: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_active_filters', description: 'Active/selected filter indicators: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Pagination2 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_pagination_links2', description: 'Pagination link elements: [{tag, id, class_preview, text_preview, href_preview, isActive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_numbers', description: 'Page number buttons: [{text, isActive, isDisabled}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_next_page_button', description: 'Next page button: {tag, id, class_preview, text_preview, disabled, exists}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_prev_page_button', description: 'Previous page button: {tag, id, class_preview, text_preview, disabled, exists}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_infinite_scroll_container', description: 'Infinite scroll container: {detected, tag, id, class_preview, itemCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_load_more_buttons2', description: 'Load more / Show more buttons: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_current_page2', description: 'Current active page indicator: {pageNumber, text_preview, source}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_total_pages', description: 'Total pages from pagination: {total, source, text_preview}', inputSchema: { type: 'object', properties: {} } },
+  // ── Theme3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_dark_mode', description: 'Dark mode detection: {prefersDark, hasDarkClass, hasDataTheme, rootTheme}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_custom_properties', description: 'CSS custom properties on :root: [{name, value_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_color_scheme4', description: 'Color scheme meta and CSS: {metaColorScheme, cssColorScheme, prefersDark, prefersLight}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_variables', description: 'Theme-related CSS vars: [{name, value_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dark_mode_preference', description: 'prefers-color-scheme media query: {prefersDark, prefersLight, noPreference}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_variables6', description: 'All CSS variables on document root: {count, variables:[{name, value_preview}]} (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_theme_elements', description: 'Elements with theme/dark/light class patterns: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_root_styles', description: 'Computed styles on :root (non-empty values): [{property, value_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Error2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_error_messages2', description: 'Error message elements: [{tag, id, class_preview, text_preview, role}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_form_validation_errors2', description: 'Form fields with validation errors: [{inputId, message, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alert_elements2', description: 'Elements with role=alert or alert class: [{tag, id, class_preview, text_preview, role}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_error_banners', description: 'Error/warning banner elements: [{tag, id, class_preview, text_preview, severity}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_invalid_inputs', description: 'Input fields with :invalid or aria-invalid: [{id, name, type, validationMessage}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_validation_messages', description: 'Visible validation/error text near inputs: [{text_preview, relatedInputId}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_toast_messages2', description: 'Toast/snackbar notification elements: [{tag, id, class_preview, text_preview, visible}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_error_state', description: 'Page-level error summary: {hasErrors, errorCount, warningCount, hasAlerts, hasInvalidInputs}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4321,6 +4351,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_autocomplete_inputs':      return await getAutocompleteInputs(cdp);
         case 'browser_search_suggestions2':      return await getSearchSuggestions2(cdp);
         case 'browser_active_filters':           return await getActiveFilters(cdp);
+                // pagination2 new
+        case 'browser_pagination_links2':        return await getPaginationLinks2(cdp);
+        case 'browser_page_numbers':             return await getPageNumbers(cdp);
+        case 'browser_next_page_button':         return await getNextPageButton(cdp);
+        case 'browser_prev_page_button':         return await getPrevPageButton(cdp);
+        case 'browser_infinite_scroll_container': return await getInfiniteScrollContainer(cdp);
+        case 'browser_load_more_buttons2':       return await getLoadMoreButtons2(cdp);
+        case 'browser_current_page2':            return await getCurrentPage2(cdp);
+        case 'browser_total_pages':              return await getTotalPages(cdp);
+        // theme3 new
+        case 'browser_dark_mode':                return await getDarkMode(cdp);
+        case 'browser_css_custom_properties':    return await getCssCustomProperties(cdp);
+        case 'browser_color_scheme4':            return await getColorScheme4(cdp);
+        case 'browser_theme_variables':          return await getThemeVariables(cdp);
+        case 'browser_dark_mode_preference':     return await getDarkModePreference(cdp);
+        case 'browser_css_variables6':           return await getCssVariables6(cdp);
+        case 'browser_theme_elements':           return await getThemeElements(cdp);
+        case 'browser_root_styles':              return await getRootStyles(cdp);
+        // error2 new
+        case 'browser_error_messages2':          return await getErrorMessages2(cdp);
+        case 'browser_form_validation_errors2':  return await getFormValidationErrors2(cdp);
+        case 'browser_alert_elements2':          return await getAlertElements2(cdp);
+        case 'browser_error_banners':            return await getErrorBanners(cdp);
+        case 'browser_invalid_inputs':           return await getInvalidInputs(cdp);
+        case 'browser_validation_messages':      return await getValidationMessages(cdp);
+        case 'browser_toast_messages2':          return await getToastMessages2(cdp);
+        case 'browser_error_state':              return await getErrorState(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
