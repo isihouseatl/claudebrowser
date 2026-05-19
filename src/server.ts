@@ -72,7 +72,7 @@ import { sleep, measureDuration, waitUntilIdle, waitForExpressionTrue, debounceE
 import { xpathFirst, xpathAll, xpathCount, xpathText, xpathExists, xpathClick, xpathGetAttribute, xpathWaitFor } from './cdp/xpathquery';
 import { getClipboardText, setClipboardText, getClipboardHtml, clearClipboard, copyTextToClipboard, pasteTextAtCursor, getClipboardItemTypes, copyElementHtml } from './cdp/clipboard2';
 import { highlightElements, removeHighlights, highlightWithLabel, flashElement, getBoundingBoxes, drawOverlay, removeOverlay, clearAllOverlays } from './cdp/highlight2';
-import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input2';
+import { typeWithDelay, clearAndType, pressKeyCombo, fillInputByLabel, checkCheckbox, uncheckCheckbox, selectRadio, typeIntoContentEditable } from './cdp/input3';
 import { getPageLanguage, getCharset, getCanonicalUrl, getOpenGraphTags, getTwitterCardTags, getStructuredData, getPageWordCount, getExternalLinks } from './cdp/pageinfo';
 import { getNetworkTimings, getLargestRequests, getFailedRequests, getRequestCount, getServiceWorkerInfo, getPageProtocol, getDnsLookupTime, getCachedRequests } from './cdp/network2';
 import { getLocalStorageSize, searchLocalStorage, getSessionStorageSize, dumpAllStorage, getCookieCount, getCookieDomains, getStorageEstimate, clearOriginStorage } from './cdp/storage2';
@@ -107,6 +107,9 @@ import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward a
 import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent } from './cdp/event2';
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
+import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions } from './cdp/image2';
+import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState } from './cdp/input2';
+import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1047,6 +1050,33 @@ const TOOLS = [
   { name: 'browser_mailto_links', description: 'Get all mailto: links with extracted email addresses', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_tel_links', description: 'Get all tel: links', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_anchor_links', description: 'Get all #fragment anchor links', inputSchema: { type: 'object', properties: {} } },
+  // ── Image2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_all_images', description: 'Get all <img> elements: src, alt, width, height, naturalWidth/Height (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_broken_images', description: 'Get images that failed to load (naturalWidth=0, src non-empty)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_image_count', description: 'Count images: total, loaded, broken', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lazy_images', description: 'Get images with loading="lazy"', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_images_no_alt', description: 'Get images missing or with empty alt attribute', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_svg_elements', description: 'List inline <svg> elements: id, class, width, height, viewBox', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_picture_elements', description: 'List <picture> elements with sources and fallback src', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_image_dimensions', description: 'Get dimensions of a specific image: natural and display size', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Input2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_all_inputs', description: 'List all form inputs: tag, type, name, id, placeholder, value, required, disabled', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_required_inputs', description: 'List inputs with required attribute', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_disabled_inputs', description: 'List disabled form inputs', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_input_values', description: 'Get current values of all named inputs', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_input', description: 'Set input value using native value setter (works with React/Vue)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'value'] } },
+  { name: 'browser_clear_input', description: 'Clear an input value using native value setter', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_checkbox_state', description: 'Get checked, indeterminate, value of a checkbox/radio', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_set_checkbox', description: 'Set checked state of a checkbox and dispatch change event', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, checked: { type: 'boolean' } }, required: ['selector', 'checked'] } },
+  // ── Meta2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_meta_description', description: 'Get <meta name="description"> content', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_meta_keywords', description: 'Get <meta name="keywords"> content', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_meta_robots', description: 'Get <meta name="robots"> content', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_meta_viewport', description: 'Get <meta name="viewport"> content', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canonical2', description: 'Get <link rel="canonical"> href', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hreflang_tags', description: 'Get all hreflang alternate link tags', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_json_ld', description: 'Get all <script type="application/ld+json"> schemas (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_headings', description: 'Get all h1-h6 headings in document order: level and text', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2069,6 +2099,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_mailto_links':             return await getMailtoLinks(cdp);
         case 'browser_tel_links':                return await getTelLinks(cdp);
         case 'browser_anchor_links':             return await getAnchorLinks(cdp);
+                // image2
+        case 'browser_all_images':               return await getAllImages(cdp);
+        case 'browser_broken_images':            return await getBrokenImages(cdp);
+        case 'browser_image_count':              return await getImageCount(cdp);
+        case 'browser_lazy_images':              return await getLazyImages(cdp);
+        case 'browser_images_no_alt':            return await getImagesWithoutAlt(cdp);
+        case 'browser_svg_elements':             return await getSvgElements(cdp);
+        case 'browser_picture_elements':         return await getPictureElements(cdp);
+        case 'browser_image_dimensions':         return await getImageDimensions(cdp, a.selector as string);
+        // input2
+        case 'browser_all_inputs':               return await getAllInputs(cdp);
+        case 'browser_required_inputs':          return await getRequiredInputs(cdp);
+        case 'browser_disabled_inputs':          return await getDisabledInputs(cdp);
+        case 'browser_input_values':             return await getInputValues(cdp);
+        case 'browser_set_input':                return await setInputValue(cdp, a.selector as string, a.value as string);
+        case 'browser_clear_input':              return await clearInputValue(cdp, a.selector as string);
+        case 'browser_checkbox_state':           return await getCheckboxState(cdp, a.selector as string);
+        case 'browser_set_checkbox':             return await setCheckboxState(cdp, a.selector as string, a.checked as boolean);
+        // meta2
+        case 'browser_meta_description':         return await getMetaDescription(cdp);
+        case 'browser_meta_keywords':            return await getMetaKeywords(cdp);
+        case 'browser_meta_robots':              return await getMetaRobots(cdp);
+        case 'browser_meta_viewport':            return await getMetaViewport(cdp);
+        case 'browser_canonical2':               return await getCanonicalUrl2(cdp);
+        case 'browser_hreflang_tags':            return await getHreflangTags(cdp);
+        case 'browser_json_ld':                  return await getJsonLdSchemas(cdp);
+        case 'browser_headings':                 return await getHeadingStructure2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
