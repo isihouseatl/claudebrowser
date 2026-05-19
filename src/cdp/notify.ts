@@ -1,5 +1,5 @@
 // src/cdp/notify.ts
-import { CdpClient } from './client';
+import type { CdpClient } from './client';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -383,4 +383,144 @@ export async function waitForBannerChange(
     if (current !== initialText) return current;
     return null;
   }, timeoutMs);
+}
+
+// ---------------------------------------------------------------------------
+// Web Notifications and Page Visibility API tools
+// ---------------------------------------------------------------------------
+
+function ok(value: unknown): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }] };
+}
+function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text', text: `Error: ${msg}` }] };
+}
+
+// Returns the current Web Notification permission state for the page.
+// Result: { permission: 'granted' | 'denied' | 'default' }
+export async function getNotificationPermission(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ permission: Notification.permission })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns whether the Web Notifications API is supported in the current page context.
+// Result: { supported: true | false }
+export async function isNotificationSupported(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ supported: typeof Notification !== 'undefined' })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns the Page Visibility API visibilityState for the current document.
+// Result: { visibilityState: 'visible' | 'hidden' | 'prerender' }
+export async function getPageVisibility(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ visibilityState: document.visibilityState })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns whether the page is currently visible (document.hidden === false).
+// Result: { visible: true | false }
+export async function isPageVisible(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ visible: !document.hidden })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns the document's current ready state.
+// Result: { readyState: 'loading' | 'interactive' | 'complete' }
+export async function getDocumentReadyState(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ readyState: document.readyState })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns the character set (encoding) of the current document.
+// Result: { charset: string }
+export async function getPageCharset(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ charset: document.characterSet || document.charset })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns the document compatibility mode.
+// CSS1Compat = standards mode, BackCompat = quirks mode.
+// Result: { compatMode: string }
+export async function getDocumentMode(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ compatMode: typeof document.compatMode !== 'undefined' ? document.compatMode : 'unknown' })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
+}
+
+// Returns the date and time the document was last modified, as reported by the server.
+// Result: { lastModified: string }
+export async function getLastModified(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `JSON.stringify({ lastModified: document.lastModified })`,
+    returnByValue: true,
+    awaitPromise: false,
+  });
+  if (exceptionDetails) {
+    return err(exceptionDetails.exception?.description ?? exceptionDetails.text);
+  }
+  return ok(result.value as string);
 }

@@ -46,7 +46,7 @@ import { mousePath, smoothDrag, dragSelector, hoverSequence, multiClick, context
 import { startRecording, stopRecording, getRecordedActions, clearRecording, isRecording } from './cdp/recorder';
 import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, findNearLabel, getElementSelector } from './cdp/finder';
 import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
-import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange } from './cdp/notify';
+import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange, getNotificationPermission, isNotificationSupported, getPageVisibility, isPageVisible, getDocumentReadyState, getPageCharset, getDocumentMode, getLastModified } from './cdp/notify';
 import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow, clickTableCell, getTableColumn, getTableHeaders, filterTableRows } from './cdp/table2';
 import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
@@ -105,6 +105,8 @@ import { isWorkerSupported, isSharedWorkerSupported, getWorkerCount as getWorker
 import { getAriaRoles, getAriaLabels, getAriaDescriptions, getLandmarkElements, getTabOrder, getFocusableElements as getFocusableElements2, getAriaExpanded, getAriaHidden } from './cdp/a11y2';
 import { getHistoryLength as getHistoryLength2, goBack as goBackNav, goForward as goForwardNav, goTo, getCurrentUrl, getPageTitle, pushHistoryState, replaceHistoryState } from './cdp/history';
 import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEventListenerCount, triggerInputEvent as triggerInputEvent2, triggerChangeEvent, triggerFocusEvent as triggerFocusEvent2, triggerBlurEvent, triggerSubmitEvent } from './cdp/event2';
+import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
+import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1018,6 +1020,33 @@ const TOOLS = [
   { name: 'browser_trigger_focus2', description: 'Dispatch focus event and call el.focus() on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_trigger_blur', description: 'Dispatch blur event and call el.blur() on element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   { name: 'browser_trigger_submit', description: 'Dispatch submit event on a form element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Notifications & page state ─────────────────────────────────────────────────
+  { name: 'browser_notification_permission', description: 'Get Notification.permission state (granted/denied/default)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_supported', description: 'Check if Web Notifications API is supported', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_visibility', description: 'Get document.visibilityState', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_visible', description: 'Check if page is visible (not hidden)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ready_state', description: 'Get document.readyState (loading/interactive/complete)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_charset', description: 'Get document.characterSet', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_compat_mode', description: 'Get document.compatMode (CSS1Compat=standards, BackCompat=quirks)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_last_modified', description: 'Get document.lastModified', inputSchema: { type: 'object', properties: {} } },
+  // ── Table ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_table_count', description: 'Count all <table> elements on page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_table_headers3', description: 'Get <th> text content from a table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_row_count2', description: 'Count <tr> elements in a table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_cell_count', description: 'Count total <td>+<th> cells in a table', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_row', description: 'Get all cell text values from row at 0-based index', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' } }, required: ['selector', 'row_index'] } },
+  { name: 'browser_table_cell', description: 'Get text of single cell at [row][col] (0-based)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, row_index: { type: 'number' }, col_index: { type: 'number' } }, required: ['selector', 'row_index', 'col_index'] } },
+  { name: 'browser_table_data', description: 'Dump all table data as 2D array of cell text (max 50 rows)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_table_summary', description: 'Summarize all tables on page: rows, cols, hasHeader, id, class (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Links ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_all_links', description: 'Get all <a href> links: text, href, target, rel (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_external_links2', description: 'Get external links (different host) from page (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_internal_links', description: 'Get internal links (same host) from page (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_link_count', description: 'Count all links: total, withHref, withoutHref', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_links_with_rel', description: 'Get links with specific rel value (nofollow, noreferrer, etc.)', inputSchema: { type: 'object', properties: { rel: { type: 'string' } }, required: ['rel'] } },
+  { name: 'browser_mailto_links', description: 'Get all mailto: links with extracted email addresses', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tel_links', description: 'Get all tel: links', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_anchor_links', description: 'Get all #fragment anchor links', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2013,6 +2042,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_trigger_focus2':           return await triggerFocusEvent2(cdp, a.selector as string);
         case 'browser_trigger_blur':             return await triggerBlurEvent(cdp, a.selector as string);
         case 'browser_trigger_submit':           return await triggerSubmitEvent(cdp, a.selector as string);
+                // notify new
+        case 'browser_notification_permission':  return await getNotificationPermission(cdp);
+        case 'browser_notification_supported':   return await isNotificationSupported(cdp);
+        case 'browser_page_visibility':          return await getPageVisibility(cdp);
+        case 'browser_is_visible':               return await isPageVisible(cdp);
+        case 'browser_ready_state':              return await getDocumentReadyState(cdp);
+        case 'browser_page_charset':             return await getPageCharset(cdp);
+        case 'browser_compat_mode':              return await getDocumentMode(cdp);
+        case 'browser_last_modified':            return await getLastModified(cdp);
+        // table
+        case 'browser_table_count':              return await getTableCount(cdp);
+        case 'browser_table_headers3':           return await getTableHeaders3(cdp, a.selector as string);
+        case 'browser_table_row_count2':         return await getTableRowCount2(cdp, a.selector as string);
+        case 'browser_table_cell_count':         return await getTableCellCount(cdp, a.selector as string);
+        case 'browser_table_row':                return await getTableRow(cdp, a.selector as string, a.row_index as number);
+        case 'browser_table_cell':               return await getTableCell(cdp, a.selector as string, a.row_index as number, a.col_index as number);
+        case 'browser_table_data':               return await getTableData2(cdp, a.selector as string);
+        case 'browser_table_summary':            return await getTableSummary(cdp);
+        // links
+        case 'browser_all_links':                return await getAllLinks(cdp);
+        case 'browser_external_links2':          return await getExternalLinks2(cdp);
+        case 'browser_internal_links':           return await getInternalLinks(cdp);
+        case 'browser_link_count':               return await getLinkCount(cdp);
+        case 'browser_links_with_rel':           return await getLinksWithRel(cdp, a.rel as string);
+        case 'browser_mailto_links':             return await getMailtoLinks(cdp);
+        case 'browser_tel_links':                return await getTelLinks(cdp);
+        case 'browser_anchor_links':             return await getAnchorLinks(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
