@@ -267,3 +267,131 @@ export async function clickAndUpload(
 
   await setFilesOnInput(client, foundSelector, filePaths);
 }
+
+// ---------------------------------------------------------------------------
+// getFileUploadInputs
+// ---------------------------------------------------------------------------
+
+/**
+ * List all file input elements on the page.
+ * Returns id, name, accept, multiple, and a class preview for each (max 20).
+ */
+export async function getFileUploadInputs(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('input[type="file"]')).slice(0,20).map(el=>({id:el.id||null,name:el.name||null,accept:el.accept||null,multiple:el.multiple,class_preview:(el.className||'').slice(0,40)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getDropzoneElements
+// ---------------------------------------------------------------------------
+
+/**
+ * Find dropzone upload area elements on the page (max 10).
+ * Matches class patterns: dropzone, drop-zone, dz-, upload-area, drag-drop, or data-dropzone attribute.
+ */
+export async function getDropzoneElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="dropzone"],[class*="drop-zone"],[class*="dz-"],[data-dropzone],[class*="upload-area"],[class*="drag-drop"]';return Array.from(document.querySelectorAll(sel)).slice(0,10).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),text_preview:(el.textContent||'').trim().slice(0,60)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getDragDropAreas
+// ---------------------------------------------------------------------------
+
+/**
+ * Find elements that have drag/drop event handlers or droppable class patterns (max 20).
+ */
+export async function getDragDropAreas(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const all=document.querySelectorAll('*');const res=[];for(const el of all){if(el.ondragover||el.ondrop||el.getAttribute('ondragover')||el.getAttribute('ondrop')||((el.className||'').toString().toLowerCase().includes('droppable')))res.push({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40)});if(res.length>=20)break;}return res })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getUploadProgress2
+// ---------------------------------------------------------------------------
+
+/**
+ * Find upload progress indicator elements on the page (max 10).
+ * Matches class patterns: upload-progress, dz-upload, file-progress, or <progress> with upload class.
+ * Returns tag, id, class preview, value, and max for each element.
+ */
+export async function getUploadProgress2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="upload-progress"],[class*="dz-upload"],[class*="file-progress"],progress[class*="upload"]';return Array.from(document.querySelectorAll(sel)).slice(0,10).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),value:el.value||el.getAttribute('value')||null,max:el.max||el.getAttribute('max')||null})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getFilePreviewElements
+// ---------------------------------------------------------------------------
+
+/**
+ * Find file preview/thumbnail elements on the page (max 20).
+ * Matches class patterns: file-preview, upload-preview, dz-preview, file-thumb, attachment-preview.
+ */
+export async function getFilePreviewElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="file-preview"],[class*="upload-preview"],[class*="dz-preview"],[class*="file-thumb"],[class*="attachment-preview"]';return Array.from(document.querySelectorAll(sel)).slice(0,20).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),src_preview:(el.src||el.querySelector('img')?.src||'').slice(0,80)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getUploadButtons
+// ---------------------------------------------------------------------------
+
+/**
+ * Find upload/attach buttons on the page (max 20).
+ * Matches buttons, links, labels, and role=button elements whose text or class indicates upload/attach.
+ */
+export async function getUploadButtons(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const kw=['upload','attach','browse files','choose file','select file','add file'];return Array.from(document.querySelectorAll('button,a,label,[role="button"]')).filter(el=>{const t=(el.textContent||'').toLowerCase().trim();const c=(el.className||'').toString().toLowerCase();return kw.some(k=>t.includes(k))||c.includes('upload-btn')||c.includes('btn-upload')}).slice(0,20).map(el=>({tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),text_preview:(el.textContent||'').trim().slice(0,60)})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getAcceptedFileTypes
+// ---------------------------------------------------------------------------
+
+/**
+ * Read accepted file types from all file inputs that have an accept attribute (max 20).
+ * Returns inputId, the raw accept string, and acceptedTypes as a parsed array.
+ */
+export async function getAcceptedFileTypes(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('input[type="file"][accept]')).slice(0,20).map(el=>({inputId:el.id||null,accept:el.accept,acceptedTypes:el.accept.split(',').map(t=>t.trim())})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+// ---------------------------------------------------------------------------
+// getMultipleFileInputs
+// ---------------------------------------------------------------------------
+
+/**
+ * Find file inputs that accept multiple files (max 10).
+ * Returns id, name, and accept for each.
+ */
+export async function getMultipleFileInputs(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return Array.from(document.querySelectorAll('input[type="file"][multiple]')).slice(0,10).map(el=>({id:el.id||null,name:el.name||null,accept:el.accept||null})) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

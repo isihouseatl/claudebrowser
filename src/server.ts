@@ -48,7 +48,7 @@ import { findByLabel, findByPlaceholder, findButton, findByRole, findByText, fin
 import { scrollUntilVisible, scrollUntilText, scrollContainer, scrollContainerToEnd, getContainerScrollState, infiniteScrollUntil, smoothScrollTo } from './cdp/scroll2';
 import { waitForToast, getToasts, waitForToastContaining, dismissToast, interceptBrowserNotification, getCapturedNotifications, clearCapturedNotifications, waitForBannerChange, getNotificationPermission, isNotificationSupported, getPageVisibility, isPageVisible, getDocumentReadyState, getPageCharset, getDocumentMode, getLastModified } from './cdp/notify';
 import { clickTableHeader, getTableRowCount, getTableColumnValues, findTableRow, clickTableCell, getTableColumn, getTableHeaders, filterTableRows, getTables, getTableHeaders2, getTableRow2, getTableData3, getTableCellValue, searchTableColumn, getTableCount2, getDataGridInfo } from './cdp/table2';
-import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload } from './cdp/upload2';
+import { findFileInputs, setFilesOnInput, waitForUploadComplete, getUploadProgress, simulateDragDropFile, clickAndUpload, getFileUploadInputs, getDropzoneElements, getDragDropAreas, getUploadProgress2, getFilePreviewElements, getUploadButtons, getAcceptedFileTypes, getMultipleFileInputs } from './cdp/upload2';
 import { getViewportElements, isInViewport, getElementCenter, getRelativePosition, getElementsInRegion, getPageDimensions, getLayoutShift, getAbsolutePosition } from './cdp/layout';
 import { getElementObstruction, getClickableState, getEventListeners, getPageDiagnostic, findStaleElements, getComputedProperties, checkVisibility } from './cdp/debug';
 import { getAnimations, getElementAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationSpeed, finishAllAnimations, cancelElementAnimations, waitForAnimationsFinished } from './cdp/animations';
@@ -181,6 +181,8 @@ import { getChartElements, getChartJs, getD3Elements2, getApexCharts, getHighcha
 import { getLoginForms, getSocialLoginButtons, getOAuthButtons, getPasswordFields2, getTwoFactorInputs, getRememberMeCheckboxes, getForgotPasswordLinks, getSignupLinks } from './cdp/auth2';
 import { getSocialShareButtons, getOpenGraphTags3, getTwitterCardTags3, getFacebookMetaTags, getSocialEmbeds, getSocialLinks2, getSocialProofElements, getFollowButtons } from './cdp/social2';
 import { getTooltipElements, getTitleAttributes, getAriaDescribedBy, getPopoverTriggers, getHelpTexts, getInfoIcons, getTooltipContent, getHoverCards } from './cdp/tooltip2';
+import { getStepperElements, getWizardSteps, getProgressSteps, getStepIndicators, getCurrentStep, getCompletedSteps, getStepNavigation, getMultiStepForms } from './cdp/stepper2';
+import { getCalendarElements, getDatePickerInputs, getCalendarNavigation, getCalendarDays, getSelectedDates, getEventCalendars, getTimePickerInputs, getDateRangePickers } from './cdp/calendar2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -2125,6 +2127,33 @@ const TOOLS = [
   { name: 'browser_info_icons', description: 'Info/help icon elements: [{tag, id, class_preview, ariaLabel_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_tooltip_content', description: 'Rendered tooltip content divs: [{tag, id, class_preview, text_preview, visible}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_hover_cards', description: 'Hover card elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Upload2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_file_upload_inputs', description: 'File input elements: [{id, name, accept, multiple, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dropzone_elements', description: 'Dropzone upload areas: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_drag_drop_areas', description: 'Elements with drag/drop patterns: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_upload_progress2', description: 'Upload progress elements: [{tag, id, class_preview, value, max}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_file_preview_elements', description: 'File preview/thumbnail elements: [{tag, id, class_preview, src_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_upload_buttons', description: 'Upload/attach buttons: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_accepted_file_types', description: 'Accepted file types from inputs: [{inputId, accept, acceptedTypes}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_multiple_file_inputs', description: 'File inputs with multiple=true: [{id, name, accept}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Stepper2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_stepper_elements', description: 'Stepper/step indicator elements: [{tag, id, class_preview, stepCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wizard_steps', description: 'Wizard step elements: [{tag, id, class_preview, text_preview, isActive, isCompleted}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_progress_steps', description: 'Step progress indicators: [{tag, id, class_preview, stepNumber, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_step_indicators', description: 'Numbered step indicators: [{tag, id, number, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_current_step', description: 'Currently active step: {tag, id, class_preview, text_preview, stepIndex}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_completed_steps', description: 'Completed steps: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_step_navigation', description: 'Next/Previous step buttons: [{tag, id, class_preview, text_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_multi_step_forms', description: 'Multi-step form containers: [{id, class_preview, totalSteps, currentStepIndex}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  // ── Calendar2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_calendar_elements', description: 'Calendar widget elements: [{tag, id, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_picker_inputs', description: 'Date input fields: [{id, name, type, value, min, max, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_calendar_navigation', description: 'Calendar prev/next navigation: [{tag, id, class_preview, text_preview, direction}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_calendar_days', description: 'Calendar day cells: {totalDays, selectedDays, todayCell, disabledDays}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selected_dates', description: 'Currently selected dates: [{inputId, value, type}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_event_calendars', description: 'Event calendar detection: {hasFullCalendar, hasEventCalendar, containerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_time_picker_inputs', description: 'Time input fields: [{id, name, value, min, max}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_range_pickers', description: 'Date range picker elements: [{tag, id, class_preview, startValue, endValue}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4152,6 +4181,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_info_icons':               return await getInfoIcons(cdp);
         case 'browser_tooltip_content':          return await getTooltipContent(cdp);
         case 'browser_hover_cards':              return await getHoverCards(cdp);
+                // upload2 new
+        case 'browser_file_upload_inputs':       return await getFileUploadInputs(cdp);
+        case 'browser_dropzone_elements':        return await getDropzoneElements(cdp);
+        case 'browser_drag_drop_areas':          return await getDragDropAreas(cdp);
+        case 'browser_upload_progress2':         return await getUploadProgress2(cdp);
+        case 'browser_file_preview_elements':    return await getFilePreviewElements(cdp);
+        case 'browser_upload_buttons':           return await getUploadButtons(cdp);
+        case 'browser_accepted_file_types':      return await getAcceptedFileTypes(cdp);
+        case 'browser_multiple_file_inputs':     return await getMultipleFileInputs(cdp);
+        // stepper2 new
+        case 'browser_stepper_elements':         return await getStepperElements(cdp);
+        case 'browser_wizard_steps':             return await getWizardSteps(cdp);
+        case 'browser_progress_steps':           return await getProgressSteps(cdp);
+        case 'browser_step_indicators':          return await getStepIndicators(cdp);
+        case 'browser_current_step':             return await getCurrentStep(cdp);
+        case 'browser_completed_steps':          return await getCompletedSteps(cdp);
+        case 'browser_step_navigation':          return await getStepNavigation(cdp);
+        case 'browser_multi_step_forms':         return await getMultiStepForms(cdp);
+        // calendar2 new
+        case 'browser_calendar_elements':        return await getCalendarElements(cdp);
+        case 'browser_date_picker_inputs':       return await getDatePickerInputs(cdp);
+        case 'browser_calendar_navigation':      return await getCalendarNavigation(cdp);
+        case 'browser_calendar_days':            return await getCalendarDays(cdp);
+        case 'browser_selected_dates':           return await getSelectedDates(cdp);
+        case 'browser_event_calendars':          return await getEventCalendars(cdp);
+        case 'browser_time_picker_inputs':       return await getTimePickerInputs(cdp);
+        case 'browser_date_range_pickers':       return await getDateRangePickers(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
