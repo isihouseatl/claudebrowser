@@ -212,3 +212,77 @@ export async function getHardwareConcurrency(cdp: any): Promise<{ content: [{ ty
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
 }
+
+// Geolocation permission state: {state, isGranted, isDenied, isPrompt}
+export async function getGeolocationPermission4(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { try { const p = await navigator.permissions.query({ name: 'geolocation' }); return { state: p.state, isGranted: p.state === 'granted', isDenied: p.state === 'denied', isPrompt: p.state === 'prompt' }; } catch(e) { return { state: 'unknown', isGranted: false, isDenied: false, isPrompt: false, error: e.message }; } })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// navigator.geolocation availability: {available, permissionState}
+export async function getGeolocationState(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(async () => { const available = 'geolocation' in navigator; let permissionState = 'unknown'; try { const p = await navigator.permissions.query({ name: 'geolocation' }); permissionState = p.state; } catch(e) {} return { available, permissionState }; })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Map container elements (leaflet, google maps, mapbox): [{tag, id, class_preview, mapType}] (max 10)
+export async function getMapElements3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const results = []; const selectors = ['.leaflet-container', '.gm-style', '.mapboxgl-map', '.ol-viewport', 'div[id*="map"]', 'div[class*="map"]', 'div[id*="Map"]', 'div[class*="Map"]']; const seen = new Set(); for (const sel of selectors) { try { const els = document.querySelectorAll(sel); for (const el of els) { if (seen.has(el)) continue; seen.add(el); let mapType = 'unknown'; if (el.classList.contains('leaflet-container')) mapType = 'leaflet'; else if (el.querySelector('.gm-style') || el.classList.contains('gm-style')) mapType = 'google'; else if (el.classList.contains('mapboxgl-map')) mapType = 'mapbox'; else if (el.classList.contains('ol-viewport')) mapType = 'openlayers'; results.push({ tag: el.tagName.toLowerCase(), id: el.id || null, class_preview: el.className.toString().slice(0, 80), mapType }); if (results.length >= 10) return results; } } catch(e) {} } return results; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Inputs for lat/lng/coordinates: [{id, name, placeholder_preview, type}] (max 20)
+export async function getCoordinateInputs(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const results = []; const inputs = document.querySelectorAll('input'); const coordPatterns = /lat|lng|lon|longitude|latitude|coord|geo/i; for (const inp of inputs) { const id = inp.id || ''; const name = inp.name || ''; const ph = inp.placeholder || ''; if (coordPatterns.test(id) || coordPatterns.test(name) || coordPatterns.test(ph)) { results.push({ id: id || null, name: name || null, placeholder_preview: ph.slice(0, 60) || null, type: inp.type || 'text' }); if (results.length >= 20) break; } } return results; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Address/location inputs: [{id, name, placeholder_preview, autocomplete}] (max 20)
+export async function getAddressInputs(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const results = []; const inputs = document.querySelectorAll('input'); const addrPatterns = /address|street|city|state|zip|postal|country|suburb|region|location/i; for (const inp of inputs) { const id = inp.id || ''; const name = inp.name || ''; const ph = inp.placeholder || ''; const ac = inp.getAttribute('autocomplete') || ''; if (addrPatterns.test(id) || addrPatterns.test(name) || addrPatterns.test(ph) || addrPatterns.test(ac)) { results.push({ id: id || null, name: name || null, placeholder_preview: ph.slice(0, 60) || null, autocomplete: ac || null }); if (results.length >= 20) break; } } return results; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Location search boxes: [{id, class_preview, placeholder_preview, text_preview}] (max 10)
+export async function getLocationSearch(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const results = []; const locPatterns = /location|search.*place|find.*address|where|destination|place/i; const els = document.querySelectorAll('input[type="search"], input[type="text"], [role="searchbox"], [role="combobox"]'); for (const el of els) { const ph = el.getAttribute('placeholder') || ''; const cls = el.className ? el.className.toString() : ''; const id = el.id || ''; const text = (el.value || el.textContent || '').toString().slice(0, 60); if (locPatterns.test(ph) || locPatterns.test(cls) || locPatterns.test(id) || locPatterns.test(text)) { results.push({ id: id || null, class_preview: cls.slice(0, 80), placeholder_preview: ph.slice(0, 60), text_preview: text }); if (results.length >= 10) break; } } return results; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Detected geo libraries: {hasLeaflet, hasGoogleMaps, hasMapbox, hasOpenLayers, hasCesium}
+export async function getGeoApiUsage(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { return { hasLeaflet: typeof L !== 'undefined' && typeof L.map === 'function', hasGoogleMaps: typeof google !== 'undefined' && typeof google.maps !== 'undefined', hasMapbox: typeof mapboxgl !== 'undefined', hasOpenLayers: typeof ol !== 'undefined', hasCesium: typeof Cesium !== 'undefined' }; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}
+
+// Browser timezone: {timezone, timezoneOffset, locale, dateFormat}
+export async function getTimezoneInfo2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const tz = Intl.DateTimeFormat().resolvedOptions(); const offset = -new Date().getTimezoneOffset(); const locale = navigator.language || navigator.languages && navigator.languages[0] || 'unknown'; let dateFormat = null; try { dateFormat = new Intl.DateTimeFormat(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(2000, 0, 15)); } catch(e) {} return { timezone: tz.timeZone, timezoneOffset: offset, locale, dateFormat }; })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value) }] };
+}

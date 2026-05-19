@@ -203,6 +203,9 @@ import { getContentEditableElements, getEditorToolbars, getEditorContent, getEdi
 import { getIframeElements, getEmbedElements3, getObjectElements3, getCrossOriginFrames, getSameOriginFrames, getFrameSandbox, getFramePermissions, getThirdPartyScripts } from './cdp/embed3';
 import { getKeyboardShortcuts, getInputMode, getHotkeys, getKeyboardNavElements, getArrowKeyTargets, getEnterKeyTargets, getEscapeKeyTargets, getKeyboardListeners2 } from './cdp/keyboard3';
 import { getCookies3, getSessionStorageItems3, getLocalStorageItems3, getIndexedDBDatabases5, getCacheStorageNames3, getStorageQuota5, getCookieCount5, getStorageState } from './cdp/cookie3';
+import { getGeolocationPermission4, getGeolocationState, getMapElements3, getCoordinateInputs, getAddressInputs, getLocationSearch, getGeoApiUsage, getTimezoneInfo2 } from './cdp/geolocation2';
+import { getPrintStyles, getPrintMediaQuery, getPrintOnlyElements, getPrintHiddenElements2, getPageBreakElements2, getPrintLinks, getPrintMetadata, getPrintViewport } from './cdp/print3';
+import { getClipboardPermission2, getClipboardState, getCopyButtons2, getCutButtons, getPasteTargets, getClipboardEventListeners, getClipboardApiUsage, getSelectAllElements } from './cdp/clipboard4';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2333,6 +2336,33 @@ const TOOLS = [
   { name: 'browser_storage_quota5', description: 'Storage quota info: {quota, usage, usageDetails}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_cookie_count5', description: 'Cookie breakdown: {count, secureCookies, httpOnlyCookies, sameSiteStrict, sameSiteLax, sameSiteNone}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_storage_state', description: 'Storage summary: {hasCookies, hasLocalStorage, hasSessionStorage, hasIndexedDB, hasCacheStorage}', inputSchema: { type: 'object', properties: {} } },
+  // ── Geolocation2 new ──────────────────────────────────────────────────────────────
+  { name: 'browser_geolocation_permission4', description: 'Geolocation permission state: {state, isGranted, isDenied, isPrompt}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geolocation_state', description: 'navigator.geolocation availability: {available, permissionState}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_map_elements3', description: 'Map container elements: [{tag, id, class_preview, mapType}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_coordinate_inputs', description: 'Lat/lng coordinate inputs: [{id, name, placeholder_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_address_inputs', description: 'Address/location inputs: [{id, name, placeholder_preview, autocomplete}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_location_search', description: 'Location search boxes: [{id, class_preview, placeholder_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geo_api_usage', description: 'Detected geo libraries: {hasLeaflet, hasGoogleMaps, hasMapbox, hasOpenLayers, hasCesium}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timezone_info2', description: 'Browser timezone: {timezone, timezoneOffset, locale, dateFormat}', inputSchema: { type: 'object', properties: {} } },
+  // ── Print3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_print_styles', description: 'CSS rules inside @media print: [{selector, property, value}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_media_query', description: '@media print detection: {hasPrintStyles, ruleCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_only_elements', description: 'Elements visible only in print: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_hidden_elements2', description: 'Elements hidden in print: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_break_elements2', description: 'Elements with page-break CSS: [{tag, id, class_preview, pageBreakBefore, pageBreakAfter}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_links', description: 'Links with href shown in print: [{tag, href_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_metadata', description: 'Document metadata for printing: {title, author, description}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_print_viewport', description: 'Page dimensions for print: {width, height, mediaType, colorScheme}', inputSchema: { type: 'object', properties: {} } },
+  // ── Clipboard4 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_clipboard_permission2', description: 'Clipboard read/write permissions: {readState, writeState, isGranted}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_state', description: 'Clipboard API availability: {hasClipboardApi, hasExecCommandCopy, hasExecCommandPaste}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_copy_buttons2', description: 'Buttons that trigger copy: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cut_buttons', description: 'Buttons that trigger cut: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paste_targets', description: 'Elements that accept paste: [{tag, id, type, contenteditable}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_event_listeners', description: 'Clipboard event handler summary: {hasCopy, hasCut, hasPaste, listenerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clipboard_api_usage', description: 'Detected clipboard patterns: {usesClipboardApi, usesExecCommand, hasClipboardButton}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_select_all_elements', description: 'Elements with select-all behavior: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4549,6 +4579,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_storage_quota5':           return await getStorageQuota5(cdp);
         case 'browser_cookie_count5':            return await getCookieCount5(cdp);
         case 'browser_storage_state':            return await getStorageState(cdp);
+                // geolocation2 new
+        case 'browser_geolocation_permission4': return await getGeolocationPermission4(cdp);
+        case 'browser_geolocation_state':        return await getGeolocationState(cdp);
+        case 'browser_map_elements3':            return await getMapElements3(cdp);
+        case 'browser_coordinate_inputs':        return await getCoordinateInputs(cdp);
+        case 'browser_address_inputs':           return await getAddressInputs(cdp);
+        case 'browser_location_search':          return await getLocationSearch(cdp);
+        case 'browser_geo_api_usage':            return await getGeoApiUsage(cdp);
+        case 'browser_timezone_info2':           return await getTimezoneInfo2(cdp);
+        // print3 new
+        case 'browser_print_styles':             return await getPrintStyles(cdp);
+        case 'browser_print_media_query':        return await getPrintMediaQuery(cdp);
+        case 'browser_print_only_elements':      return await getPrintOnlyElements(cdp);
+        case 'browser_print_hidden_elements2':   return await getPrintHiddenElements2(cdp);
+        case 'browser_page_break_elements2':     return await getPageBreakElements2(cdp);
+        case 'browser_print_links':              return await getPrintLinks(cdp);
+        case 'browser_print_metadata':           return await getPrintMetadata(cdp);
+        case 'browser_print_viewport':           return await getPrintViewport(cdp);
+        // clipboard4 new
+        case 'browser_clipboard_permission2':    return await getClipboardPermission2(cdp);
+        case 'browser_clipboard_state':          return await getClipboardState(cdp);
+        case 'browser_copy_buttons2':            return await getCopyButtons2(cdp);
+        case 'browser_cut_buttons':              return await getCutButtons(cdp);
+        case 'browser_paste_targets':            return await getPasteTargets(cdp);
+        case 'browser_clipboard_event_listeners': return await getClipboardEventListeners(cdp);
+        case 'browser_clipboard_api_usage':      return await getClipboardApiUsage(cdp);
+        case 'browser_select_all_elements':      return await getSelectAllElements(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
