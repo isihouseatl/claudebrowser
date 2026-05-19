@@ -245,3 +245,117 @@ export async function getClipboardSupport(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+/**
+ * getSelectionRanges — Current selection ranges:
+ * { rangeCount, isCollapsed, hasSelection }
+ */
+export async function getSelectionRanges(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel=window.getSelection();return{rangeCount:sel?sel.rangeCount:0,isCollapsed:sel?sel.isCollapsed:true,hasSelection:sel?sel.toString().length>0:false} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getSelectedNodeInfo — Node containing the selection anchor:
+ * { tag, id, class_preview, text_preview }
+ */
+export async function getSelectedNodeInfo(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel=window.getSelection();if(!sel||!sel.anchorNode)return{tag:null,id:null,class_preview:null,text_preview:null};const n=sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode;return{tag:n?n.tagName?n.tagName.toLowerCase():null:null,id:n&&n.id?n.id:null,class_preview:n&&n.className?(n.className||'').toString().slice(0,40):null,text_preview:sel.toString().slice(0,60)} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getCaretPosition2 — Caret position in focused input:
+ * { inInput, tag, id, selectionStart, selectionEnd, value_preview }
+ * (Renamed from getCaretPosition to avoid collision with selection.ts export.)
+ */
+export async function getCaretPosition2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const el=document.activeElement;if(!el||!('selectionStart' in el))return{inInput:false};return{inInput:true,tag:el.tagName.toLowerCase(),id:el.id||null,selectionStart:el.selectionStart,selectionEnd:el.selectionEnd,value_preview:(el.value||'').slice(0,60)} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getSelectionBounds — Bounding rect of current selection:
+ * { x, y, width, height, hasSelection }
+ */
+export async function getSelectionBounds(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel=window.getSelection();if(!sel||sel.rangeCount===0)return{hasSelection:false};try{const r=sel.getRangeAt(0).getBoundingClientRect();return{hasSelection:true,x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}}catch(e){return{hasSelection:false,error:e.message}} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getTextSelection2 — Currently selected text:
+ * { text_preview, length }
+ * (Renamed from getTextSelection to avoid collision with existing export in this file.)
+ */
+export async function getTextSelection2(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const t=window.getSelection()?window.getSelection().toString():'';return{text_preview:t.slice(0,200),length:t.length} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getSelectionContainer — Deepest common ancestor of selection:
+ * { tag, id, class_preview }
+ */
+export async function getSelectionContainer(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel=window.getSelection();if(!sel||sel.rangeCount===0)return{tag:null,id:null,class_preview:null};try{const el=sel.getRangeAt(0).commonAncestorContainer;const n=el.nodeType===3?el.parentElement:el;return{tag:n?n.tagName?n.tagName.toLowerCase():null:null,id:n&&n.id?n.id:null,class_preview:n&&n.className?(n.className||'').toString().slice(0,40):null}}catch(e){return{tag:null,id:null,class_preview:null}} })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getRichTextEditors — Rich text editor elements:
+ * [{ tag, id, class_preview, framework }] (max 20)
+ */
+export async function getRichTextEditors(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[contenteditable="true"],[role="textbox"],[class*="ql-editor"],[class*="ProseMirror"],[class*="tiptap"],[class*="codex-editor"],[class*="DraftEditor"]';return Array.from(document.querySelectorAll(sel)).slice(0,20).map(el=>{let fw='generic';if(el.className&&el.className.toString().includes('ql-'))fw='quill';else if(el.className&&el.className.toString().includes('ProseMirror'))fw='prosemirror';else if(el.className&&el.className.toString().includes('tiptap'))fw='tiptap';return{tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:(el.className||'').toString().slice(0,40),framework:fw}}) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}
+
+/**
+ * getMarkdownEditors — Markdown editor elements (CodeMirror, Monaco, ACE):
+ * [{ tag, id, class_preview, editor }] (max 10)
+ */
+export async function getMarkdownEditors(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sel='[class*="CodeMirror"],[class*="monaco-editor"],[class*="ace_editor"],[class*="cm-editor"]';return Array.from(document.querySelectorAll(sel)).slice(0,10).map(el=>{let ed='unknown';const c=(el.className||'').toString();if(c.includes('CodeMirror'))ed='codemirror';else if(c.includes('monaco'))ed='monaco';else if(c.includes('ace_'))ed='ace';else if(c.includes('cm-editor'))ed='codemirror6';return{tag:el.tagName.toLowerCase(),id:el.id||null,class_preview:c.slice(0,40),editor:ed}}) })()`,
+    returnByValue: true,
+  });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
+}

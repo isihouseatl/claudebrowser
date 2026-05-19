@@ -133,7 +133,7 @@ import { getLocalStorageItems, getSessionStorageItems, getLocalStorageSize3, get
 import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts, getShadowHostElements2, getWebComponents, getTemplateElements2, getSlotElements2, getCustomElementRegistry, getShadowDomDepth, getPartElements, getExportPartsElements, getShadowRoots, getCustomElements2, getSlotElements3, getOpenShadowRoots3, getClosedShadowHosts, getTemplateElements3, getShadowRootContent, getWebComponents2 } from './cdp/shadow2';
 import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecentlyAddedElements, getHiddenElements, getDOMNodeCount, getDeepestElement, getOrphanedNodes } from './cdp/mutation2';
 import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
-import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
+import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport, getSelectionRanges, getSelectedNodeInfo, getCaretPosition2, getSelectionBounds, getTextSelection2, getSelectionContainer, getRichTextEditors, getMarkdownEditors } from './cdp/clipboard3';
 import { getScrollPositionFull, getViewportDimensions, getElementsInViewport, getAboveTheFold, getOffscreenElements, getStickyElements, getOverflowContainers, getZIndexStack } from './cdp/viewport2';
 import { getMetaTags2, getPageTitle2, getCanonicalUrl3, getRobotsDirectives, getLinkRelTags, getHreflangTags2, getPageLanguage2, getStructuredDataCount, getPrintMediaRules, getPageBreakElements, getPrintHiddenElements, getPrintVisibleElements, getPrintStylesheets, getPaperSizeHints, getPrintFontSizes, getOrphanWidowSettings } from './cdp/print2';
 import { getGridContainers, getFlexContainers2, getGridAreas, getFlexItems, getGridCount, getGridGaps, getAbsoluteElements, getLayoutShift2 } from './cdp/grid2';
@@ -174,6 +174,8 @@ import { getWebAppManifest, getThemeColorMeta, getAppleTouchIcons, getPwaInstall
 import { getTextOverflow, getWhitespace, getLetterSpacing, getTextTransform, getTextDecoration, getTextShadow, getTextAlign, getVerticalAlign } from './cdp/typography2';
 import { getAddToCartButtons, getProductImages, getCartIndicator, getWishlistButtons, getQuantityInputs, getProductVariants, getShippingInfo, getPromoElements } from './cdp/ecommerce2';
 import { getHoverableElements, getClickTargets, getDoubleClickTargets, getContextMenuElements, getLongPressElements, getSwipeableContainers, getPinchZoomElements, getPointerCapture3 } from './cdp/pointer2';
+import { getMutationObservers2, getIntersectionObservers2, getResizeObservers2, getPerformanceObservers, getObservableMutations, getObserverTargets, getObserverCallbacks, getObserverThresholds } from './cdp/observer2';
+import { getConsentBanners, getPrivacyLinks, getGdprElements, getCookiePreferences, getConsentButtons, getPrivacyPolicyLinks, getTermsLinks, getDoNotTrack } from './cdp/consent2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -2037,6 +2039,33 @@ const TOOLS = [
   { name: 'browser_swipeable_containers', description: 'Elements with swipe/gesture classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_pinch_zoom_elements', description: 'Elements with pinch/zoom attributes: [{tag, id, class_preview, touchAction}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_pointer_capture3', description: 'Pointer events API support: {pointerEventsSupported, touchEventsSupported, maxTouchPoints}', inputSchema: { type: 'object', properties: {} } },
+  // ── Clipboard3 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_selection_ranges', description: 'Current selection ranges: {rangeCount, isCollapsed, hasSelection}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selected_node_info', description: 'Node containing selection anchor: {tag, id, class_preview, text_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_caret_position2', description: 'Caret position in focused input: {inInput, tag, id, selectionStart, selectionEnd, value_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selection_bounds', description: 'Bounding rect of current selection: {x, y, width, height, hasSelection}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_selection2', description: 'Currently selected text: {text_preview, length}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_selection_container', description: 'Common ancestor of selection: {tag, id, class_preview}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rich_text_editors', description: 'Rich text editor elements: [{tag, id, class_preview, framework}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_markdown_editors', description: 'Code/markdown editor elements: [{tag, id, class_preview, editor}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Observer2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_mutation_observers2', description: 'MutationObserver support: {supported, nativeMutationObserver}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_intersection_observers2', description: 'IntersectionObserver support: {supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resize_observers2', description: 'ResizeObserver support: {supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_performance_observers', description: 'PerformanceObserver support and entry types: {supported, entryTypes}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_observable_mutations', description: 'Elements with observable patterns: [{tag, id, class_preview, reason}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_observer_targets', description: 'Lazy-loaded/observed images: [{tag, id, dataSrc, loading}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_observer_callbacks', description: 'IntersectionObserver usage patterns: {hasLazyLoad, hasInfiniteScroll, hasAnimationTrigger}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_observer_thresholds', description: 'Observed element counts: {lazyCount, animateCount, stickyCount, revealCount}', inputSchema: { type: 'object', properties: {} } },
+  // ── Consent2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_consent_banners', description: 'Cookie/consent banner elements: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_privacy_links', description: 'Links to privacy pages: [{text_preview, href_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_gdpr_elements', description: 'GDPR/CCPA-related elements: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_preferences', description: 'Cookie preference elements: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_consent_buttons', description: 'Accept/reject consent buttons: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_privacy_policy_links', description: 'Links to privacy policy: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_terms_links', description: 'Links to terms/conditions: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_do_not_track', description: 'DNT and privacy control: {doNotTrack, globalPrivacyControl, navigatorDoNotTrack}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3983,6 +4012,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_swipeable_containers':     return await getSwipeableContainers(cdp);
         case 'browser_pinch_zoom_elements':      return await getPinchZoomElements(cdp);
         case 'browser_pointer_capture3':         return await getPointerCapture3(cdp);
+                // clipboard3 new
+        case 'browser_selection_ranges':         return await getSelectionRanges(cdp);
+        case 'browser_selected_node_info':       return await getSelectedNodeInfo(cdp);
+        case 'browser_caret_position2':          return await getCaretPosition2(cdp);
+        case 'browser_selection_bounds':         return await getSelectionBounds(cdp);
+        case 'browser_text_selection2':          return await getTextSelection2(cdp);
+        case 'browser_selection_container':      return await getSelectionContainer(cdp);
+        case 'browser_rich_text_editors':        return await getRichTextEditors(cdp);
+        case 'browser_markdown_editors':         return await getMarkdownEditors(cdp);
+        // observer2 new
+        case 'browser_mutation_observers2':      return await getMutationObservers2(cdp);
+        case 'browser_intersection_observers2':  return await getIntersectionObservers2(cdp);
+        case 'browser_resize_observers2':        return await getResizeObservers2(cdp);
+        case 'browser_performance_observers':    return await getPerformanceObservers(cdp);
+        case 'browser_observable_mutations':     return await getObservableMutations(cdp);
+        case 'browser_observer_targets':         return await getObserverTargets(cdp);
+        case 'browser_observer_callbacks':       return await getObserverCallbacks(cdp);
+        case 'browser_observer_thresholds':      return await getObserverThresholds(cdp);
+        // consent2 new
+        case 'browser_consent_banners':          return await getConsentBanners(cdp);
+        case 'browser_privacy_links':            return await getPrivacyLinks(cdp);
+        case 'browser_gdpr_elements':            return await getGdprElements(cdp);
+        case 'browser_cookie_preferences':       return await getCookiePreferences(cdp);
+        case 'browser_consent_buttons':          return await getConsentButtons(cdp);
+        case 'browser_privacy_policy_links':     return await getPrivacyPolicyLinks(cdp);
+        case 'browser_terms_links':              return await getTermsLinks(cdp);
+        case 'browser_do_not_track':             return await getDoNotTrack(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
