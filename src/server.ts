@@ -188,6 +188,9 @@ import { retry } from './retry';
 import { readConfig } from './config';
 import { getNotificationPermission4, getNotificationElements, getPushSubscription, getServiceWorkerNotifications, getNotificationBadge, getNotificationCount, getWebPushElements, getNotificationHistory } from './cdp/notification3';
 import { getPerformanceTiming, getResourceTimings4, getLargestContentfulPaint3, getCumulativeLayoutShift3, getFirstInputDelay3, getNavigationTiming5, getMemoryInfo3, getLongTasks3 } from './cdp/performance3';
+import { getVideoElements4, getAudioElements3, getMediaPlayers, getVideoSources2, getAudioSources, getMediaControls, getStreamElements, getMediaState2 } from './cdp/media3';
+import { getCssAnimations4, getCssTransitions4, getAnimatedElements, getKeyframeRules, getTransitionProperties, getRunningAnimations, getAnimationTiming, getWapiAnimations } from './cdp/animation3';
+import { getSearchInputs3, getSearchForms3, getSearchResults2, getFilterElements2, getSortControls, getAutocompleteInputs, getSearchSuggestions2, getActiveFilters } from './cdp/search4';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2183,6 +2186,33 @@ const TOOLS = [
   { name: 'browser_nav_timing5', description: 'Navigation timing detail: {redirectCount, type, protocol, transferSize}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_memory_info3', description: 'JS heap memory (Chrome): {usedJSHeapSize, totalJSHeapSize, jsHeapSizeLimit, available}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_long_tasks3', description: 'Long task entries >50ms: {count, entries:[{duration, startTime, attribution_preview}]}', inputSchema: { type: 'object', properties: {} } },
+  // ── Media3 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_video_elements4', description: 'Video element details: [{id, src_preview, paused, currentTime, duration, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_audio_elements3', description: 'Audio element details: [{id, src_preview, paused, currentTime, duration, muted}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_players', description: 'All media summary: {videoCount, audioCount, playingCount, pausedCount, mutedCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_video_sources2', description: 'Video source elements: [{src_preview, type, parentId}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_audio_sources', description: 'Audio source elements: [{src_preview, type, parentId}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_controls', description: 'Media control buttons: [{tag, id, class_preview, text_preview, type}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_stream_elements', description: 'Elements with MediaStream sources: [{tag, id, srcObject_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_state2', description: 'Overall media state: {hasVideo, hasAudio, anyPlaying, anyMuted, hasAutoplay, hasPictureinPicture}', inputSchema: { type: 'object', properties: {} } },
+  // ── Animation3 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_css_animations4', description: 'Elements with CSS animation-name: [{tag, id, class_preview, animationName, duration}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_css_transitions4', description: 'Elements with CSS transitions: [{tag, id, class_preview, transitionProperty, duration}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animated_elements', description: 'Animated element counts: {total, animationOnly, transitionOnly, both}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_keyframe_rules', description: '@keyframes rules from stylesheets: [{name, ruleCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_transition_properties', description: 'Unique transition-property values in use: [{property, count}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_running_animations', description: 'Web Animations API running: [{id, playState, currentTime, effect_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_animation_timing', description: 'Web Animations API timing summary: {total, running, paused, finished, idle}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wapi_animations', description: 'document.getAnimations() summary: {count, hasWebAnimationsApi, animationsRunning}', inputSchema: { type: 'object', properties: {} } },
+  // ── Search4 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_search_inputs3', description: 'Search input fields: [{id, name, placeholder_preview, value_preview, type, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_forms3', description: 'Forms with search role/action: [{id, action_preview, method, inputCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_results2', description: 'Search result elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_filter_elements2', description: 'Filter UI elements: [{tag, id, class_preview, type, label_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_sort_controls', description: 'Sort/order controls: [{tag, id, class_preview, text_preview, isActive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_autocomplete_inputs', description: 'Inputs with autocomplete/datalist: [{id, autocomplete, listId, optionCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_suggestions2', description: 'Visible autocomplete options: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_active_filters', description: 'Active/selected filter indicators: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4264,6 +4294,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_nav_timing5':              return await getNavigationTiming5(cdp);
         case 'browser_memory_info3':             return await getMemoryInfo3(cdp);
         case 'browser_long_tasks3':              return await getLongTasks3(cdp);
+                // media3 new
+        case 'browser_video_elements4':          return await getVideoElements4(cdp);
+        case 'browser_audio_elements3':          return await getAudioElements3(cdp);
+        case 'browser_media_players':            return await getMediaPlayers(cdp);
+        case 'browser_video_sources2':           return await getVideoSources2(cdp);
+        case 'browser_audio_sources':            return await getAudioSources(cdp);
+        case 'browser_media_controls':           return await getMediaControls(cdp);
+        case 'browser_stream_elements':          return await getStreamElements(cdp);
+        case 'browser_media_state2':             return await getMediaState2(cdp);
+        // animation3 new
+        case 'browser_css_animations4':          return await getCssAnimations4(cdp);
+        case 'browser_css_transitions4':         return await getCssTransitions4(cdp);
+        case 'browser_animated_elements':        return await getAnimatedElements(cdp);
+        case 'browser_keyframe_rules':           return await getKeyframeRules(cdp);
+        case 'browser_transition_properties':    return await getTransitionProperties(cdp);
+        case 'browser_running_animations':       return await getRunningAnimations(cdp);
+        case 'browser_animation_timing':         return await getAnimationTiming(cdp);
+        case 'browser_wapi_animations':          return await getWapiAnimations(cdp);
+        // search4 new
+        case 'browser_search_inputs3':           return await getSearchInputs3(cdp);
+        case 'browser_search_forms3':            return await getSearchForms3(cdp);
+        case 'browser_search_results2':          return await getSearchResults2(cdp);
+        case 'browser_filter_elements2':         return await getFilterElements2(cdp);
+        case 'browser_sort_controls':            return await getSortControls(cdp);
+        case 'browser_autocomplete_inputs':      return await getAutocompleteInputs(cdp);
+        case 'browser_search_suggestions2':      return await getSearchSuggestions2(cdp);
+        case 'browser_active_filters':           return await getActiveFilters(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
