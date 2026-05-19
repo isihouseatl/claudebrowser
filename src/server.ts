@@ -130,7 +130,7 @@ import { getTemplateElements, getCustomElements, getCustomElementNames, getSlotE
 import { getJsonLdScripts, getOpenGraphTags2, getTwitterCardTags2, getSchemaOrg, getPageJsonData, getWindowJsonGlobals, getDataAttributes, getPageDatasets } from './cdp/json2';
 import { getAnimatingElements, getCssAnimations, getCssTransitions, getAnimationDuration, getAnimationPlayState, pauseAllAnimations2, resumeAllAnimations2, getScrollAnimations } from './cdp/animation2';
 import { getLocalStorageItems, getSessionStorageItems, getLocalStorageSize3, getSessionStorageSize3, getIndexedDBDatabases3, getDocumentCookies, getStorageQuota3, clearLocalStorage2 } from './cdp/storage2';
-import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts } from './cdp/shadow2';
+import { getShadowHosts2, getShadowDOMContent, getShadowDepth2, getIframes3, getIframeCount3, getShadowStyles, getOpenShadowRoots, getNestedShadowHosts, getShadowHostElements2, getWebComponents, getTemplateElements2, getSlotElements2, getCustomElementRegistry, getShadowDomDepth, getPartElements, getExportPartsElements } from './cdp/shadow2';
 import { injectMutationObserver, getMutationLog2, clearMutationLog2, getRecentlyAddedElements, getHiddenElements, getDOMNodeCount, getDeepestElement, getOrphanedNodes } from './cdp/mutation2';
 import { injectFetchMonitor, getFetchLog, clearFetchLog, injectXhrMonitor, getXhrLog, clearXhrLog, getNetworkLinks, getApiEndpoints } from './cdp/fetch2';
 import { getTextSelection, getSelectableText, getDraggableCount, getDropZones2, getContentEditable, getFocusedElement2, getTabOrder2, getClipboardSupport } from './cdp/clipboard3';
@@ -142,7 +142,7 @@ import { getJsHeapSize2, getPerformanceMarks3, getPerformanceMeasures, getScript
 import { getFontFaces2, getUsedFontFamilies, getWebFontLinks, getFontSizeDistribution, getTextRenderingMode, getLineHeightDistribution, getFontWeightDistribution, getDocumentFontAPI, getLoadedFonts3, getFontFaceRules, getSystemFonts, getFontSizes, getFontWeights, getLineHeights, getTextElements, getFontLoadStatus } from './cdp/font2';
 import { getCurrentUrl2, getQueryParams3, getHashContent, getHistoryLength2 as getHistoryLengthFull, getInternalLinks2 as getInternalLinksFull, getExternalLinks2 as getExternalLinksFull, getAnchors, getRedirectMeta } from './cdp/url2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
-import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
+import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo, getCurrentUrl3, getUrlHistory, getAnchorsById, getHashLinks, getQueryParams4, getOpenGraphMeta, getTwitterCardMeta, getCanonicalUrl4 } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2, getLocalStorageItems2, getSessionStorageItems2, getLocalStorageCount, getCookieCount3, getStorageQuota2, clearLocalStorage3, getLocalStorageKey, getSessionStorageKey } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
@@ -159,6 +159,7 @@ import { getCanvasElements3, getSvgCharts, getChartLabels, getChartLegend, getD3
 import { getMapElements, getAddressElements, getPhoneNumbers, getEmailLinks, getSocialLinks, getSchemaOrg2, getMicrodata, getGeolocationPermission2 } from './cdp/geo3';
 import { getContentSecurityPolicy2, getMixedContentLinks, getCrossOriginLinks, getSubresourceIntegrity2, getIframePermissions, getExternalScripts2, getPasswordFields, getFormActions } from './cdp/security2';
 import { getGridContainers2, getFlexContainers3, getStickyElements2, getFixedElements, getAbsoluteElements2, getOverflowElements, getZIndexStack2, getViewportInfo } from './cdp/layout2';
+import { getDeepestElement2, getDuplicateIds, getEmptyElements, getHiddenElements2, getDetachedElements, getDataAttributes2, getAriaHidden2, getTabOrder3 } from './cdp/dom3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1752,6 +1753,33 @@ const TOOLS = [
   { name: 'browser_overflow_elements', description: 'Elements with overflow:scroll/auto/hidden: [{tag, id, class, overflow, overflowX, overflowY}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_zindex_stack2', description: 'Elements with z-index > 0: [{tag, id, class, zIndex}] sorted desc (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_viewport_info', description: 'Window dimensions: {innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio, scrollX, scrollY}', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_shadow_host_elements2', description: 'Elements with shadowRoot: [{tag, id, class, mode}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_components', description: 'Custom elements with hyphenated tag names: [{tagName, id, class, hasTemplate}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_template_elements2', description: 'All <template> elements: [{id, class, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slot_elements2', description: 'All <slot> and [slot] elements: [{name, id, assignedCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_element_registry', description: 'Custom element tag names with hyphen: {count, tagNames[]} (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_dom_depth', description: 'Max depth of nested shadow roots: {maxDepth, hostsFound}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_part_elements', description: 'Elements with part attribute (CSS shadow parts): [{tag, id, part}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_export_parts_elements', description: 'Elements with exportparts attribute: [{tag, id, exportparts}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── URL2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_current_url3', description: 'window.location full URL and parts: {href, protocol, hostname, pathname, search, hash, port}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_url_history', description: 'window.history state: {length, state, scrollRestoration}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_anchors_by_id', description: 'All <a id="..."> elements: [{id, href, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hash_links', description: 'All links with href starting with "#": [{href, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_query_params4', description: 'Parsed window.location.search: [{key, value}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_graph_meta', description: 'Meta tags with og: prefix: [{property, content_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_twitter_card_meta', description: 'Meta tags with twitter: prefix: [{name, content_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_canonical_url4', description: 'link[rel=canonical] href: {canonical, exists}', inputSchema: { type: 'object', properties: {} } },
+  // ── Dom3 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_deepest_element2', description: 'Most deeply nested element: {tag, id, depth, path}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_duplicate_ids', description: 'Duplicate id attributes: [{id, count, tags[]}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_empty_elements', description: 'Elements with no text and no children: [{tag, id, class}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hidden_elements2', description: 'Elements with visibility:hidden or opacity:0: [{tag, id, class}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_detached_elements', description: 'Elements with display:none: [{tag, id, class}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_attributes2', description: 'Elements with data-* attributes: [{tag, id, dataAttrs [{name, value_preview}]}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_hidden2', description: 'Elements with aria-hidden="true": [{tag, id, class, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_order3', description: 'Focusable elements in tab order: [{tag, id, tabIndex, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3428,6 +3456,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_overflow_elements':        return await getOverflowElements(cdp);
         case 'browser_zindex_stack2':            return await getZIndexStack2(cdp);
         case 'browser_viewport_info':            return await getViewportInfo(cdp);
+                // shadow2 new
+        case 'browser_shadow_host_elements2':   return await getShadowHostElements2(cdp);
+        case 'browser_web_components':          return await getWebComponents(cdp);
+        case 'browser_template_elements2':      return await getTemplateElements2(cdp);
+        case 'browser_slot_elements2':          return await getSlotElements2(cdp);
+        case 'browser_custom_element_registry': return await getCustomElementRegistry(cdp);
+        case 'browser_shadow_dom_depth':        return await getShadowDomDepth(cdp);
+        case 'browser_part_elements':           return await getPartElements(cdp);
+        case 'browser_export_parts_elements':   return await getExportPartsElements(cdp);
+        // url2 new
+        case 'browser_current_url3':            return await getCurrentUrl3(cdp);
+        case 'browser_url_history':             return await getUrlHistory(cdp);
+        case 'browser_anchors_by_id':           return await getAnchorsById(cdp);
+        case 'browser_hash_links':              return await getHashLinks(cdp);
+        case 'browser_query_params4':           return await getQueryParams4(cdp);
+        case 'browser_open_graph_meta':         return await getOpenGraphMeta(cdp);
+        case 'browser_twitter_card_meta':       return await getTwitterCardMeta(cdp);
+        case 'browser_canonical_url4':          return await getCanonicalUrl4(cdp);
+        // dom3
+        case 'browser_deepest_element2':        return await getDeepestElement2(cdp);
+        case 'browser_duplicate_ids':           return await getDuplicateIds(cdp);
+        case 'browser_empty_elements':          return await getEmptyElements(cdp);
+        case 'browser_hidden_elements2':        return await getHiddenElements2(cdp);
+        case 'browser_detached_elements':       return await getDetachedElements(cdp);
+        case 'browser_data_attributes2':        return await getDataAttributes2(cdp);
+        case 'browser_aria_hidden2':            return await getAriaHidden2(cdp);
+        case 'browser_tab_order3':              return await getTabOrder3(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

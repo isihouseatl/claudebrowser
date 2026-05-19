@@ -492,3 +492,172 @@ export async function getRedirectMeta(
     return err(e instanceof Error ? e.message : String(e));
   }
 }
+
+// ============================================================
+// New batch: 8 URL inspection functions (added 2026-05-19)
+// ============================================================
+
+/**
+ * getCurrentUrl3 — window.location full URL and parsed parts.
+ * Returns: { href, protocol, hostname, pathname, search, hash, port }
+ * (Named getCurrentUrl3: getCurrentUrl conflicts with history.ts,
+ *  getCurrentUrl2 already exists in this file.)
+ */
+export async function getCurrentUrl3(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){return JSON.stringify({href:window.location.href,protocol:window.location.protocol,hostname:window.location.hostname,pathname:window.location.pathname,search:window.location.search,hash:window.location.hash,port:window.location.port});})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getUrlHistory — window.history length and state.
+ * Returns: { length, state, scrollRestoration }
+ */
+export async function getUrlHistory(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var s=window.history.state;return JSON.stringify({length:window.history.length,state:s===null?null:(typeof s==='object'?JSON.stringify(s).slice(0,200):String(s).slice(0,200)),scrollRestoration:window.history.scrollRestoration});})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getAnchorsById — all <a id="..."> elements (max 20).
+ * Returns: [{ id, href, text_preview }]
+ */
+export async function getAnchorsById(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var els=Array.from(document.querySelectorAll('a[id]')).slice(0,20);return JSON.stringify(els.map(function(a){return{id:a.id,href:(a.getAttribute('href')||'').slice(0,120),text_preview:a.textContent.trim().slice(0,60)};}));})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getHashLinks — all links with href starting with '#' (max 20).
+ * Returns: [{ href, text_preview }]
+ */
+export async function getHashLinks(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var els=Array.from(document.querySelectorAll('a[href^="#"]')).slice(0,20);return JSON.stringify(els.map(function(a){return{href:a.getAttribute('href').slice(0,120),text_preview:a.textContent.trim().slice(0,60)};}));})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getQueryParams4 — parse window.location.search into [{key, value}] (max 20).
+ * (Named getQueryParams4: getQueryParams conflicts with existing export in this file,
+ *  getQueryParams2 and getQueryParams3 are also already taken.)
+ */
+export async function getQueryParams4(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var p=new URLSearchParams(window.location.search);var out=[];p.forEach(function(v,k){out.push({key:k,value:v.slice(0,200)});});return JSON.stringify(out.slice(0,20));})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getOpenGraphMeta — meta tags with property starting with 'og:' (max 20).
+ * Returns: [{ property, content_preview }]
+ */
+export async function getOpenGraphMeta(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var metas=Array.from(document.querySelectorAll('meta[property]')).filter(function(m){return(m.getAttribute('property')||'').indexOf('og:')===0;}).slice(0,20);return JSON.stringify(metas.map(function(m){return{property:m.getAttribute('property'),content_preview:(m.getAttribute('content')||'').slice(0,200)};}));})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getTwitterCardMeta — meta tags with name starting with 'twitter:' (max 20).
+ * Returns: [{ name, content_preview }]
+ */
+export async function getTwitterCardMeta(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var metas=Array.from(document.querySelectorAll('meta[name]')).filter(function(m){return(m.getAttribute('name')||'').indexOf('twitter:')===0;}).slice(0,20);return JSON.stringify(metas.map(function(m){return{name:m.getAttribute('name'),content_preview:(m.getAttribute('content')||'').slice(0,200)};}));})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * getCanonicalUrl4 — link[rel=canonical] href.
+ * Returns: { canonical, exists }
+ * (Named getCanonicalUrl4: getCanonicalUrl conflicts with pageinfo.ts,
+ *  getCanonicalUrl2 conflicts with meta2.ts, getCanonicalUrl3 conflicts with print2.ts.)
+ */
+export async function getCanonicalUrl4(
+  cdp: any,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  try {
+    const { result, exceptionDetails } = await (cdp as any).raw.Runtime.evaluate({
+      expression: `(function(){var el=document.querySelector('link[rel="canonical"]');return JSON.stringify({canonical:el?el.getAttribute('href'):null,exists:!!el});})()`,
+      returnByValue: true,
+    });
+    if (exceptionDetails) return err(exceptionDetails.text ?? JSON.stringify(exceptionDetails));
+    const data = JSON.parse(result.value as string);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
