@@ -218,6 +218,9 @@ import { getMutationObservers3, getDynamicContent, getLoadingSpinners, getSkelet
 import { getPaymentForms, getCreditCardInputs, getPaymentButtons, getPaymentState, getStripeElements, getPaymentIframes, getCheckoutForms, getPaymentApiUsage } from './cdp/payment2';
 import { getLoginForms2, getPasswordInputs3, getOAuthButtons2, getSsoElements, getAuthState, getMfaInputs, getRememberMeCheckboxes2, getAuthApiUsage } from './cdp/auth3';
 import { getChartElements3, getCanvasElements5, getSvgCharts3, getChartLegends3, getChartAxes, getChartTooltips3, getChartState, getChartApiUsage } from './cdp/chart3';
+import { getTimelineElements, getTimelineItems, getActivityFeed, getFeedItems, getTimelineState, getStepTimeline, getVerticalTimeline, getTimelineApiUsage } from './cdp/timeline2';
+import { getRatingElements, getStarRatings3, getReviewElements, getRatingInputs, getRatingState, getLikeButtons3, getVoteElements, getRatingApiUsage } from './cdp/rating3';
+import { getCommentElements, getCommentForms, getCommentCount, getNestedComments, getCommentState, getReplyButtons, getCommentAuthors, getCommentApiUsage } from './cdp/comment2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2483,6 +2486,33 @@ const TOOLS = [
   { name: 'browser_chart_tooltips3', description: 'Chart tooltip elements: [{tag, id, class_preview, visible, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_chart_state', description: 'Chart summary: {hasCharts, canvasCount, svgCount, chartLibrary}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_chart_api_usage', description: 'Detected chart libraries: {hasChartJs, hasD3, hasHighcharts, hasApexCharts, hasPlotly, hasRecharts}', inputSchema: { type: 'object', properties: {} } },
+  // ── Timeline2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_timeline_elements', description: 'Timeline container elements: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timeline_items', description: 'Individual timeline items: [{tag, id, class_preview, text_preview, date_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_activity_feed', description: 'Activity/news feed containers: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_feed_items', description: 'Individual feed/post items: [{tag, id, class_preview, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timeline_state', description: 'Timeline summary: {hasTimeline, hasFeed, itemCount, isVertical, isHorizontal}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_step_timeline', description: 'Step/progress timeline widgets: [{tag, id, class_preview, stepCount, currentStep}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_vertical_timeline', description: 'Vertically oriented timelines: [{tag, id, class_preview, itemCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_timeline_api_usage', description: 'Detected timeline/feed patterns: {hasTimeline, hasActivityFeed, hasInfiniteScroll, hasPagination}', inputSchema: { type: 'object', properties: {} } },
+  // ── Rating3 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_rating_elements', description: 'Star/rating display elements: [{tag, id, class_preview, value_preview, maxRating}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_star_ratings3', description: 'Star icon rating widgets: [{tag, id, class_preview, filledCount, totalCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_review_elements', description: 'Review/testimonial containers: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rating_inputs', description: 'Rating input controls: [{id, type, value, min, max}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rating_state', description: 'Rating summary: {hasRating, hasStars, hasReviews, averageRating, reviewCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_like_buttons3', description: 'Like/upvote/heart buttons: [{tag, id, text_preview, class_preview, count_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_vote_elements', description: 'Upvote/downvote elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rating_api_usage', description: 'Detected rating patterns: {hasStarRating, hasLikeButton, hasReviewForm, hasAggregateRating}', inputSchema: { type: 'object', properties: {} } },
+  // ── Comment2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_comment_elements', description: 'Comment container elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_forms', description: 'Comment submission forms: [{id, class_preview, hasTextarea, hasSubmitButton}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_count', description: 'Comment count indicators: [{tag, id, class_preview, count_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nested_comments', description: 'Threaded/nested comment containers: [{tag, id, class_preview, depth, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_state', description: 'Comment section summary: {hasComments, commentCount, hasForm, hasNested, hasPagination}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_reply_buttons', description: 'Reply/respond buttons: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_authors', description: 'Comment author elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_comment_api_usage', description: 'Detected comment system: {hasDisqus, hasDiscourse, hasNativeComments, hasWordpressComments}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4834,6 +4864,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_chart_tooltips3':          return await getChartTooltips3(cdp);
         case 'browser_chart_state':              return await getChartState(cdp);
         case 'browser_chart_api_usage':          return await getChartApiUsage(cdp);
+                // timeline2 new
+        case 'browser_timeline_elements':        return await getTimelineElements(cdp);
+        case 'browser_timeline_items':           return await getTimelineItems(cdp);
+        case 'browser_activity_feed':            return await getActivityFeed(cdp);
+        case 'browser_feed_items':               return await getFeedItems(cdp);
+        case 'browser_timeline_state':           return await getTimelineState(cdp);
+        case 'browser_step_timeline':            return await getStepTimeline(cdp);
+        case 'browser_vertical_timeline':        return await getVerticalTimeline(cdp);
+        case 'browser_timeline_api_usage':       return await getTimelineApiUsage(cdp);
+        // rating3 new
+        case 'browser_rating_elements':          return await getRatingElements(cdp);
+        case 'browser_star_ratings3':            return await getStarRatings3(cdp);
+        case 'browser_review_elements':          return await getReviewElements(cdp);
+        case 'browser_rating_inputs':            return await getRatingInputs(cdp);
+        case 'browser_rating_state':             return await getRatingState(cdp);
+        case 'browser_like_buttons3':            return await getLikeButtons3(cdp);
+        case 'browser_vote_elements':            return await getVoteElements(cdp);
+        case 'browser_rating_api_usage':         return await getRatingApiUsage(cdp);
+        // comment2 new
+        case 'browser_comment_elements':         return await getCommentElements(cdp);
+        case 'browser_comment_forms':            return await getCommentForms(cdp);
+        case 'browser_comment_count':            return await getCommentCount(cdp);
+        case 'browser_nested_comments':          return await getNestedComments(cdp);
+        case 'browser_comment_state':            return await getCommentState(cdp);
+        case 'browser_reply_buttons':            return await getReplyButtons(cdp);
+        case 'browser_comment_authors':          return await getCommentAuthors(cdp);
+        case 'browser_comment_api_usage':        return await getCommentApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
