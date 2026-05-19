@@ -1,5 +1,5 @@
 // src/cdp/scroll2.ts
-import { CdpClient } from './client';
+import type { CdpClient } from './client';
 
 export interface ScrollState {
   scrollTop: number;
@@ -278,4 +278,183 @@ export async function smoothScrollTo(
   }
 
   await new Promise<void>(resolve => setTimeout(resolve, durationMs));
+}
+
+// ---------------------------------------------------------------------------
+// Advanced scroll and position tools (scroll2 extension)
+// ---------------------------------------------------------------------------
+
+function ok(v: unknown): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v) }] };
+}
+
+function err(msg: string): { content: [{ type: 'text'; text: string }] } {
+  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }] };
+}
+
+/**
+ * Get scroll depth as percentage: scrolled %, total scrollable px, current px.
+ * Named getScrollDepth2 to avoid conflict with scroll3.ts getScrollDepth.
+ */
+export async function getScrollDepth2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const scrollY = window.scrollY;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const innerHeight = window.innerHeight;
+  const totalScrollable = scrollHeight - innerHeight;
+  const percent = totalScrollable <= 0 ? 0 : Math.min(100, Math.max(0, (scrollY / totalScrollable) * 100));
+  return { scrolledPercent: Math.round(percent * 100) / 100, totalScrollablePx: totalScrollable, currentPx: scrollY };
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getScrollDepth2 error');
+  return ok(result.value);
+}
+
+/**
+ * Check if page is scrolled to bottom (within 50px tolerance).
+ */
+export async function isAtBottom(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 50`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'isAtBottom error');
+  return ok(result.value);
+}
+
+/**
+ * Check if page is scrolled to top (scrollY <= 10).
+ */
+export async function isAtTop(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `window.scrollY <= 10`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'isAtTop error');
+  return ok(result.value);
+}
+
+/**
+ * Scroll to absolute bottom of page.
+ * Named scrollToBottom2 to avoid conflict with page.ts scrollToBottom.
+ */
+export async function scrollToBottom2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `window.scrollTo(0, document.documentElement.scrollHeight)`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'scrollToBottom2 error');
+  return ok('Scrolled to bottom');
+}
+
+/**
+ * Scroll to top of page (0, 0).
+ * Named scrollToTop2 to avoid conflict with page.ts scrollToTop.
+ */
+export async function scrollToTop2(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `window.scrollTo(0, 0)`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'scrollToTop2 error');
+  return ok('Scrolled to top');
+}
+
+/**
+ * Find all scrollable elements (overflow auto/scroll with scrollHeight > clientHeight), max 10.
+ * Returns array of { tagName, id, className, scrollHeight, clientHeight, scrollWidth, clientWidth }.
+ */
+export async function getScrollableContainers(
+  client: CdpClient,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const all = Array.from(document.querySelectorAll('*'));
+  const results = [];
+  for (const el of all) {
+    if (results.length >= 10) break;
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY;
+    const overflowX = style.overflowX;
+    const isScrollable = (overflowY === 'auto' || overflowY === 'scroll' || overflowX === 'auto' || overflowX === 'scroll');
+    if (isScrollable && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)) {
+      results.push({
+        tagName: el.tagName.toLowerCase(),
+        id: el.id || null,
+        className: el.className || null,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      });
+    }
+  }
+  return results;
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getScrollableContainers error');
+  return ok(result.value);
+}
+
+/**
+ * Set scrollLeft/scrollTop on a container element matching selector.
+ */
+export async function scrollContainerTo(
+  client: CdpClient,
+  selector: string,
+  x: number,
+  y: number,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const selLiteral = JSON.stringify(selector);
+  const { exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const el = document.querySelector(${selLiteral});
+  if (!el) throw new Error('Element not found: ' + ${selLiteral});
+  el.scrollLeft = ${x};
+  el.scrollTop = ${y};
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'scrollContainerTo error');
+  return ok('Scrolled container to (' + x + ', ' + y + ')');
+}
+
+/**
+ * Get scrollLeft, scrollTop, scrollWidth, scrollHeight, clientWidth, clientHeight of element.
+ */
+export async function getElementScrollInfo(
+  client: CdpClient,
+  selector: string,
+): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const selLiteral = JSON.stringify(selector);
+  const { result, exceptionDetails } = await client.raw.Runtime.evaluate({
+    expression: `(() => {
+  const el = document.querySelector(${selLiteral});
+  if (!el) throw new Error('Element not found: ' + ${selLiteral});
+  return {
+    scrollLeft: el.scrollLeft,
+    scrollTop: el.scrollTop,
+    scrollWidth: el.scrollWidth,
+    scrollHeight: el.scrollHeight,
+    clientWidth: el.clientWidth,
+    clientHeight: el.clientHeight,
+  };
+})()`,
+    returnByValue: true,
+  });
+  if (exceptionDetails) return err(exceptionDetails.exception?.description ?? exceptionDetails.text ?? 'getElementScrollInfo error');
+  return ok(result.value);
 }

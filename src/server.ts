@@ -116,6 +116,9 @@ import { getStylesheets2, getInlineStyles, getComputedStyles, getCssVariables2 a
 import { injectWsMonitor, getWsConnections, getWsMessages, clearWsMonitor, getWsStatus, sendWsMessage, closeWsConnection, getWsReadyState } from './cdp/websocket2';
 import { getIframes2, getIframeCount2, queryInIframe, getIframeTitle, getIframeSrc2, isIframeSandboxed2, getIframeDocument, focusIframe } from './cdp/iframe2';
 import { getCdpTargets, getCdpVersion, enableCdpDomain, getCdpMetricNames, setDeviceMetrics2, clearDeviceMetrics2, getCdpDomains, captureNetworkLog } from './cdp/devtools';
+import { getScrollDepth2, isAtBottom, isAtTop, scrollToBottom2, scrollToTop2, getScrollableContainers, scrollContainerTo, getElementScrollInfo } from './cdp/scroll2';
+import { pressEnter, pressTab, pressEscape, pressArrowDown, pressArrowUp, typeText2, getActiveElement, getFocusPath } from './cdp/keyboard2';
+import { getElementDepth, getElementPath, getSiblings, getParentElement, getElementsByText, getElementsWithAttribute, countElementsByTag, getFirstVisible } from './cdp/element2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1181,6 +1184,33 @@ const TOOLS = [
   { name: 'browser_clear_device_metrics', description: 'Restore normal viewport via Emulation.clearDeviceMetricsOverride', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_cdp_domains', description: 'List all available CDP domains: name, version', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_capture_network_log', description: 'Enable CDP Network domain to start capturing requests', inputSchema: { type: 'object', properties: {} } },
+  // ── Scroll2 ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_scroll_depth', description: 'Get scroll depth as percentage, total scrollable px, current scroll px', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_at_bottom', description: 'Check if page is scrolled to bottom (within 50px tolerance)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_at_top', description: 'Check if page is scrolled to top (scrollY <= 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_bottom', description: 'Scroll to absolute bottom of page', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_to_top', description: 'Scroll to top of page (0,0)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scrollable_containers', description: 'Find all scrollable elements (overflow auto/scroll with scrollHeight > clientHeight), max 10', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_scroll_container_to', description: 'Set scrollLeft/scrollTop on a container element', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['selector', 'x', 'y'] } },
+  { name: 'browser_element_scroll_info', description: 'Get scrollLeft, scrollTop, scrollWidth, scrollHeight, clientWidth, clientHeight of element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Keyboard2 ───────────────────────────────────────────────────────────────────
+  { name: 'browser_press_enter', description: 'Dispatch Enter keydown+keyup on focused element or document', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_press_tab', description: 'Dispatch Tab keydown+keyup on document', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_press_escape', description: 'Dispatch Escape keydown+keyup on document', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_press_arrow_down', description: 'Dispatch ArrowDown keydown+keyup on document', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_press_arrow_up', description: 'Dispatch ArrowUp keydown+keyup on document', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_type_text', description: 'Type text character-by-character dispatching keyboard events to focused element', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_active_element', description: 'Get the currently focused element: tag, id, class, type, name', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focus_path', description: 'Walk from activeElement up to body, return ancestor tag breadcrumb path', inputSchema: { type: 'object', properties: {} } },
+  // ── Element2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_element_depth', description: 'Count how many ancestor elements an element has (depth in DOM tree)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_element_path', description: 'Build a CSS selector path from root to element using tag+nth-child', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_siblings', description: 'Get all sibling elements: tag, id, class, text snippet', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_parent_element', description: 'Get parent element info: tag, id, class, childCount', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_elements_by_text', description: 'Find all elements containing text (case-insensitive), return tag/id/class (max 10)', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'browser_elements_with_attr', description: 'Find all elements with a specific attribute name, return tag/id/value (max 20)', inputSchema: { type: 'object', properties: { attribute: { type: 'string' } }, required: ['attribute'] } },
+  { name: 'browser_tag_counts', description: 'Count all element tags on page as {tag: count} object sorted by count descending', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_first_visible', description: 'From all elements matching selector, return first one that is visible (not hidden/display:none)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2328,6 +2358,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_clear_device_metrics':     return await clearDeviceMetrics2(cdp);
         case 'browser_cdp_domains':              return await getCdpDomains(cdp);
         case 'browser_capture_network_log':      return await captureNetworkLog(cdp);
+                // scroll2
+        case 'browser_scroll_depth':             return await getScrollDepth2(cdp);
+        case 'browser_is_at_bottom':             return await isAtBottom(cdp);
+        case 'browser_is_at_top':                return await isAtTop(cdp);
+        case 'browser_scroll_to_bottom':         return await scrollToBottom2(cdp);
+        case 'browser_scroll_to_top':            return await scrollToTop2(cdp);
+        case 'browser_scrollable_containers':    return await getScrollableContainers(cdp);
+        case 'browser_scroll_container_to':      return await scrollContainerTo(cdp, a.selector as string, a.x as number, a.y as number);
+        case 'browser_element_scroll_info':      return await getElementScrollInfo(cdp, a.selector as string);
+        // keyboard2
+        case 'browser_press_enter':              return await pressEnter(cdp);
+        case 'browser_press_tab':                return await pressTab(cdp);
+        case 'browser_press_escape':             return await pressEscape(cdp);
+        case 'browser_press_arrow_down':         return await pressArrowDown(cdp);
+        case 'browser_press_arrow_up':           return await pressArrowUp(cdp);
+        case 'browser_type_text':                return await typeText2(cdp, a.text as string);
+        case 'browser_active_element':           return await getActiveElement(cdp);
+        case 'browser_focus_path':               return await getFocusPath(cdp);
+        // element2
+        case 'browser_element_depth':            return await getElementDepth(cdp, a.selector as string);
+        case 'browser_element_path':             return await getElementPath(cdp, a.selector as string);
+        case 'browser_siblings':                 return await getSiblings(cdp, a.selector as string);
+        case 'browser_parent_element':           return await getParentElement(cdp, a.selector as string);
+        case 'browser_elements_by_text':         return await getElementsByText(cdp, a.text as string);
+        case 'browser_elements_with_attr':       return await getElementsWithAttribute(cdp, a.attribute as string);
+        case 'browser_tag_counts':               return await countElementsByTag(cdp);
+        case 'browser_first_visible':            return await getFirstVisible(cdp, a.selector as string);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
