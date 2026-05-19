@@ -167,6 +167,9 @@ import { getSearchInputs2, getSearchForms2, getHighlightedText, getTextBySelecto
 import { getDarkModeSupport, getColorScheme3, getBackgroundColors, getTextColors, getBorderColors, getContrastRatios, getThemeClasses, getColorDataAttrs } from './cdp/theme2';
 import { getStarRatings, getReviewBlocks, getProductPrices, getLikeButtons, getShareButtons, getCommentSections, getUserAvatars, getBadgeElements } from './cdp/rating2';
 import { getLazyImages3, getInfiniteScrollContainers, getLoadMoreButtons, getSkeletonElements, getSpinners, getProgressBars2, getDeferredImages, getVirtualLists } from './cdp/lazy2';
+import { getNotificationPermission3, getToastElements, getBannerElements2, getAlertBanners, getCookieBanners, getAriaLiveRegions, getStatusMessages, getDismissButtons } from './cdp/notification2';
+import { getVideoElements3, getAudioElements2, getEmbedElements, getObjectElements, getYouTubeEmbeds, getVideoSources, getMediaTracks, getPictureElements2 } from './cdp/embed2';
+import { getDocumentLanguage, getLangAttributes, getDirAttributes, getHreflangLinks, getTranslationMeta, getDateTimeElements, getCurrencySymbols, getRtlElements } from './cdp/i18n2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -1895,6 +1898,33 @@ const TOOLS = [
   { name: 'browser_progress_bars2', description: 'Progress bar elements: [{tag, id, value, max, ariaValueNow, ariaValueMax}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_deferred_images', description: 'Images with empty src but data-src set: [{dataSrc_preview, alt_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_virtual_lists', description: 'Virtual/windowed list elements: [{tag, id, class_preview, style_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Notification2 ────────────────────────────────────────────────────────────────
+  { name: 'browser_notification_permission3', description: 'Browser notification permission: {permission, supported}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_toast_elements', description: 'Toast/snackbar elements: [{tag, id, class_preview, text_preview, ariaLive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_banner_elements2', description: 'Banner/announcement elements: [{tag, id, class_preview, role, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_alert_banners', description: 'Alert/warning banners: [{tag, id, class_preview, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cookie_banners', description: 'Cookie consent banners: [{tag, id, class_preview, text_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_live_regions', description: 'Elements with aria-live: [{tag, id, ariaLive, ariaAtomic, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_status_messages', description: 'Elements with role=status|log: [{tag, id, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dismiss_buttons', description: 'Close/dismiss buttons: [{tag, id, class_preview, ariaLabel_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Embed2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_video_elements3', description: 'All <video> elements: [{id, src_preview, autoplay, controls, muted, loop, width, height, duration, paused}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_audio_elements2', description: 'All <audio> elements: [{id, src_preview, autoplay, controls, muted, loop, paused, currentTime}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_embed_elements', description: 'All <embed> elements: [{id, src_preview, type, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_object_elements', description: 'All <object> elements: [{id, data_preview, type, width, height}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_youtube_embeds', description: 'YouTube iframes: [{src_preview, id, width, height, title_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_video_sources', description: '<source> inside <video>: [{src_preview, type, media}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_media_tracks', description: '<track> elements: [{src_preview, kind, srclang, label, default}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_picture_elements2', description: '<picture> elements: [{id, sourceCount, imgSrc_preview, imgAlt_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── I18n2 ─────────────────────────────────────────────────────────────────────────
+  { name: 'browser_document_language', description: 'Document language: {htmlLang, navigatorLanguage, navigatorLanguages[]}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lang_attributes', description: 'Elements with lang attribute: [{tag, id, lang, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_dir_attributes', description: 'Elements with dir attribute: [{tag, id, dir, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hreflang_links', description: 'Link[rel=alternate][hreflang]: [{hreflang, href_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_translation_meta', description: 'Translation-related meta tags: [{name, content_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_time_elements', description: 'All <time> elements: [{id, datetime, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_currency_symbols', description: 'Elements containing currency symbols: [{tag, id, symbol, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rtl_elements', description: 'Elements with dir=rtl or computed RTL direction: [{tag, id, class_preview, dir}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -3706,6 +3736,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_progress_bars2':              return await getProgressBars2(cdp);
         case 'browser_deferred_images':             return await getDeferredImages(cdp);
         case 'browser_virtual_lists':               return await getVirtualLists(cdp);
+                // notification2
+        case 'browser_notification_permission3': return await getNotificationPermission3(cdp);
+        case 'browser_toast_elements':           return await getToastElements(cdp);
+        case 'browser_banner_elements2':         return await getBannerElements2(cdp);
+        case 'browser_alert_banners':            return await getAlertBanners(cdp);
+        case 'browser_cookie_banners':           return await getCookieBanners(cdp);
+        case 'browser_aria_live_regions':        return await getAriaLiveRegions(cdp);
+        case 'browser_status_messages':          return await getStatusMessages(cdp);
+        case 'browser_dismiss_buttons':          return await getDismissButtons(cdp);
+        // embed2
+        case 'browser_video_elements3':          return await getVideoElements3(cdp);
+        case 'browser_audio_elements2':          return await getAudioElements2(cdp);
+        case 'browser_embed_elements':           return await getEmbedElements(cdp);
+        case 'browser_object_elements':          return await getObjectElements(cdp);
+        case 'browser_youtube_embeds':           return await getYouTubeEmbeds(cdp);
+        case 'browser_video_sources':            return await getVideoSources(cdp);
+        case 'browser_media_tracks':             return await getMediaTracks(cdp);
+        case 'browser_picture_elements2':        return await getPictureElements2(cdp);
+        // i18n2
+        case 'browser_document_language':        return await getDocumentLanguage(cdp);
+        case 'browser_lang_attributes':          return await getLangAttributes(cdp);
+        case 'browser_dir_attributes':           return await getDirAttributes(cdp);
+        case 'browser_hreflang_links':           return await getHreflangLinks(cdp);
+        case 'browser_translation_meta':         return await getTranslationMeta(cdp);
+        case 'browser_date_time_elements':       return await getDateTimeElements(cdp);
+        case 'browser_currency_symbols':         return await getCurrencySymbols(cdp);
+        case 'browser_rtl_elements':             return await getRtlElements(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
