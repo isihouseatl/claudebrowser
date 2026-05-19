@@ -209,6 +209,9 @@ import { getClipboardPermission2, getClipboardState, getCopyButtons2, getCutButt
 import { getSpeechRecognitionState, getSpeechSynthesisVoices, getSpeechSynthesisState, getSpeechInputs, getVoiceSearchElements, getSpeechPermission, getTtsButtons, getSpeechApiUsage } from './cdp/speech2';
 import { getDraggableElements4, getDropZones3, getDragHandles2, getSortableElements, getDragState, getDropTargets3, getDragListeners, getDragApiUsage } from './cdp/drag3';
 import { getResizableElements2, getResizeHandles, getSplitPanels, getResizeObservers3, getResizeState, getResizableContainers, getMinMaxConstraints, getResizeApiUsage } from './cdp/resize2';
+import { getContextMenuItems, getContextMenuTriggers, getRightClickTargets, getContextMenuState, getMenuItemElements, getContextMenuPopup, getContextActions, getContextApiUsage } from './cdp/context2';
+import { getNetworkStatus, getConnectionType2, getOnlineState, getNetworkInfo2, getServiceWorkers, getFetchState, getXhrState, getNetworkApiUsage } from './cdp/network4';
+import { getShadowRoots3, getShadowHosts3, getWebComponents3, getCustomElements3, getShadowState, getShadowStyles3, getShadowSlots3, getShadowApiUsage } from './cdp/shadow3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2393,6 +2396,33 @@ const TOOLS = [
   { name: 'browser_resizable_containers', description: 'Overflow containers that can be resized: [{tag, id, class_preview, overflow}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_min_max_constraints', description: 'Elements with min/max dimensions: [{tag, id, minWidth, maxWidth, minHeight, maxHeight}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_resize_api_usage', description: 'Detected resize library: {hasResizeObserver, hasSplitJs, hasInteractJs, hasReResizable}', inputSchema: { type: 'object', properties: {} } },
+  // ── Context2 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_context_menu_items', description: 'Elements with context menu role: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_menu_triggers', description: 'Elements that show context menus on right-click: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_right_click_targets', description: 'Elements with contextmenu event listeners: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_menu_state', description: 'Context menu state: {hasContextMenu, hasCustomMenu, menuVisible, menuItemCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_menu_item_elements', description: 'Elements with role=menuitem: [{tag, id, text_preview, disabled, checked}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_menu_popup', description: 'Active context menu popup: {visible, tag, id, class_preview, itemCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_actions', description: 'Elements with data-action attributes: [{tag, id, action_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_context_api_usage', description: 'Detected context menu patterns: {hasNativeContextMenu, hasCustomContextMenu, hasRadixMenu, hasHeadlessUiMenu}', inputSchema: { type: 'object', properties: {} } },
+  // ── Network4 new ──────────────────────────────────────────────────────────────────
+  { name: 'browser_network_status', description: 'navigator.onLine and connection: {online, connectionType, effectiveType, downlink, rtt}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_connection_type2', description: 'Network Information API: {type, effectiveType, downlink, rtt, saveData}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_online_state', description: 'Online/offline state: {isOnline, hasOnlineListener, hasOfflineListener}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_info2', description: 'Full network info: {online, type, downlink, rtt, effectiveType, saveData}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_workers', description: 'Registered service workers: [{scope, state, scriptUrl_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fetch_state', description: 'Page fetch/XHR indicators: {hasFetch, hasXhr, hasAxios, hasJquery}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_xhr_state', description: 'XMLHttpRequest usage: {hasXhr, xhrCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_network_api_usage', description: 'Detected network patterns: {hasFetch, hasXhr, hasWebSocket, hasEventSource, hasBeacon}', inputSchema: { type: 'object', properties: {} } },
+  // ── Shadow3 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_shadow_roots3', description: 'Elements with shadow roots: [{tag, id, class_preview, mode, delegatesFocus}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_hosts3', description: 'Shadow host elements: [{tag, id, class_preview, childCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_components3', description: 'Custom element registrations: [{name, constructorName}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_custom_elements3', description: 'Elements using custom element names: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_state', description: 'Shadow DOM summary: {hasShadowDom, shadowHostCount, openCount, closedCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_styles3', description: 'adoptedStyleSheets in shadow roots: {count, totalRules}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_slots3', description: 'Slot elements in shadow roots: [{name, assignedCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_shadow_api_usage', description: 'Web Components usage: {hasCustomElements, hasShadowDom, hasTemplateElement, hasSlots}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4663,6 +4693,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_resizable_containers':     return await getResizableContainers(cdp);
         case 'browser_min_max_constraints':      return await getMinMaxConstraints(cdp);
         case 'browser_resize_api_usage':         return await getResizeApiUsage(cdp);
+                // context2 new
+        case 'browser_context_menu_items':       return await getContextMenuItems(cdp);
+        case 'browser_context_menu_triggers':    return await getContextMenuTriggers(cdp);
+        case 'browser_right_click_targets':      return await getRightClickTargets(cdp);
+        case 'browser_context_menu_state':       return await getContextMenuState(cdp);
+        case 'browser_menu_item_elements':       return await getMenuItemElements(cdp);
+        case 'browser_context_menu_popup':       return await getContextMenuPopup(cdp);
+        case 'browser_context_actions':          return await getContextActions(cdp);
+        case 'browser_context_api_usage':        return await getContextApiUsage(cdp);
+        // network4 new
+        case 'browser_network_status':           return await getNetworkStatus(cdp);
+        case 'browser_connection_type2':         return await getConnectionType2(cdp);
+        case 'browser_online_state':             return await getOnlineState(cdp);
+        case 'browser_network_info2':            return await getNetworkInfo2(cdp);
+        case 'browser_service_workers':          return await getServiceWorkers(cdp);
+        case 'browser_fetch_state':              return await getFetchState(cdp);
+        case 'browser_xhr_state':               return await getXhrState(cdp);
+        case 'browser_network_api_usage':        return await getNetworkApiUsage(cdp);
+        // shadow3 new
+        case 'browser_shadow_roots3':            return await getShadowRoots3(cdp);
+        case 'browser_shadow_hosts3':            return await getShadowHosts3(cdp);
+        case 'browser_web_components3':          return await getWebComponents3(cdp);
+        case 'browser_custom_elements3':         return await getCustomElements3(cdp);
+        case 'browser_shadow_state':             return await getShadowState(cdp);
+        case 'browser_shadow_styles3':           return await getShadowStyles3(cdp);
+        case 'browser_shadow_slots3':            return await getShadowSlots3(cdp);
+        case 'browser_shadow_api_usage':         return await getShadowApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
