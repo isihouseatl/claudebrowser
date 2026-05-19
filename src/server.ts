@@ -221,6 +221,9 @@ import { getChartElements3, getCanvasElements5, getSvgCharts3, getChartLegends3,
 import { getTimelineElements, getTimelineItems, getActivityFeed, getFeedItems, getTimelineState, getStepTimeline, getVerticalTimeline, getTimelineApiUsage } from './cdp/timeline2';
 import { getRatingElements, getStarRatings3, getReviewElements, getRatingInputs, getRatingState, getLikeButtons3, getVoteElements, getRatingApiUsage } from './cdp/rating3';
 import { getCommentElements, getCommentForms, getCommentCount, getNestedComments, getCommentState, getReplyButtons, getCommentAuthors, getCommentApiUsage } from './cdp/comment2';
+import { getShareButtons2, getSocialShareLinks, getShareState, getCopyLinkButtons, getShareDialog, getShareApiUsage, getEmbedShareElements, getShareCount } from './cdp/share2';
+import { getBadgeElements2, getCounterBadges, getStatusBadges, getTagElements, getBadgeState, getPillElements, getLabelElements, getBadgeApiUsage } from './cdp/badge2';
+import { getCarouselElements, getCarouselSlides, getCarouselControls, getCarouselDots, getCarouselState, getSliderElements, getSwipeElements, getCarouselApiUsage } from './cdp/carousel3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2513,6 +2516,33 @@ const TOOLS = [
   { name: 'browser_reply_buttons', description: 'Reply/respond buttons: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_comment_authors', description: 'Comment author elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_comment_api_usage', description: 'Detected comment system: {hasDisqus, hasDiscourse, hasNativeComments, hasWordpressComments}', inputSchema: { type: 'object', properties: {} } },
+  // ── Share2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_share_buttons2', description: 'Share buttons: [{tag, id, text_preview, class_preview, platform}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_share_links', description: 'Social share links (Twitter/FB/LinkedIn): [{tag, href_preview, platform, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_state', description: 'Share UI summary: {hasShareButton, hasSocialLinks, hasNativeShare, hasCopyLink}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_copy_link_buttons', description: 'Copy link/URL buttons: [{tag, id, text_preview, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_dialog', description: 'Share modal/dialog: {visible, tag, id, class_preview, hasOptions}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_api_usage', description: 'Detected share patterns: {hasWebShareApi, hasSocialButtons, hasCopyLink, hasEmbedCode}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_embed_share_elements', description: 'Embed code/iframe share elements: [{tag, id, class_preview, value_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_count', description: 'Share count display elements: [{tag, id, class_preview, count_preview, platform}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Badge2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_badge_elements2', description: 'Badge/pill UI elements: [{tag, id, class_preview, text_preview, color_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_counter_badges', description: 'Numeric counter badges: [{tag, id, class_preview, count_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_status_badges', description: 'Status indicator badges: [{tag, id, class_preview, text_preview, status}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tag_elements', description: 'Tag/chip elements: [{tag, id, class_preview, text_preview, removable}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_badge_state', description: 'Badge summary: {hasBadges, hasCounters, hasStatusBadges, hasTags, totalCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_pill_elements', description: 'Pill-shaped elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_label_elements', description: 'Label elements: [{tag, id, class_preview, text_preview, forAttr}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_badge_api_usage', description: 'Detected badge patterns: {hasBadgeComponent, hasCounterBadge, hasStatusDot, hasTagSystem}', inputSchema: { type: 'object', properties: {} } },
+  // ── Carousel3 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_carousel_elements', description: 'Carousel/slider containers: [{tag, id, class_preview, slideCount}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousel_slides', description: 'Individual slide elements: [{tag, id, class_preview, isActive, index}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousel_controls', description: 'Prev/next arrow controls: [{tag, id, class_preview, direction, disabled}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousel_dots', description: 'Dot/bullet nav indicators: [{tag, id, class_preview, isActive, index}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousel_state', description: 'Carousel summary: {hasCarousel, carouselCount, currentSlide, totalSlides, autoPlay}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_slider_elements', description: 'Range slider/swiper elements: [{tag, id, class_preview, type, min, max, value}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_swipe_elements', description: 'Elements with swipe/touch gesture handlers: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_carousel_api_usage', description: 'Detected carousel libraries: {hasSwiperJs, hasSplide, hasSlick, hasOwlCarousel, hasGlide}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4891,6 +4921,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_reply_buttons':            return await getReplyButtons(cdp);
         case 'browser_comment_authors':          return await getCommentAuthors(cdp);
         case 'browser_comment_api_usage':        return await getCommentApiUsage(cdp);
+                // share2 new
+        case 'browser_share_buttons2':           return await getShareButtons2(cdp);
+        case 'browser_social_share_links':       return await getSocialShareLinks(cdp);
+        case 'browser_share_state':              return await getShareState(cdp);
+        case 'browser_copy_link_buttons':        return await getCopyLinkButtons(cdp);
+        case 'browser_share_dialog':             return await getShareDialog(cdp);
+        case 'browser_share_api_usage':          return await getShareApiUsage(cdp);
+        case 'browser_embed_share_elements':     return await getEmbedShareElements(cdp);
+        case 'browser_share_count':              return await getShareCount(cdp);
+        // badge2 new
+        case 'browser_badge_elements2':          return await getBadgeElements2(cdp);
+        case 'browser_counter_badges':           return await getCounterBadges(cdp);
+        case 'browser_status_badges':            return await getStatusBadges(cdp);
+        case 'browser_tag_elements':             return await getTagElements(cdp);
+        case 'browser_badge_state':              return await getBadgeState(cdp);
+        case 'browser_pill_elements':            return await getPillElements(cdp);
+        case 'browser_label_elements':           return await getLabelElements(cdp);
+        case 'browser_badge_api_usage':          return await getBadgeApiUsage(cdp);
+        // carousel3 new
+        case 'browser_carousel_elements':        return await getCarouselElements(cdp);
+        case 'browser_carousel_slides':          return await getCarouselSlides(cdp);
+        case 'browser_carousel_controls':        return await getCarouselControls(cdp);
+        case 'browser_carousel_dots':            return await getCarouselDots(cdp);
+        case 'browser_carousel_state':           return await getCarouselState(cdp);
+        case 'browser_slider_elements':          return await getSliderElements(cdp);
+        case 'browser_swipe_elements':           return await getSwipeElements(cdp);
+        case 'browser_carousel_api_usage':       return await getCarouselApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
