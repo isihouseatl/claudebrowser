@@ -90,7 +90,7 @@ import { startWatchdog, stopWatchdog } from './chrome';
 import { getFormFields, getFormValidationErrors, isFormValid, getRequiredFields, getEmptyRequiredFields, listSelectOptions, setMultipleSelectValues, getCheckedCheckboxes } from './cdp/form2';
 import { getVideoState, muteMedia, unmuteMedia, getAllMediaElements, playMedia as playMedia2, pauseMedia as pauseMedia2, setMediaVolume as setMediaVolume2, seekMedia as seekMedia2, getMediaState, getVideoElements2, getAudioElements, getMediaCount, getPlayingMedia, pauseAllMedia, muteAllMedia, getVideoSubtitles, getEmbedSources } from './cdp/media2';
 import { pauseAnimations, playAnimations, getTransitions, getAnimationCount, setAnimationPlaybackRate, getPageAnimationCount, cancelAnimations } from './cdp/animation';
-import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy } from './cdp/accessibility2';
+import { getAriaAttributes, getRole, getTabIndex, checkImageAlts, getHeadingStructure, getLandmarks, getAriaLabelledBy, getAriaRoles3, getAriaLabels3, getAriaLiveRegions2, getSkipLinks3, getFocusableElements3, getTabIndexElements, getAriaDescriptions3, getHeadingStructure3 } from './cdp/accessibility2';
 import { checkEventHandlers, dispatchCustomEvent, triggerMouseEvent, triggerKeyEvent, triggerInputEvent, triggerFocusEvent, waitForDomMutation, getFormSubmitUrl } from './cdp/events2';
 import { getPerformanceEntries, getNavigationTiming as getNavigationTiming3, getResourceTimings as getResourceTimings3, getLongTasks, getMemoryInfo, getCLS, getFCP, getLCP } from './cdp/performance2';
 import { hasShadowRoot, getShadowChildren, queryShadowRoot, getShadowRootMode, getShadowHostContent, countShadowRoots, getShadowHostElements, getShadowSlots } from './cdp/shadow-dom';
@@ -186,6 +186,8 @@ import { getCalendarElements, getDatePickerInputs, getCalendarNavigation, getCal
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
+import { getNotificationPermission4, getNotificationElements, getPushSubscription, getServiceWorkerNotifications, getNotificationBadge, getNotificationCount, getWebPushElements, getNotificationHistory } from './cdp/notification3';
+import { getPerformanceTiming, getResourceTimings4, getLargestContentfulPaint3, getCumulativeLayoutShift3, getFirstInputDelay3, getNavigationTiming5, getMemoryInfo3, getLongTasks3 } from './cdp/performance3';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2154,6 +2156,33 @@ const TOOLS = [
   { name: 'browser_event_calendars', description: 'Event calendar detection: {hasFullCalendar, hasEventCalendar, containerCount}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_time_picker_inputs', description: 'Time input fields: [{id, name, value, min, max}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_date_range_pickers', description: 'Date range picker elements: [{tag, id, class_preview, startValue, endValue}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  // ── Accessibility2 new ───────────────────────────────────────────────────────────
+  { name: 'browser_aria_roles3', description: 'Elements with explicit ARIA roles: [{tag, id, role, text_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_labels3', description: 'Elements with aria-label: [{tag, id, aria_label_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_live_regions2', description: 'aria-live regions: [{tag, id, live, atomic, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_skip_links3', description: 'Skip navigation links: [{href, text_preview, visible}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_focusable3', description: 'Focusable element counts by type: {buttons, links, inputs, selects, textareas, tabIndexed, total}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tab_index_elements', description: 'Elements with explicit tabindex: [{tag, id, tabindex, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_aria_descriptions3', description: 'Elements with aria-description/describedby: [{tag, id, description_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_heading_structure3', description: 'Heading hierarchy: [{level, text_preview, id}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Notification3 new ─────────────────────────────────────────────────────────────
+  { name: 'browser_notification_permission4', description: 'Notification.permission status: {permission, canRequest}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_elements', description: 'Notification-class elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_push_subscription', description: 'ServiceWorker push subscription: {hasSubscription, endpoint_preview, isActive}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_service_worker_notifications', description: 'SW registration state: {hasRegistration, scope, state}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_badge', description: 'Badge/notification count elements: [{tag, id, class_preview, count}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_count', description: 'Unread/badge count summary: {totalBadges, visibleCount, maxCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_web_push_elements', description: 'Push notification opt-in elements: [{tag, id, class_preview, text_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_notification_history', description: 'aria-live notification regions: [{tag, id, class_preview, role, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Performance3 new ──────────────────────────────────────────────────────────────
+  { name: 'browser_performance_timing', description: 'Navigation timing summary: {domContentLoaded, loadTime, ttfb, dnsLookup}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_resource_timings4', description: 'Top resource load times: [{name_preview, duration, initiatorType, size}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_lcp3', description: 'Largest Contentful Paint: {lcp, element_preview, hasData}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cls3', description: 'Cumulative Layout Shift score: {cls, entryCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_fid3', description: 'First Input Delay / INP: {fid, inp, hasData}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_nav_timing5', description: 'Navigation timing detail: {redirectCount, type, protocol, transferSize}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_memory_info3', description: 'JS heap memory (Chrome): {usedJSHeapSize, totalJSHeapSize, jsHeapSizeLimit, available}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_long_tasks3', description: 'Long task entries >50ms: {count, entries:[{duration, startTime, attribution_preview}]}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4208,6 +4237,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_event_calendars':          return await getEventCalendars(cdp);
         case 'browser_time_picker_inputs':       return await getTimePickerInputs(cdp);
         case 'browser_date_range_pickers':       return await getDateRangePickers(cdp);
+                // accessibility2 new
+        case 'browser_aria_roles3':              return await getAriaRoles3(cdp);
+        case 'browser_aria_labels3':             return await getAriaLabels3(cdp);
+        case 'browser_aria_live_regions2':       return await getAriaLiveRegions2(cdp);
+        case 'browser_skip_links3':              return await getSkipLinks3(cdp);
+        case 'browser_focusable3':               return await getFocusableElements3(cdp);
+        case 'browser_tab_index_elements':       return await getTabIndexElements(cdp);
+        case 'browser_aria_descriptions3':       return await getAriaDescriptions3(cdp);
+        case 'browser_heading_structure3':       return await getHeadingStructure3(cdp);
+        // notification3 new
+        case 'browser_notification_permission4': return await getNotificationPermission4(cdp);
+        case 'browser_notification_elements':    return await getNotificationElements(cdp);
+        case 'browser_push_subscription':        return await getPushSubscription(cdp);
+        case 'browser_service_worker_notifications': return await getServiceWorkerNotifications(cdp);
+        case 'browser_notification_badge':       return await getNotificationBadge(cdp);
+        case 'browser_notification_count':       return await getNotificationCount(cdp);
+        case 'browser_web_push_elements':        return await getWebPushElements(cdp);
+        case 'browser_notification_history':     return await getNotificationHistory(cdp);
+        // performance3 new
+        case 'browser_performance_timing':       return await getPerformanceTiming(cdp);
+        case 'browser_resource_timings4':        return await getResourceTimings4(cdp);
+        case 'browser_lcp3':                     return await getLargestContentfulPaint3(cdp);
+        case 'browser_cls3':                     return await getCumulativeLayoutShift3(cdp);
+        case 'browser_fid3':                     return await getFirstInputDelay3(cdp);
+        case 'browser_nav_timing5':              return await getNavigationTiming5(cdp);
+        case 'browser_memory_info3':             return await getMemoryInfo3(cdp);
+        case 'browser_long_tasks3':              return await getLongTasks3(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

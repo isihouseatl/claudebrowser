@@ -231,3 +231,135 @@ export async function getAriaLabelledBy(
 
   return ok(JSON.stringify(result.value, null, 2));
 }
+
+// ─── New accessibility module functions ──────────────────────────────────────
+
+// 9. getAriaRoles3 — Elements with explicit ARIA roles (max 30)
+export async function getAriaRoles3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const els = Array.from(document.querySelectorAll('[role]')).slice(0, 30);
+    return els.map(el => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      role: el.getAttribute('role') || '',
+      text_preview: (el.textContent || '').trim().slice(0, 80),
+    }));
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 10. getAriaLabels3 — Elements with aria-label (max 30)
+export async function getAriaLabels3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const els = Array.from(document.querySelectorAll('[aria-label]')).slice(0, 30);
+    return els.map(el => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      aria_label_preview: (el.getAttribute('aria-label') || '').slice(0, 100),
+    }));
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 11. getAriaLiveRegions2 — aria-live regions (max 20)
+export async function getAriaLiveRegions2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const els = Array.from(document.querySelectorAll('[aria-live]')).slice(0, 20);
+    return els.map(el => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      live: el.getAttribute('aria-live') || '',
+      atomic: el.getAttribute('aria-atomic') || '',
+      text_preview: (el.textContent || '').trim().slice(0, 80),
+    }));
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 12. getSkipLinks3 — Skip navigation links (max 10)
+export async function getSkipLinks3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const anchors = Array.from(document.querySelectorAll('a[href^="#"]')).slice(0, 10);
+    return anchors.map(el => {
+      const style = window.getComputedStyle(el);
+      const visible = style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity || '1') > 0;
+      return {
+        href: el.getAttribute('href') || '',
+        text_preview: (el.textContent || '').trim().slice(0, 80),
+        visible,
+      };
+    });
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 13. getFocusableElements3 — Focusable element counts by type
+export async function getFocusableElements3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const buttons = document.querySelectorAll('button:not([disabled])').length;
+    const links = document.querySelectorAll('a[href]').length;
+    const inputs = document.querySelectorAll('input:not([disabled])').length;
+    const selects = document.querySelectorAll('select:not([disabled])').length;
+    const textareas = document.querySelectorAll('textarea:not([disabled])').length;
+    const tabIndexed = document.querySelectorAll('[tabindex]:not([tabindex="-1"])').length;
+    const total = buttons + links + inputs + selects + textareas + tabIndexed;
+    return { buttons, links, inputs, selects, textareas, tabIndexed, total };
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 14. getTabIndexElements — Elements with explicit tabindex (max 20)
+export async function getTabIndexElements(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const els = Array.from(document.querySelectorAll('[tabindex]')).slice(0, 20);
+    return els.map(el => ({
+      tag: el.tagName.toLowerCase(),
+      id: el.id || '',
+      tabindex: el.getAttribute('tabindex') || '',
+      text_preview: (el.textContent || '').trim().slice(0, 80),
+    }));
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 15. getAriaDescriptions3 — Elements with aria-description or aria-describedby (max 20)
+export async function getAriaDescriptions3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const els = Array.from(document.querySelectorAll('[aria-description],[aria-describedby]')).slice(0, 20);
+    return els.map(el => {
+      const direct = el.getAttribute('aria-description') || '';
+      const refIds = (el.getAttribute('aria-describedby') || '').trim().split(/\\s+/).filter(Boolean);
+      const refText = refIds.map(id => {
+        const ref = document.getElementById(id);
+        return ref ? (ref.textContent || '').trim().slice(0, 60) : '';
+      }).filter(Boolean).join(' ');
+      return {
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        description_preview: (direct || refText).slice(0, 100),
+      };
+    });
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
+
+// 16. getHeadingStructure3 — Heading hierarchy with id (max 30)
+export async function getHeadingStructure3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const expression = `(async () => {
+    const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6')).slice(0, 30);
+    return headings.map(el => ({
+      level: parseInt(el.tagName.slice(1), 10),
+      text_preview: (el.textContent || '').trim().slice(0, 100),
+      id: el.id || '',
+    }));
+  })()`;
+  const { result } = await (cdp as any).raw.Runtime.evaluate({ expression, returnByValue: true, awaitPromise: true });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result.value ?? result) }] };
+}
