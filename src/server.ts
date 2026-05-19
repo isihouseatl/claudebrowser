@@ -238,6 +238,9 @@ import { getPerformanceMetrics, getPageLoadTiming, getResourceTiming3, getLarges
 import { getPageLanguage4, getTranslationElements, getLocaleState, getRtlElements4, getI18nAttributes, getLanguageSwitcher, getNumberFormats, getI18nApiUsage } from './cdp/i18n2';
 import { getCspHeaders, getHttpsState, getSecurityHeaders, getMixedContent, getContentSecurityPolicy3, getFrameOptions, getCorsIndicators, getSecurityApiUsage } from './cdp/security2';
 import { getMapContainers, getGeoJsonElements, getMapMarkers2, getMapLayers, getGeoState, getLocationInputs, getAddressSearch, getGeoApiUsage2 } from './cdp/geo2';
+import { getProductCards, getAddToCartButtons3, getPriceElements2, getProductImages2, getCartState, getWishlistButtons2, getProductRatings, getEcommerceApiUsage } from './cdp/ecommerce2';
+import { getSocialLinks3, getFollowButtons2, getShareButtons3, getSocialProfiles, getSocialState, getOpenGraphMeta2, getTwitterCardMeta2, getSocialApiUsage } from './cdp/social2';
+import { getAnalyticsScripts, getTrackingPixels, getAnalyticsState, getConversionEvents, getDataLayer, getTagManagerElements, getAnalyticsConsent, getAnalyticsApiUsage } from './cdp/analytics2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2683,6 +2686,33 @@ const TOOLS = [
   { name: 'browser_location_inputs', description: 'Address/location input fields: [{name, id, placeholder, autocomplete}] (max 20)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_address_search', description: 'Autocomplete address search elements: [{tag, id, class_preview, visible, childCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_geo_api_usage2', description: 'Detected map libraries: {hasLeaflet, hasGoogleMaps, hasMapbox, hasOpenLayers, hasHereMaps, hasCesium, hasDeckGl}', inputSchema: { type: 'object', properties: {} } },
+  // ── Ecommerce2 new ───────────────────────────────────────────────────────────────
+  { name: 'browser_product_cards', description: 'Product listing cards: [{tag, id, class_preview, title, price, hasImage, hasLink}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_add_to_cart_buttons3', description: 'Add to cart/buy now buttons: [{tag, id, class_preview, text_preview, disabled, visible}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_price_elements2', description: 'Price display elements: [{tag, id, class_preview, text_preview, dataPrice}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_images2', description: 'Product images: [{id, src_preview, alt_preview, width, height, hasLazy}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cart_state', description: 'Shopping cart summary: {hasCart, itemCount, cartTotal, hasCheckout}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_wishlist_buttons2', description: 'Wishlist/favorite buttons: [{tag, id, class_preview, text_preview, isActive}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_product_ratings', description: 'Product star rating displays: [{tag, id, class_preview, parsed_rating}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_ecommerce_api_usage', description: 'Detected e-commerce platforms: {hasShopify, hasWooCommerce, hasMagento, hasBigCommerce, hasStripe, detectedPlatforms}', inputSchema: { type: 'object', properties: {} } },
+  // ── Social2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_social_links3', description: 'Social media profile links: [{platform, href, text_preview, ariaLabel}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_follow_buttons2', description: 'Follow/subscribe social buttons: [{platform, tag, text_preview, href}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_share_buttons3', description: 'Share-to-social buttons: [{platform, tag, id, text_preview, href_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_profiles', description: 'Detected social profile URLs: [{platform, url, handle}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_state', description: 'Social summary: {hasSocialLinks, socialLinkCount, hasSocialMeta, hasOpenGraph, socialNetworkCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_open_graph_meta2', description: 'Open Graph meta tags: {title, description, image, url, type, ...} (og:* tags)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_twitter_card_meta2', description: 'Twitter/X Card meta tags: {card, title, description, image, ...} (twitter:* tags)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_api_usage', description: 'Detected social SDKs: {hasTwitterWidget, hasFacebookSdk, hasLinkedInInsight, hasInstagramEmbed, hasTikTokPixel}', inputSchema: { type: 'object', properties: {} } },
+  // ── Analytics2 new ────────────────────────────────────────────────────────────────
+  { name: 'browser_analytics_scripts', description: 'Analytics script tags: [{vendor, src_preview, id_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tracking_pixels', description: 'Tracking pixel images and beacons: [{tag, src_preview, dimensions}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_analytics_state', description: 'Analytics summary: {hasGa, hasGtm, hasFbPixel, hasTikTokPixel, hasHotjar}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_conversion_events', description: 'Elements with conversion tracking attributes: [{tag, id, class_preview, trackAttr, handler_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_layer', description: 'GTM dataLayer contents: [{event, entries_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_tag_manager_elements', description: 'Tag manager container scripts: [{vendor, containerId, tag}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_analytics_consent', description: 'Cookie/analytics consent state: {hasConsentBanner, consentFramework, hasAccepted, hasDenied}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_analytics_api_usage', description: 'Detected analytics tools: {hasGoogleAnalytics, hasGtm, hasFacebookPixel, hasTikTokPixel, hasHotjar, hasMixpanel, hasAmplitude}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -5214,6 +5244,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_location_inputs':          return await getLocationInputs(cdp);
         case 'browser_address_search':           return await getAddressSearch(cdp);
         case 'browser_geo_api_usage2':           return await getGeoApiUsage2(cdp);
+                // ecommerce2 new
+        case 'browser_product_cards':            return await getProductCards(cdp);
+        case 'browser_add_to_cart_buttons3':     return await getAddToCartButtons3(cdp);
+        case 'browser_price_elements2':          return await getPriceElements2(cdp);
+        case 'browser_product_images2':          return await getProductImages2(cdp);
+        case 'browser_cart_state':               return await getCartState(cdp);
+        case 'browser_wishlist_buttons2':        return await getWishlistButtons2(cdp);
+        case 'browser_product_ratings':          return await getProductRatings(cdp);
+        case 'browser_ecommerce_api_usage':      return await getEcommerceApiUsage(cdp);
+        // social2 new
+        case 'browser_social_links3':            return await getSocialLinks3(cdp);
+        case 'browser_follow_buttons2':          return await getFollowButtons2(cdp);
+        case 'browser_share_buttons3':           return await getShareButtons3(cdp);
+        case 'browser_social_profiles':          return await getSocialProfiles(cdp);
+        case 'browser_social_state':             return await getSocialState(cdp);
+        case 'browser_open_graph_meta2':         return await getOpenGraphMeta2(cdp);
+        case 'browser_twitter_card_meta2':       return await getTwitterCardMeta2(cdp);
+        case 'browser_social_api_usage':         return await getSocialApiUsage(cdp);
+        // analytics2 new
+        case 'browser_analytics_scripts':        return await getAnalyticsScripts(cdp);
+        case 'browser_tracking_pixels':          return await getTrackingPixels(cdp);
+        case 'browser_analytics_state':          return await getAnalyticsState(cdp);
+        case 'browser_conversion_events':        return await getConversionEvents(cdp);
+        case 'browser_data_layer':               return await getDataLayer(cdp);
+        case 'browser_tag_manager_elements':     return await getTagManagerElements(cdp);
+        case 'browser_analytics_consent':        return await getAnalyticsConsent(cdp);
+        case 'browser_analytics_api_usage':      return await getAnalyticsApiUsage(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

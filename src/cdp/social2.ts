@@ -61,3 +61,77 @@ export async function getFollowButtons(cdp: any): Promise<{ content: [{ type: 't
   });
   return { content: [{ type: 'text' as const, text: JSON.stringify(result.value, null, 2) }] };
 }
+
+// --- social2.ts additions ---
+
+export async function getSocialLinks3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const targets={twitter:['twitter.com','x.com'],instagram:['instagram.com'],facebook:['facebook.com','fb.com'],tiktok:['tiktok.com'],linkedin:['linkedin.com']};const links=Array.from(document.querySelectorAll('a[href]'));const out=[];for(const[platform,domains]of Object.entries(targets)){const matches=links.filter(a=>domains.some(d=>a.href.includes(d))).slice(0,5);for(const a of matches)out.push({platform,href:a.href.slice(0,120),text:(a.textContent||'').trim().slice(0,40),ariaLabel:(a.getAttribute('aria-label')||'').slice(0,40)})}return out.slice(0,20) })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getFollowButtons2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const platforms=['twitter','instagram','facebook','tiktok','linkedin','youtube'];const all=Array.from(document.querySelectorAll('a,button,[role="button"]'));return all.filter(el=>{const t=(el.textContent||'').toLowerCase();const c=(el.className||'').toString().toLowerCase();const h=(el.getAttribute('href')||'').toLowerCase();return(t.includes('follow')||t.includes('subscribe'))&&platforms.some(p=>c.includes(p)||h.includes(p+'.com'))}).slice(0,20).map(el=>{const h=(el.getAttribute('href')||'').toLowerCase();const p=platforms.find(p=>h.includes(p+'.com'))||'unknown';return{tag:el.tagName.toLowerCase(),platform:p,text:(el.textContent||'').trim().slice(0,60),href:(el.getAttribute('href')||'').slice(0,100),class_preview:(el.className||'').toString().slice(0,40)}}) })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getShareButtons3(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const sharePatterns=[{p:'twitter',d:['twitter.com/intent/tweet','x.com/intent/tweet']},{p:'facebook',d:['facebook.com/sharer','facebook.com/share']},{p:'linkedin',d:['linkedin.com/sharing','linkedin.com/shareArticle']},{p:'whatsapp',d:['wa.me/','api.whatsapp.com/send','whatsapp://send']},{p:'pinterest',d:['pinterest.com/pin/create']},{p:'reddit',d:['reddit.com/submit']},{p:'email',d:['mailto:']}];const els=Array.from(document.querySelectorAll('a[href],button,[role="button"]'));const out=[];for(const el of els){const h=(el.getAttribute('href')||'').toLowerCase();const t=(el.textContent||'').toLowerCase();const c=(el.className||'').toString().toLowerCase();const match=sharePatterns.find(({d})=>d.some(pat=>h.includes(pat)||c.includes('share')));if(match)out.push({platform:match.p,tag:el.tagName.toLowerCase(),href:(el.getAttribute('href')||'').slice(0,120),text:(el.textContent||'').trim().slice(0,40),class_preview:c.slice(0,40)})}return out.slice(0,20) })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getSocialProfiles(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const domains={twitter:['twitter.com','x.com'],instagram:['instagram.com'],facebook:['facebook.com'],tiktok:['tiktok.com'],linkedin:['linkedin.com'],youtube:['youtube.com'],github:['github.com'],snapchat:['snapchat.com'],pinterest:['pinterest.com']};const links=Array.from(document.querySelectorAll('a[href]'));const profiles={};for(const[platform,doms]of Object.entries(domains)){const found=links.find(a=>doms.some(d=>a.href.includes(d)&&!a.href.includes('/share')&&!a.href.includes('/intent')));if(found){const h=found.href;const handle=h.split('/').filter(Boolean).pop()||null;profiles[platform]={url:h.slice(0,120),handle:handle?handle.split('?')[0].slice(0,40):null}}}const og=document.querySelector('meta[property="og:url"]');const canonical=document.querySelector('link[rel="canonical"]');return{profiles,pageUrl:og?og.getAttribute('content'):'',canonicalUrl:canonical?canonical.getAttribute('href'):''} })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getSocialState(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const socialDomains=['twitter.com','x.com','instagram.com','facebook.com','tiktok.com','linkedin.com','youtube.com','github.com','pinterest.com','snapchat.com'];const links=Array.from(document.querySelectorAll('a[href]'));const socialLinks=links.filter(a=>socialDomains.some(d=>a.href.includes(d)));const networksFound=new Set(socialLinks.map(a=>{const d=socialDomains.find(d=>a.href.includes(d));return d?d.split('.')[0]:'other'}));const hasSocialMeta=!!(document.querySelector('meta[property^="og:"]')||document.querySelector('meta[name^="twitter:"]'));const hasOG=!!document.querySelector('meta[property="og:title"]');return{hasSocialLinks:socialLinks.length>0,socialLinkCount:socialLinks.length,hasSocialMeta,hasOpenGraph:hasOG,socialNetworkCount:networksFound.size,networksDetected:Array.from(networksFound)} })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getOpenGraphMeta2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const metas=Array.from(document.querySelectorAll('meta[property^="og:"],meta[name^="og:"]'));const out={};for(const m of metas){const key=m.getAttribute('property')||m.getAttribute('name')||'';const val=(m.getAttribute('content')||'').slice(0,200);if(key)out[key]=val}return out })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getTwitterCardMeta2(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const metas=Array.from(document.querySelectorAll('meta[name^="twitter:"]'));const out={};for(const m of metas){const key=m.getAttribute('name')||'';const val=(m.getAttribute('content')||'').slice(0,200);if(key)out[key]=val}return out })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
+
+export async function getSocialApiUsage(cdp: any): Promise<{ content: [{ type: 'text'; text: string }] }> {
+  const { result } = await (cdp as any).raw.Runtime.evaluate({
+    expression: `(function() { const scripts=Array.from(document.querySelectorAll('script[src],script')).map(s=>((s.src||s.textContent||'').toLowerCase()));const hasTwitterWidget=scripts.some(s=>s.includes('platform.twitter.com')||s.includes('widgets.js')||typeof window.twttr!=='undefined');const hasFacebookSdk=scripts.some(s=>s.includes('connect.facebook.net')||s.includes('fbevents.js'))||typeof window.FB!=='undefined';const hasLinkedInInsight=scripts.some(s=>s.includes('snap.licdn.com')||s.includes('linkedin/insight'));const hasInstagramEmbed=scripts.some(s=>s.includes('instagram.com/embed'))||document.querySelector('blockquote[class*="instagram-media"]')!==null;const hasTikTokPixel=scripts.some(s=>s.includes('analytics.tiktok.com')||s.includes('tiktok-pixel'))||typeof window.ttq!=='undefined';const hasPinterestTag=scripts.some(s=>s.includes('pintrk')||s.includes('ct.pinterest.com'))||typeof window.pintrk!=='undefined';const hasSnapchatPixel=scripts.some(s=>s.includes('tr.snapchat.com')||s.includes('snap-pixel'));return{hasTwitterWidget,hasFacebookSdk,hasLinkedInInsight,hasInstagramEmbed,hasTikTokPixel,hasPinterestTag,hasSnapchatPixel} })()`,
+    returnByValue: true,
+    awaitPromise: true
+  });
+  return { content: [{ type: 'text', text: JSON.stringify(result.value) }] };
+}
