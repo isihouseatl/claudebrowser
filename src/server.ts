@@ -108,7 +108,7 @@ import { dispatchCustomEvent as dispatchCustomEvent2, dispatchWindowEvent, getEv
 import { getTableCount, getTableHeaders as getTableHeaders3, getTableRowCount as getTableRowCount2, getTableCellCount, getTableRow, getTableCell, getTableData as getTableData2, getTableSummary } from './cdp/table';
 import { getAllLinks, getExternalLinks as getExternalLinks2, getInternalLinks, getLinkCount, getLinksWithRel, getMailtoLinks, getTelLinks, getAnchorLinks } from './cdp/link';
 import { getAllImages, getBrokenImages, getImageCount, getLazyImages, getImagesWithoutAlt, getSvgElements, getPictureElements, getImageDimensions, getImages, getBackgroundImages } from './cdp/image2';
-import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState } from './cdp/input2';
+import { getAllInputs, getRequiredInputs, getDisabledInputs, getInputValues, setInputValue, clearInputValue, getCheckboxState, setCheckboxState, getAllInputs2, getPasswordInputs, getSearchInputs, getTextareas, getHiddenInputs, getDateInputs, getFileInputs, getRangeInputs } from './cdp/input2';
 import { getMetaDescription, getMetaKeywords, getMetaRobots, getMetaViewport, getCanonicalUrl as getCanonicalUrl2, getHreflangTags, getJsonLdSchemas, getHeadingStructure as getHeadingStructure2 } from './cdp/meta2';
 import { getComputedFont, getLoadedFonts as getLoadedFonts2, getFontFaces, getElementFontSize, getElementFontFamily, getTextStyles, countDistinctFonts, isFontLoaded } from './cdp/font';
 import { getCdpMetrics, getJsHeapSize, getDomNodeCount as getDomNodeCount2, getEventListenerTotal, markPerformance as markPerformance2, measurePerformance as measurePerformance2, clearPerformanceMarks, getPerformanceMarks as getPerformanceMarks2 } from './cdp/perf2';
@@ -122,6 +122,8 @@ import { getElementDepth, getElementPath, getSiblings, getParentElement, getElem
 import { getForms, getFormFields2, getSelectOptions2, setSelectOption, getRadioGroup, getFormValidation, submitForm2, resetForm2 } from './cdp/form2';
 import { getBreakpointInfo, getMediaQueryMatches, isMobileViewport, getDevicePixelRatio, getViewportOrientation, simulatePrintMedia, getContainerQueries, getFlexContainers } from './cdp/responsive2';
 import { getLists, getListItems2, getNestedListDepth, getDescriptionLists, getNavLists, getMenuItems, getCheckedListItems, getListCount } from './cdp/list2';
+import { getHeadings2, getHeadingOutline, getH1s, getHeadingCount, getLandmarks2, getPageSections, getSkipLinks, getReadingOrder } from './cdp/heading2';
+import { getPageTextContent, getTextBySelector, searchPageText, getVisibleText, getParagraphs2, getTextLength, getLinks, getLinksCount } from './cdp/text2';
 import { getElementColors, getDominantColors, getColorContrast, hasTransparentBackground, getAllColors, getGradients, getColorScheme2, getLinkColors } from './cdp/color';
 import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
 import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
@@ -1315,6 +1317,34 @@ const TOOLS = [
   { name: 'browser_menu_items', description: 'Find elements with role="menuitem", "option", or "listitem": tag, id, text, role (max 30)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_checked_list_items', description: 'Find <li> elements containing checked checkboxes: text, checkedCount, totalCount per list', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_list_count', description: 'Count list elements: ul, ol, dl, nav, menuRole', inputSchema: { type: 'object', properties: {} } },
+  // ── Heading2 ────────────────────────────────────────────────────────────────────
+  // ── Input2 new ───────────────────────────────────────────────────────────────────
+  { name: 'browser_all_inputs2', description: 'Get all input/textarea/select elements with type, name, id, placeholder, value, required, disabled, readonly (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_password_inputs', description: 'Find <input type="password"> elements: id, name, autocomplete, hasValue (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_search_inputs', description: 'Find search inputs by type, role, or name/placeholder containing "search": id, name, placeholder, value (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_textareas', description: 'Find all <textarea> elements: id, name, placeholder, rows, cols, value_length, required, readonly (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_hidden_inputs', description: 'Find <input type="hidden"> elements: name, id, value (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_date_inputs', description: 'Find date/time inputs (date, time, datetime-local, month, week): id, name, type, value, min, max (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_file_inputs', description: 'Find <input type="file"> elements: id, name, accept, multiple, hasFiles (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_range_inputs', description: 'Find range and number inputs: id, name, type, value, min, max, step (max 20)', inputSchema: { type: 'object', properties: {} } },
+  // ── Heading2 ────────────────────────────────────────────────────────────────────
+  { name: 'browser_headings', description: 'Find all h1-h6 elements: level, text, id, class (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_heading_outline', description: 'Build hierarchical heading outline as a tree: { outline: [{level, text, children}] }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_h1s', description: 'Get all <h1> text content: { h1s, count }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_heading_count', description: 'Count headings by level: { h1, h2, h3, h4, h5, h6, total }', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_landmarks', description: 'Find ARIA landmark elements (main, nav, banner, contentinfo, search, complementary): tag, role, id, class (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_page_sections', description: 'Find <section> and <article> elements with ariaLabel and first heading text (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_skip_links', description: 'Find skip-navigation links (href="#...") near top of page: text, href', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_reading_order', description: 'Get all headings in DOM order as flat array: { items: [{level, text}] } (max 30)', inputSchema: { type: 'object', properties: {} } },
+  // ── Text2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_page_text', description: 'Get document.body.innerText: { text, wordCount, charCount } (truncated to 5000 chars)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_by_selector', description: 'Get innerText of elements matching selector: { texts, count } (max 20, 500 chars each)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_search_text', description: 'Find text nodes containing query (case-insensitive): { matches: [{text, parentTag, parentId}], count } (max 20)', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'browser_visible_text', description: 'Get text from only visible elements (not hidden): { text, wordCount } (truncated to 3000 chars)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_paragraphs', description: 'Get all <p> element text: { paragraphs, count } (max 30, 300 chars each)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_text_length', description: 'Get char and word count for element matching selector: { charCount, wordCount, text_preview }', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_links', description: 'Get all <a> elements: text, href, id, class, target, isExternal (max 50)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_links_count', description: 'Count links: total, internal, external, withoutText, broken_possible (empty href or "#")', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -1371,7 +1401,7 @@ export async function startServer(sessionName?: string): Promise<void> {
   }
 
   const server = new Server(
-    { name: 'claudebrowser', version: '1.44.0' },
+    { name: 'claudebrowser', version: '1.45.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -2587,6 +2617,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_menu_items':               return await getMenuItems(cdp);
         case 'browser_checked_list_items':       return await getCheckedListItems(cdp);
         case 'browser_list_count':               return await getListCount(cdp);
+                // input2 new
+        case 'browser_all_inputs2':              return await getAllInputs2(cdp);
+        case 'browser_password_inputs':          return await getPasswordInputs(cdp);
+        case 'browser_search_inputs':            return await getSearchInputs(cdp);
+        case 'browser_textareas':                return await getTextareas(cdp);
+        case 'browser_hidden_inputs':            return await getHiddenInputs(cdp);
+        case 'browser_date_inputs':              return await getDateInputs(cdp);
+        case 'browser_file_inputs':              return await getFileInputs(cdp);
+        case 'browser_range_inputs':             return await getRangeInputs(cdp);
+        // heading2
+        case 'browser_headings':                 return await getHeadings2(cdp);
+        case 'browser_heading_outline':          return await getHeadingOutline(cdp);
+        case 'browser_h1s':                      return await getH1s(cdp);
+        case 'browser_heading_count':            return await getHeadingCount(cdp);
+        case 'browser_landmarks':                return await getLandmarks2(cdp);
+        case 'browser_page_sections':            return await getPageSections(cdp);
+        case 'browser_skip_links':               return await getSkipLinks(cdp);
+        case 'browser_reading_order':            return await getReadingOrder(cdp);
+        // text2
+        case 'browser_page_text':                return await getPageTextContent(cdp);
+        case 'browser_text_by_selector':         return await getTextBySelector(cdp, a.selector as string);
+        case 'browser_search_text':              return await searchPageText(cdp, a.query as string);
+        case 'browser_visible_text':             return await getVisibleText(cdp);
+        case 'browser_paragraphs':               return await getParagraphs2(cdp);
+        case 'browser_text_length':              return await getTextLength(cdp, a.selector as string);
+        case 'browser_links':                    return await getLinks(cdp);
+        case 'browser_links_count':              return await getLinksCount(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
