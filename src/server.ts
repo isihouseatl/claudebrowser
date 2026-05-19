@@ -176,6 +176,9 @@ import { getAddToCartButtons, getProductImages, getCartIndicator, getWishlistBut
 import { getHoverableElements, getClickTargets, getDoubleClickTargets, getContextMenuElements, getLongPressElements, getSwipeableContainers, getPinchZoomElements, getPointerCapture3 } from './cdp/pointer2';
 import { getMutationObservers2, getIntersectionObservers2, getResizeObservers2, getPerformanceObservers, getObservableMutations, getObserverTargets, getObserverCallbacks, getObserverThresholds } from './cdp/observer2';
 import { getConsentBanners, getPrivacyLinks, getGdprElements, getCookiePreferences, getConsentButtons, getPrivacyPolicyLinks, getTermsLinks, getDoNotTrack } from './cdp/consent2';
+import { getMapElements2, getGoogleMapsIframes, getLeafletMaps, getMapboxMaps, getMapMarkers, getMapControls, getCoordinateData, getGeoJsonData } from './cdp/map2';
+import { getChartElements, getChartJs, getD3Elements2, getApexCharts, getHighcharts, getChartLegends, getChartTooltips, getDataVisualization } from './cdp/chart2';
+import { getLoginForms, getSocialLoginButtons, getOAuthButtons, getPasswordFields2, getTwoFactorInputs, getRememberMeCheckboxes, getForgotPasswordLinks, getSignupLinks } from './cdp/auth2';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
 import { retry } from './retry';
 import { readConfig } from './config';
@@ -2066,6 +2069,33 @@ const TOOLS = [
   { name: 'browser_privacy_policy_links', description: 'Links to privacy policy: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_terms_links', description: 'Links to terms/conditions: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_do_not_track', description: 'DNT and privacy control: {doNotTrack, globalPrivacyControl, navigatorDoNotTrack}', inputSchema: { type: 'object', properties: {} } },
+  // ── Map2 new ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_map_elements2', description: 'Elements with map-related classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_google_maps_iframes', description: 'Google Maps iframes: [{src_preview, width, height, title_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_leaflet_maps', description: 'Leaflet map instances: {count, hasLeaflet, leafletVersion}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mapbox_maps', description: 'Mapbox map containers: {count, hasMapbox}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_map_markers', description: 'Map marker elements: [{tag, id, class_preview, ariaLabel_preview}] (max 30)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_map_controls', description: 'Map control elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_coordinate_data', description: 'Elements with lat/lon data attributes: [{tag, id, lat, lng, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geo_json_data', description: 'Script tags with GeoJSON content: {count, hasGeoJson}', inputSchema: { type: 'object', properties: {} } },
+  // ── Chart2 new ────────────────────────────────────────────────────────────────────
+  { name: 'browser_chart_elements', description: 'Elements with chart-related classes: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_js', description: 'Chart.js presence: {hasChartJs, version, canvasCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_d3_elements2', description: 'D3.js presence and SVG elements: {hasD3, version, svgCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_apex_charts', description: 'ApexCharts presence: {hasApexCharts, chartCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_highcharts', description: 'Highcharts presence: {hasHighcharts, version, containerCount}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_legends', description: 'Chart legend elements: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_chart_tooltips', description: 'Chart tooltip elements: [{tag, id, class_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_data_visualization', description: 'Data viz library summary: {hasChartJs, hasD3, hasApexCharts, hasHighcharts, hasEcharts, svgCount, canvasCount}', inputSchema: { type: 'object', properties: {} } },
+  // ── Auth2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_login_forms', description: 'Forms with login patterns: [{id, class_preview, hasEmail, hasPassword, submitText}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_social_login_buttons', description: 'Social login buttons: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_oauth_buttons', description: 'Elements with OAuth-related attributes: [{tag, id, class_preview, text_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_password_fields2', description: 'Password input fields: [{id, name, autocomplete, class_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_two_factor_inputs', description: '2FA/OTP input fields: [{id, name, maxlength, pattern_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_remember_me_checkboxes', description: 'Remember me checkbox elements: [{id, name, checked, label_text}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_forgot_password_links', description: 'Forgot password links: [{text_preview, href_preview}] (max 5)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_signup_links', description: 'Sign up / register links: [{text_preview, href_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -4039,6 +4069,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_privacy_policy_links':     return await getPrivacyPolicyLinks(cdp);
         case 'browser_terms_links':              return await getTermsLinks(cdp);
         case 'browser_do_not_track':             return await getDoNotTrack(cdp);
+                // map2 new
+        case 'browser_map_elements2':            return await getMapElements2(cdp);
+        case 'browser_google_maps_iframes':      return await getGoogleMapsIframes(cdp);
+        case 'browser_leaflet_maps':             return await getLeafletMaps(cdp);
+        case 'browser_mapbox_maps':              return await getMapboxMaps(cdp);
+        case 'browser_map_markers':              return await getMapMarkers(cdp);
+        case 'browser_map_controls':             return await getMapControls(cdp);
+        case 'browser_coordinate_data':          return await getCoordinateData(cdp);
+        case 'browser_geo_json_data':            return await getGeoJsonData(cdp);
+        // chart2 new
+        case 'browser_chart_elements':           return await getChartElements(cdp);
+        case 'browser_chart_js':                 return await getChartJs(cdp);
+        case 'browser_d3_elements2':             return await getD3Elements2(cdp);
+        case 'browser_apex_charts':              return await getApexCharts(cdp);
+        case 'browser_highcharts':               return await getHighcharts(cdp);
+        case 'browser_chart_legends':            return await getChartLegends(cdp);
+        case 'browser_chart_tooltips':           return await getChartTooltips(cdp);
+        case 'browser_data_visualization':       return await getDataVisualization(cdp);
+        // auth2 new
+        case 'browser_login_forms':              return await getLoginForms(cdp);
+        case 'browser_social_login_buttons':     return await getSocialLoginButtons(cdp);
+        case 'browser_oauth_buttons':            return await getOAuthButtons(cdp);
+        case 'browser_password_fields2':         return await getPasswordFields2(cdp);
+        case 'browser_two_factor_inputs':        return await getTwoFactorInputs(cdp);
+        case 'browser_remember_me_checkboxes':   return await getRememberMeCheckboxes(cdp);
+        case 'browser_forgot_password_links':    return await getForgotPasswordLinks(cdp);
+        case 'browser_signup_links':             return await getSignupLinks(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };

@@ -2,17 +2,17 @@
 class Claudebrowser < Formula
   desc "Claude Code browser automation via Chrome CDP"
   homepage "https://github.com/isihouseatl/claudebrowser"
-  version "1.70.0"
+  version "1.71.0"
   license "MIT"
 
   on_arm do
-    url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.70.0/claudebrowser-macos-arm64"
-    sha256 "7bcc9533578677d20abddbd2dc641f7bffc831f7a93697036fbf1c134d5839c7"
+    url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.71.0/claudebrowser-macos-arm64"
+    sha256 "43ecfe2699e6a2fdeef663ce09cbe331a0e994eebe46a47b8f5f416473a49ba5"
   end
 
   on_intel do
-    url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.70.0/claudebrowser-macos-x64"
-    sha256 "f3f9f7d18a2a24388f3fdb131a7db22b363b2c995358a95de0d5317ed7976245"
+    url "https://github.com/isihouseatl/claudebrowser/releases/download/v1.71.0/claudebrowser-macos-x64"
+    sha256 "9bf1fd5bcef76e5a69fbed1e9ef44a9fdd748cf592f65cb7987abd392f01a49d"
   end
 
   def install
