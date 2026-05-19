@@ -119,6 +119,9 @@ import { getCdpTargets, getCdpVersion, enableCdpDomain, getCdpMetricNames, setDe
 import { getScrollDepth2, isAtBottom, isAtTop, scrollToBottom2, scrollToTop2, getScrollableContainers, scrollContainerTo, getElementScrollInfo } from './cdp/scroll2';
 import { pressEnter, pressTab, pressEscape, pressArrowDown, pressArrowUp, typeText2, getActiveElement, getFocusPath } from './cdp/keyboard2';
 import { getElementDepth, getElementPath, getSiblings, getParentElement, getElementsByText, getElementsWithAttribute, countElementsByTag, getFirstVisible } from './cdp/element2';
+import { getForms, getFormFields2, getSelectOptions2, setSelectOption, getRadioGroup, getFormValidation, submitForm2, resetForm2 } from './cdp/form2';
+import { parseCurrentUrl, getQueryParams2, getUrlFragment, setUrlFragment, getOrigin, isHttps, getPathSegments, navigateTo } from './cdp/url2';
+import { getConsoleErrors, clearConsoleErrors, injectConsoleMonitor, getConsoleLogs, clearConsoleLogs, getWindowErrors, clearWindowErrors, getUnhandledRejections } from './cdp/debug2';
 import { getLocalStorageKeys, getSessionStorageKeys, getLocalStorageSizeInfo, wipeLocalStorage, wipeSessionStorage, getIndexedDBDatabases, getCookieCountInfo, getStorageQuota as getStorageQuotaInfo, getIndexedDBDatabases2, getIndexedDBObjectStores, getSessionStorageKeys2, getSessionStorageItem, setSessionStorageItem, clearSessionStorage2, getStorageSizes, getCookieCount2 } from './cdp/storage2';
 import { getConnectionType, isOnline, getPageLocation, getOpenWebSockets, getServiceWorkerRegistrations, getBeaconSupport, getPageReferrer } from './cdp/network3';
 import { withTimeout, TimeoutError, DEFAULT_TOOL_TIMEOUT_MS } from './timeout';
@@ -1211,6 +1214,33 @@ const TOOLS = [
   { name: 'browser_elements_with_attr', description: 'Find all elements with a specific attribute name, return tag/id/value (max 20)', inputSchema: { type: 'object', properties: { attribute: { type: 'string' } }, required: ['attribute'] } },
   { name: 'browser_tag_counts', description: 'Count all element tags on page as {tag: count} object sorted by count descending', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_first_visible', description: 'From all elements matching selector, return first one that is visible (not hidden/display:none)', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── Form2 ───────────────────────────────────────────────────────────────────────
+  { name: 'browser_forms', description: 'List all forms: action, method, id, name, elementCount (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_form_fields', description: 'Get all fields inside a form: type, name, id, value, required, disabled', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_select_options', description: 'Get all <option> elements in a <select>: value, text, selected, disabled', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_set_select', description: 'Select an <option> by value using native setter + change event (works with React/Vue)', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, value: { type: 'string' } }, required: ['selector', 'value'] } },
+  { name: 'browser_radio_group', description: 'Get all radio inputs with a given name: value, checked, id, disabled', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'browser_form_validation', description: 'Check form validity: isValid, invalidFields with name+validationMessage', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_submit_form', description: 'Dispatch submit event on a form element', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  { name: 'browser_reset_form', description: 'Call form.reset() to clear all fields to default values', inputSchema: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } },
+  // ── URL2 ────────────────────────────────────────────────────────────────────────
+  { name: 'browser_parse_url', description: 'Parse window.location into parts: href, protocol, host, pathname, search, hash, port', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_query_params', description: 'Parse URL query string into key-value pairs object', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_url_fragment', description: 'Get window.location.hash value', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_set_fragment', description: 'Set window.location.hash = fragment', inputSchema: { type: 'object', properties: { fragment: { type: 'string' } }, required: ['fragment'] } },
+  { name: 'browser_origin', description: 'Get window.location.origin', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_is_https', description: 'Check if current URL uses https protocol', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_path_segments', description: 'Split pathname by "/" and return non-empty segments array', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_navigate_to', description: 'Set window.location.href = url to trigger navigation', inputSchema: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } },
+  // ── Debug2 ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_console_errors', description: 'Get captured console.error entries (auto-injects interceptor on first call)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_console_errors', description: 'Clear window.__consoleErrors log', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_inject_console_monitor', description: 'Inject monitors for console.log/warn/error/info into window.__consoleLogs', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_console_logs', description: 'Get all captured console logs: level, message, timestamp', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_console_logs', description: 'Clear window.__consoleLogs', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_window_errors', description: 'Get captured window.onerror entries: message, source, lineno, stack (auto-injects on first call)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_clear_window_errors', description: 'Clear window.__windowErrors log', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_unhandled_rejections', description: 'Get captured unhandledrejection events: message, stack, timestamp (auto-injects listener)', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -2385,6 +2415,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_elements_with_attr':       return await getElementsWithAttribute(cdp, a.attribute as string);
         case 'browser_tag_counts':               return await countElementsByTag(cdp);
         case 'browser_first_visible':            return await getFirstVisible(cdp, a.selector as string);
+                // form2
+        case 'browser_forms':                    return await getForms(cdp);
+        case 'browser_form_fields':              return await getFormFields2(cdp, a.selector as string);
+        case 'browser_select_options':           return await getSelectOptions2(cdp, a.selector as string);
+        case 'browser_set_select':               return await setSelectOption(cdp, a.selector as string, a.value as string);
+        case 'browser_radio_group':              return await getRadioGroup(cdp, a.name as string);
+        case 'browser_form_validation':          return await getFormValidation(cdp, a.selector as string);
+        case 'browser_submit_form':              return await submitForm2(cdp, a.selector as string);
+        case 'browser_reset_form':               return await resetForm2(cdp, a.selector as string);
+        // url2
+        case 'browser_parse_url':                return await parseCurrentUrl(cdp);
+        case 'browser_query_params':             return await getQueryParams2(cdp);
+        case 'browser_url_fragment':             return await getUrlFragment(cdp);
+        case 'browser_set_fragment':             return await setUrlFragment(cdp, a.fragment as string);
+        case 'browser_origin':                   return await getOrigin(cdp);
+        case 'browser_is_https':                 return await isHttps(cdp);
+        case 'browser_path_segments':            return await getPathSegments(cdp);
+        case 'browser_navigate_to':              return await navigateTo(cdp, a.url as string);
+        // debug2
+        case 'browser_console_errors':           return await getConsoleErrors(cdp);
+        case 'browser_clear_console_errors':     return await clearConsoleErrors(cdp);
+        case 'browser_inject_console_monitor':   return await injectConsoleMonitor(cdp);
+        case 'browser_console_logs':             return await getConsoleLogs(cdp);
+        case 'browser_clear_console_logs':       return await clearConsoleLogs(cdp);
+        case 'browser_window_errors':            return await getWindowErrors(cdp);
+        case 'browser_clear_window_errors':      return await clearWindowErrors(cdp);
+        case 'browser_unhandled_rejections':     return await getUnhandledRejections(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
