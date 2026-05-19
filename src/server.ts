@@ -235,6 +235,9 @@ import { getRichTextEditors2, getContentEditableElements2, getEditorToolbars2, g
 import { getDarkModeState, getColorScheme5, getThemeColors2, getCssVariables7, getColorPalette, getDarkModeToggle, getSystemColorScheme, getColorSchemeApiUsage } from './cdp/colorscheme2';
 import { getBreakpoints, getMediaQueryState, getViewportBreakpoint, getResponsiveImages2, getFlexContainers4, getGridContainers3, getResponsiveState, getResponsiveApiUsage } from './cdp/responsive2';
 import { getPerformanceMetrics, getPageLoadTiming, getResourceTiming3, getLargestContentfulPaint4, getFirstContentfulPaint2, getCumulativeLayoutShift4, getPerformanceState, getPerfApiUsage } from './cdp/perf2';
+import { getPageLanguage4, getTranslationElements, getLocaleState, getRtlElements4, getI18nAttributes, getLanguageSwitcher, getNumberFormats, getI18nApiUsage } from './cdp/i18n2';
+import { getCspHeaders, getHttpsState, getSecurityHeaders, getMixedContent, getContentSecurityPolicy3, getFrameOptions, getCorsIndicators, getSecurityApiUsage } from './cdp/security2';
+import { getMapContainers, getGeoJsonElements, getMapMarkers2, getMapLayers, getGeoState, getLocationInputs, getAddressSearch, getGeoApiUsage2 } from './cdp/geo2';
 
 function ok(content: unknown) {
   return { content: [{ type: 'text' as const, text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] };
@@ -2653,6 +2656,33 @@ const TOOLS = [
   { name: 'browser_cumulative_layout_shift4', description: 'CLS metric: {rawScore, filteredScore, shiftCount}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_performance_state', description: 'Performance summary: {hasPerformanceApi, lcpMs, fcpMs, ttfbMs, clsScore}', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_perf_api_usage', description: 'Detected perf monitoring: {hasWebVitals, hasNewRelic, hasDatadog, hasGoogleAnalytics, hasSentry}', inputSchema: { type: 'object', properties: {} } },
+  // ── I18n2 new ─────────────────────────────────────────────────────────────────────
+  { name: 'browser_page_language4', description: 'Page language: {lang, htmlLang, metaLanguage, navigatorLanguage}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_translation_elements', description: 'Elements with i18n data attributes: [{tag, id, key, attribute}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_locale_state', description: 'Locale summary: {lang, dir, isRtl, hasI18n, detectedLocale}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_rtl_elements4', description: 'Elements with RTL text direction: [{tag, id, class_preview, source}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_i18n_attributes', description: 'Elements with i18n data attributes: [{tag, id, attributes}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_language_switcher', description: 'Language selector elements: [{type, tag, id, class_preview, options}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_number_formats', description: 'Locale-specific number/currency/date format detection: {style, currencySamples, dateSamples}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_i18n_api_usage', description: 'Detected i18n libraries: {hasI18next, hasIntl, hasFormatJs, hasVueI18n, hasReactIntl}', inputSchema: { type: 'object', properties: {} } },
+  // ── Security2 new ─────────────────────────────────────────────────────────────────
+  { name: 'browser_csp_headers', description: 'CSP meta tags/headers: {hasCsp, policy_preview, directives}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_https_state', description: 'HTTPS state: {isHttps, protocol, host}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_security_headers', description: 'Security meta tags: [{name, content_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_mixed_content', description: 'HTTP resources on HTTPS page: [{type, src_preview, tag}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_content_security_policy3', description: 'CSP directives from meta tag: {hasCsp, directives: {key: value}}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_frame_options', description: 'Frame embedding policy: {hasXFrameOptions, value, hasFrameAncestors}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_cors_indicators', description: 'Resources with crossorigin attributes: [{tag, src_preview, crossorigin, integrity}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_security_api_usage', description: 'Detected security patterns: {hasCSP, hasSri, hasCrossorigin, hasHttps, hasHsts}', inputSchema: { type: 'object', properties: {} } },
+  // ── Geo2 new ──────────────────────────────────────────────────────────────────────
+  { name: 'browser_map_containers', description: 'Map container elements: [{library, tag, id, class_preview, width, height}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geo_json_elements', description: 'GeoJSON data elements: [{type, featureCount, content_preview}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_map_markers2', description: 'Map marker elements: [{library, class_preview, ariaLabel, title, x, y}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_map_layers', description: 'Map tile/layer elements: [{library, tag, class_preview, src_preview}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geo_state', description: 'Map/geo summary: {hasMap, hasMarkers, mapLibrary, hasGeolocationPermission}', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_location_inputs', description: 'Address/location input fields: [{name, id, placeholder, autocomplete}] (max 20)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_address_search', description: 'Autocomplete address search elements: [{tag, id, class_preview, visible, childCount}] (max 10)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'browser_geo_api_usage2', description: 'Detected map libraries: {hasLeaflet, hasGoogleMaps, hasMapbox, hasOpenLayers, hasHereMaps, hasCesium, hasDeckGl}', inputSchema: { type: 'object', properties: {} } },
   // ── Status & auth ─────────────────────────────────────────────────────────────
   { name: 'browser_status', description: 'Check CDP connection and active tab', inputSchema: { type: 'object', properties: {} } },
   { name: 'browser_auth_check', description: 'Check login status for Instagram, Meta Ads, TikTok Ads. Run before any automation.', inputSchema: { type: 'object', properties: {} } },
@@ -5157,6 +5187,33 @@ export async function startServer(sessionName?: string): Promise<void> {
         case 'browser_cumulative_layout_shift4': return await getCumulativeLayoutShift4(cdp);
         case 'browser_performance_state':        return await getPerformanceState(cdp);
         case 'browser_perf_api_usage':           return await getPerfApiUsage(cdp);
+                // i18n2 new
+        case 'browser_page_language4':           return await getPageLanguage4(cdp);
+        case 'browser_translation_elements':     return await getTranslationElements(cdp);
+        case 'browser_locale_state':             return await getLocaleState(cdp);
+        case 'browser_rtl_elements4':            return await getRtlElements4(cdp);
+        case 'browser_i18n_attributes':          return await getI18nAttributes(cdp);
+        case 'browser_language_switcher':        return await getLanguageSwitcher(cdp);
+        case 'browser_number_formats':           return await getNumberFormats(cdp);
+        case 'browser_i18n_api_usage':           return await getI18nApiUsage(cdp);
+        // security2 new
+        case 'browser_csp_headers':              return await getCspHeaders(cdp);
+        case 'browser_https_state':              return await getHttpsState(cdp);
+        case 'browser_security_headers':         return await getSecurityHeaders(cdp);
+        case 'browser_mixed_content':            return await getMixedContent(cdp);
+        case 'browser_content_security_policy3': return await getContentSecurityPolicy3(cdp);
+        case 'browser_frame_options':            return await getFrameOptions(cdp);
+        case 'browser_cors_indicators':          return await getCorsIndicators(cdp);
+        case 'browser_security_api_usage':       return await getSecurityApiUsage(cdp);
+        // geo2 new
+        case 'browser_map_containers':           return await getMapContainers(cdp);
+        case 'browser_geo_json_elements':        return await getGeoJsonElements(cdp);
+        case 'browser_map_markers2':             return await getMapMarkers2(cdp);
+        case 'browser_map_layers':               return await getMapLayers(cdp);
+        case 'browser_geo_state':                return await getGeoState(cdp);
+        case 'browser_location_inputs':          return await getLocationInputs(cdp);
+        case 'browser_address_search':           return await getAddressSearch(cdp);
+        case 'browser_geo_api_usage2':           return await getGeoApiUsage2(cdp);
                 default: return fail(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
       }
     };
